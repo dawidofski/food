@@ -132,12 +132,47 @@ describe('resolveItems', () => {
 });
 
 describe('quantityToGrams', () => {
-  test('bare counts use the first single-item portion, skipping measures', () => {
+  test('bare counts take a whole-item portion before a measure', () => {
     expect(quantityToGrams({ count: 3 }, hotDog)).toBe(171);
     expect(quantityToGrams({ count: 2 }, mystery)).toBe(160);
   });
-  test('a food with only measure portions has no natural serving', () => {
-    expect(quantityToGrams({ count: 1 }, oilNoTbsp)).toBeNull();
+  test('a bare count falls back to a cup when there is no whole-item portion', () => {
+    expect(quantityToGrams({ count: 1 }, oilNoTbsp)).toBe(216);
+  });
+  test('sub-serving measures rank last, but a container label that mentions fl oz is a container', () => {
+    const cola: DatasetFood = {
+      ...egg, id: 'cola',
+      portions: [{ label: '1 fl oz (no ice)', grams: 31 }, { label: '1 cup', grams: 247 }, { label: '1 can (12 fl oz)', grams: 372 }],
+    };
+    expect(quantityToGrams({ count: 1 }, cola)).toBe(372);
+    expect(quantityToGrams({ count: 1 }, { ...cola, portions: cola.portions.filter((p) => !p.label.includes('can')) })).toBe(247);
+    expect(quantityToGrams({ count: 1 }, { ...cola, portions: [{ label: '1 fl oz', grams: 31 }, { label: '1 tbsp', grams: 15 }] })).toBe(31);
+  });
+  test('the middle size is preferred, and qualified variants lose', () => {
+    const apple: DatasetFood = {
+      ...egg, id: 'apple',
+      portions: [{ label: '1 small', grams: 165 }, { label: '1 medium', grams: 200 }, { label: '1 large', grams: 242 }],
+    };
+    expect(quantityToGrams({ count: 1 }, apple)).toBe(200);
+    const bread: DatasetFood = {
+      ...egg, id: 'bread',
+      portions: [{ label: '1 slice, crust not eaten', grams: 13 }, { label: '1 slice', grams: 28 }],
+    };
+    expect(quantityToGrams({ count: 2, unitLabel: 'slice' }, bread)).toBe(56);
+    expect(quantityToGrams({ count: 2 }, bread)).toBe(56);
+  });
+  test('dataset guideline rows and a school container never beat a cup', () => {
+    const milk: DatasetFood = {
+      ...egg, id: 'milk',
+      portions: [{ label: '1 cup', grams: 244 }, { label: '1 individual school container', grams: 244 }, { label: 'Guideline amount per fl oz of beverage', grams: 2.5 }],
+    };
+    expect(resolveItems([{ rawFragment: 'milk', quantity: { count: 1 }, foodQuery: 'milk' }], lookupOf([milk])).refs[0]!.portionLabel).toBe('1 cup');
+  });
+  test('a food with no portions at all has no serving', () => {
+    expect(quantityToGrams({ count: 1 }, { ...egg, portions: [] })).toBeNull();
+  });
+  test('a bare-count ref reports the portion it chose', () => {
+    expect(resolveItems(parseEntry('two hot dogs').items, fixtureLookup).refs[0]!.portionLabel).toBe('1 frankfurter');
   });
   test('unit labels match case-insensitively and tolerate the leading number', () => {
     expect(quantityToGrams({ count: 2, unitLabel: 'TBSP' }, oliveOil)).toBe(27);

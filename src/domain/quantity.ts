@@ -23,6 +23,7 @@ const KITCHEN_UNITS: Record<string, string> = {
   cup: 'cup', cups: 'cup',
   slice: 'slice', slices: 'slice',
   piece: 'piece', pieces: 'piece',
+  glass: 'glass', glasses: 'glass',
 };
 
 // Numbers: decimal point or decimal comma ("1.5", "1,5"), and fractions.
