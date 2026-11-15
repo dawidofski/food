@@ -1,3 +1,14 @@
+/**
+ * Food repository. Read this before relying on `score`.
+ *
+ * The real accept/reject decision in search is TOKEN COMPLETENESS, not the score: a food is
+ * returned only when every word of the (normalised, singularised, synonym-mapped) query is
+ * present in its name (or in a dataset synonym), allowing one typo in words of 5+ letters.
+ * Fuse.js still supplies `score` (0 exact .. 1 poor), but with ignoreLocation and
+ * ignoreFieldNorm it is near 0 for any full-word match, so it only separates exact words
+ * from typo matches. A threshold on it (e.g. 0.25) is a near no-op; do not treat it as a
+ * quality signal. Result ORDER comes from base-form ranking (see qualifierPenalty).
+ */
 import Fuse from 'fuse.js';
 import type { DatasetFood } from '@/types/food';
 
@@ -11,27 +22,25 @@ export interface FoodHit {
 
 /**
  * Curated colloquialisms the dataset does not carry. Keys and values are plain
- * lowercase phrases; both go through the same normalisation as queries. Extend freely.
+ * lowercase phrases; both go through the same normalisation as queries. Extend freely, but
+ * only when the target is nutritionally the SAME food. If the dataset has no equivalent
+ * entry (passata, courgette: its only zucchini is pickled), the right answer is no hit, so
+ * the user adds their own food rather than logging plausible-looking wrong numbers.
+ * Deliberately absent: chips (UK fries vs US crisps), mince (beef, lamb or pork), sweets.
  */
 export const QUERY_SYNONYMS: Record<string, string> = {
   coke: 'cola',
   pepsi: 'cola',
   crisps: 'potato chips',
-  chips: 'potato chips',
   aubergine: 'eggplant',
-  courgette: 'zucchini',
   yoghurt: 'yogurt',
   penne: 'pasta',
   fusilli: 'pasta',
   rigatoni: 'pasta',
-  passata: 'tomato sauce',
   rocket: 'arugula',
   coriander: 'cilantro',
   prawn: 'shrimp',
-  mince: 'ground beef',
   fries: 'french fries',
-  'ice lolly': 'ice pop',
-  sweets: 'candy',
 };
 
 /** Words marking the plain/base variant of a FNDDS food. */
@@ -103,7 +112,7 @@ function qualifierPenalty(segs: string[][], qt: string[]): number {
       if (firstMatch < 0) firstMatch = i;
       penalty += 0.05 * seg.filter((t) => !BASE_MARKERS.has(t) && !qt.some((q) => tokenMatches(q, [t]))).length;
     } else {
-      penalty += seg.some((t) => BASE_MARKERS.has(t)) && seg.length <= 3 ? -0.02 : 0.02;
+      penalty += seg.every((t) => BASE_MARKERS.has(t)) ? -0.02 : 0.02;
     }
   });
   return penalty + 0.01 * Math.max(firstMatch, 0);
@@ -204,7 +213,7 @@ export function searchFoods(query: string, limit = 10): FoodHit[] {
     if (!inName && !inSyn) continue;
     const base = r.score ?? 1;
     const score = Math.min(1, base + (inSyn ? 0.1 : 0));
-    const rank = 0.2 * score + qualifierPenalty(d.segTokens, qt);
+    const rank = 0.2 * score + qualifierPenalty(d.segTokens, qt) + (inSyn ? 1 : 0); // name matches always beat category-label matches
     hits.push({ hit: { food: d.food, score }, rank });
   }
   hits.sort((a, b) => a.rank - b.rank);

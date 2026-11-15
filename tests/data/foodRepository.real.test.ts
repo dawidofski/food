@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeAll, expect, test } from 'vitest';
-import { datasetState, loadFoods, resetFoodRepository, searchFoods } from '@/data/foodRepository';
+import { QUERY_SYNONYMS, datasetState, loadFoods, resetFoodRepository, searchFoods } from '@/data/foodRepository';
 
 // Slow-ish: loads the real bundled dataset (~4 MB, 5,431 foods) and indexes it.
 const fromDisk = (async (url: string) => {
@@ -11,7 +11,9 @@ const fromDisk = (async (url: string) => {
 }) as typeof fetch;
 
 const ACCEPT = 0.25;
-const UNRESOLVABLE = ['frikandel', 'bitterballen'];
+// Unresolvable by design: Dutch foods absent from USDA, and foods whose only dataset
+// equivalent is a different food (passata -> salted cooking sauce, courgette -> pickled zucchini).
+const UNRESOLVABLE = ['frikandel', 'bitterballen', 'passata', 'courgette'];
 const QUERIES = [
   'hot dogs', 'hot dog', 'cola', 'penne', 'passata', 'white bread', 'cheddar cheese', 'yoghurt',
   'apple', 'eggs', 'salmon', 'bitterballen', 'frikandel', 'coke', 'crisps', 'aubergine',
@@ -36,8 +38,20 @@ test.each(QUERIES.filter((q) => !UNRESOLVABLE.includes(q)))('"%s" resolves withi
 });
 
 test.each(UNRESOLVABLE)('"%s" is correctly unresolvable', (q) => {
-  const hit = top(q);
-  expect(hit === undefined || hit.score > ACCEPT).toBe(true);
+  expect(searchFoods(q)).toEqual([]);
+});
+
+test('passata and courgette are not re-added to the query synonym map', () => {
+  expect(QUERY_SYNONYMS).not.toHaveProperty('passata');
+  expect(QUERY_SYNONYMS).not.toHaveProperty('courgette');
+});
+
+test('penne and bare pasta resolve to plain refined "Pasta, cooked", outranking every qualified variant', () => {
+  for (const q of ['penne', 'pasta', 'fusilli']) {
+    const hit = top(q)!;
+    expect(hit.food.name).toBe('Pasta, cooked');
+    expect(hit.food.classification.refinedGrain).toBe(true);
+  }
 });
 
 test('cola resolves to a cola drink, not a confectionery; coke is the same', () => {
