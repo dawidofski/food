@@ -1,0 +1,92 @@
+/** A parsed amount. Weight/volume units set `grams`; kitchen units set `count` + `unitLabel` only. */
+export type Quantity = { count?: number; grams?: number; unitLabel?: string };
+
+const NUMBER_WORDS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
+  eighteen: 18, nineteen: 19, twenty: 20, half: 0.5,
+};
+
+// Weight and volume units convert straight to grams. ml and l are treated as grams 1:1: exact for
+// water-like liquids and close enough for the rest (milk, juice, cola). Density is not modelled.
+const GRAM_UNITS: Record<string, number> = {
+  g: 1, gram: 1, grams: 1, kg: 1000, kilogram: 1000, kilograms: 1000,
+  ml: 1, millilitre: 1, millilitres: 1, milliliter: 1, milliliters: 1,
+  l: 1000, litre: 1000, litres: 1000, liter: 1000, liters: 1000,
+};
+
+// Kitchen units have NO gram weight here: a tablespoon of oil and of flour differ in mass, so the
+// weight comes from the food's own portion rows later.
+const KITCHEN_UNITS: Record<string, string> = {
+  tbsp: 'tbsp', tablespoon: 'tbsp', tablespoons: 'tbsp',
+  tsp: 'tsp', teaspoon: 'tsp', teaspoons: 'tsp',
+  cup: 'cup', cups: 'cup',
+  slice: 'slice', slices: 'slice',
+  piece: 'piece', pieces: 'piece',
+};
+
+const NUMERIC = /^(-?(?:\d+(?:\.\d+)?|\.\d+)(?:\/\d+(?:\.\d+)?)?)/;
+const WORD_NUM = new RegExp(`^(${Object.keys(NUMBER_WORDS).join('|')})(?![a-z])`);
+const UNIT = /^\s*([a-z]+)(?![a-z])/;
+
+function parseNumeric(token: string): number | null {
+  const [a, b] = token.split('/');
+  const n = Number(a);
+  if (b === undefined) return Number.isFinite(n) ? n : null;
+  const d = Number(b);
+  if (d === 0) return null;
+  const v = n / d;
+  return Number.isFinite(v) ? v : null;
+}
+
+function finish(count: number, after: string): { quantity: Quantity; rest: string } | null {
+  const u = UNIT.exec(after);
+  if (u) {
+    const word = u[1]!;
+    const factor = GRAM_UNITS[word];
+    if (factor !== undefined) {
+      const grams = count * factor;
+      if (!Number.isFinite(grams)) return null;
+      return { quantity: { grams }, rest: stripOf(after.slice(u[0].length)) };
+    }
+    const label = KITCHEN_UNITS[word];
+    if (label !== undefined) {
+      return { quantity: { count, unitLabel: label }, rest: stripOf(after.slice(u[0].length)) };
+    }
+  }
+  return { quantity: { count }, rest: after.trim() };
+}
+
+function stripOf(s: string): string {
+  return s.trim().replace(/^of\s+/, '').trim();
+}
+
+/** Reads a leading quantity. Returns null when the text does not start with one (or it is malformed). */
+export function parseQuantity(text: string): { quantity: Quantity; rest: string } | null {
+  const t = text.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+
+  const num = NUMERIC.exec(t);
+  if (num) {
+    const n = parseNumeric(num[1]!);
+    return n === null ? null : finish(n, t.slice(num[0].length));
+  }
+
+  const word = WORD_NUM.exec(t);
+  if (word) {
+    let after = t.slice(word[0].length);
+    // "half a banana": the article after "half" is not part of the food.
+    if (word[1] === 'half') after = after.replace(/^\s+an?(?![a-z])/, '');
+    return finish(NUMBER_WORDS[word[1]!]!, after);
+  }
+
+  const article = /^an?(?= )/.exec(t);
+  if (article) {
+    const after = t.slice(article[0].length);
+    // "a half" means 0.5, not one item called "half".
+    const half = /^\s+half(?![a-z])/.exec(after);
+    if (half) return finish(0.5, after.slice(half[0].length));
+    return finish(1, after);
+  }
+  return null;
+}
