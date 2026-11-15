@@ -59,6 +59,17 @@ describe('pinned bare-count portions', () => {
     expect(r.refs[0]!.grams).toBe(244);
     expect(r.refs[0]!.portionLabel).toBe('1 cup');
   });
+  test('a hot pepper is the 15 g pepper, not a 150 g cup (labels containing "per" are not guideline rows)', () => {
+    const r = resolveText('a hot pepper');
+    expect(r.needsHelp).toEqual([]);
+    expect(r.refs[0]!.portionLabel).toBe('1 pepper');
+    expect(r.refs[0]!.grams).toBeCloseTo(15, 0);
+  });
+  test('milk never takes a 2.5 g guideline row', () => {
+    const r = resolveText('a glass of milk');
+    expect(r.refs[0]!.grams).toBe(244);
+    expect(r.refs[0]!.portionLabel).toBe('1 cup');
+  });
   test('apple takes the medium (200 g)', () => expect(gramsOf('an apple')).toEqual([200]));
   test('two hot dogs is 114 g from "1 regular"', () => expect(gramsOf('two hot dogs')).toEqual([114]));
   test('a cola is the can, never a fluid ounce', () => {

@@ -55,6 +55,7 @@ function parsePortionLabel(label: string): { n: number; word: string; words: str
   return { n: Number.isFinite(n) && n > 0 ? n : 1, word: unitWord(m?.[3] ?? ''), words };
 }
 
+const NOT_A_SERVING = /guideline amount|^topping per /i;
 const CONTAINER = new Set(['can', 'bottle', 'package', 'packet', 'bar', 'box', 'carton', 'pouch', 'jar']);
 
 /**
@@ -109,15 +110,18 @@ function choosePortion(q: Quantity, food: DatasetFood): { grams: number; label?:
   const wanted = q.unitLabel === undefined ? undefined : unitWord(q.unitLabel);
   const candidates = food.portions
     .map((p, i) => ({ p, i, ...parsePortionLabel(p.label) }))
-    // "Guideline amount per fl oz of beverage" is a dataset rule of thumb (2.5 g), not a serving.
-    .filter((c) => !/^guideline|per/i.test(c.p.label))
+    // Dataset rules of thumb, not servings ("Guideline amount per fl oz of beverage" = 2.5 g,
+    // "Topping per surface inch of pizza"). Anchored to those phrases on purpose: a bare "per"
+    // also sits inside real portions ("1 pepper", "1 personal size pizza", "1 paper cup",
+    // "1 slice (15 per 8 oz package)"), and dropping those silently changes the weight.
+    .filter((c) => !NOT_A_SERVING.test(c.p.label))
     .filter((c) => c.word !== '' && Number.isFinite(c.p.grams) && c.p.grams > 0)
     .filter((c) => (wanted === undefined ? true : c.words.includes(wanted)));
   const rank = (c: (typeof candidates)[number]) => [wanted === undefined ? group(c.word, c.p.label) : 0, tier(c.p.label, c.word), c.i];
   candidates.sort((a, b) => {
     const ra = rank(a);
     const rb = rank(b);
-    return ra[0]! - rb[0]! || ra[1]! - rb[1]! || ra[2]! - rb[2]!;
+    return ra[0]! - rb[0]! || ra[1]! - rb[1]! || a.p.grams - b.p.grams || (a.p.label < b.p.label ? -1 : a.p.label > b.p.label ? 1 : 0) || ra[2]! - rb[2]!;
   });
   const best = candidates[0];
   if (!best) return null;

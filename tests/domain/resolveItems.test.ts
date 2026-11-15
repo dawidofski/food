@@ -146,7 +146,7 @@ describe('quantityToGrams', () => {
     };
     expect(quantityToGrams({ count: 1 }, cola)).toBe(372);
     expect(quantityToGrams({ count: 1 }, { ...cola, portions: cola.portions.filter((p) => !p.label.includes('can')) })).toBe(247);
-    expect(quantityToGrams({ count: 1 }, { ...cola, portions: [{ label: '1 fl oz', grams: 31 }, { label: '1 tbsp', grams: 15 }] })).toBe(31);
+    expect(quantityToGrams({ count: 1 }, { ...cola, portions: [{ label: '1 fl oz', grams: 31 }, { label: '1 tbsp', grams: 15 }] })).toBe(15); // measures only: deterministic smallest first
   });
   test('the middle size is preferred, and qualified variants lose', () => {
     const apple: DatasetFood = {
@@ -169,6 +169,30 @@ describe('quantityToGrams', () => {
     expect(quantityToGrams({ count: 1 }, milk)).toBe(244);
     expect(quantityToGrams({ count: 1 }, { ...milk, portions: milk.portions.slice(1) })).toBe(244);
     expect(quantityToGrams({ count: 1 }, { ...milk, portions: milk.portions.slice(2) })).toBeNull();
+  });
+  test('labels that merely contain "per" are real portions: pepper, personal pizza, paper, "N per package"', () => {
+    const pepper: DatasetFood = { ...egg, id: 'pepper', portions: [{ label: '1 pepper', grams: 15 }, { label: '1 cup', grams: 150 }] };
+    expect(quantityToGrams({ count: 1 }, pepper)).toBe(15);
+    const pizza: DatasetFood = { ...egg, id: 'pizza', portions: [{ label: '1 personal size pizza (5-7" diameter)', grams: 150 }, { label: '1 cup', grams: 100 }] };
+    expect(quantityToGrams({ count: 1 }, pizza)).toBe(150);
+    const bacon: DatasetFood = { ...egg, id: 'bacon', portions: [{ label: '1 slice (15 per 8 oz package)', grams: 8 }, { label: '1 cup', grams: 100 }] };
+    expect(quantityToGrams({ count: 2 }, bacon)).toBe(16);
+    const guideline: DatasetFood = { ...egg, id: 'g', portions: [{ label: '1 guideline amount per item', grams: 1 }, { label: 'Topping per surface inch of pizza', grams: 3 }, { label: 'Guideline amount per fl oz of beverage', grams: 2.5 }] };
+    expect(quantityToGrams({ count: 1 }, guideline)).toBeNull();
+  });
+  test('the chosen weight does not depend on the order of the portion rows', () => {
+    const apple: DatasetFood = {
+      ...egg, id: 'apple',
+      portions: [
+        { label: '1 medium (3" dia)', grams: 182 }, { label: '1 medium', grams: 200 }, { label: '1 small', grams: 165 },
+        { label: '1 large', grams: 242 }, { label: '1 cup', grams: 125 },
+      ],
+    };
+    const orders = [apple.portions, [...apple.portions].reverse(), [...apple.portions.slice(2), ...apple.portions.slice(0, 2)]];
+    const weights = orders.map((portions) => quantityToGrams({ count: 1 }, { ...apple, portions }));
+    expect(new Set(weights).size).toBe(1);
+    const sliced = orders.map((portions) => quantityToGrams({ count: 1, unitLabel: 'cup' }, { ...apple, portions }));
+    expect(new Set(sliced).size).toBe(1);
   });
   test('a food with no portions at all has no serving', () => {
     expect(quantityToGrams({ count: 1 }, { ...egg, portions: [] })).toBeNull();
