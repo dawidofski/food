@@ -42,7 +42,9 @@ describe('check-no-secrets.sh', () => {
 
   test('exits 1 and names the file when a single file leaks a key', () => {
     git('init', '-q');
-    writeFileSync(join(dir, 'a.ts'), 'x = "a fake sk- style key"\n');
+    // Built at runtime so this tracked file never contains a literal the guard matches.
+    const fakeKey = ['sk', 'abcdefghijklmnopqrstuv'].join('-');
+    writeFileSync(join(dir, 'a.ts'), `x = "${fakeKey}"\n`);
     git('add', 'a.ts');
     const r = run();
     expect(r.status).toBe(1);
