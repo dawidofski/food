@@ -146,7 +146,7 @@ describe('quantityToGrams', () => {
     };
     expect(quantityToGrams({ count: 1 }, cola)).toBe(372);
     expect(quantityToGrams({ count: 1 }, { ...cola, portions: cola.portions.filter((p) => !p.label.includes('can')) })).toBe(247);
-    expect(quantityToGrams({ count: 1 }, { ...cola, portions: [{ label: '1 fl oz', grams: 31 }, { label: '1 tbsp', grams: 15 }] })).toBe(15); // measures only: deterministic smallest first
+    expect(quantityToGrams({ count: 1 }, { ...cola, portions: [{ label: '1 fl oz', grams: 31 }, { label: '1 tbsp', grams: 15 }] })).toBe(31); // measures only: label order, not weight
   });
   test('the middle size is preferred, and qualified variants lose', () => {
     const apple: DatasetFood = {
@@ -193,6 +193,28 @@ describe('quantityToGrams', () => {
     expect(new Set(weights).size).toBe(1);
     const sliced = orders.map((portions) => quantityToGrams({ count: 1, unitLabel: 'cup' }, { ...apple, portions }));
     expect(new Set(sliced).size).toBe(1);
+  });
+  test('a whole item beats a fragment of it, whatever the row order or weights', () => {
+    const cases: [string, { label: string; grams: number }[], number][] = [
+      ['banana', [{ label: '1 banana', grams: 126 }, { label: '1 slice', grams: 6 }, { label: '1 cup', grams: 150 }, { label: '1 linear inch', grams: 15 }], 126],
+      ['cereal', [{ label: '1 cup', grams: 40 }, { label: '1 prepackaged single serving', grams: 30 }, { label: '1 piece', grams: 0.1 }], 30],
+      ['butter', [{ label: '1 stick', grams: 113 }, { label: '1 pat', grams: 7 }, { label: '1 tablespoon', grams: 14 }], 113],
+      ['oxtail', [{ label: '1 tail', grams: 240 }, { label: '1 tail bone', grams: 30 }, { label: '1 cup', grams: 135 }], 240],
+      ['apricot', [{ label: '1 apricot', grams: 35 }, { label: '1 slice/chunk', grams: 10 }], 35],
+    ];
+    for (const [name, portions, want] of cases) {
+      const orders = [portions, [...portions].reverse(), [...portions.slice(1), ...portions.slice(0, 1)]];
+      for (const o of orders) expect(quantityToGrams({ count: 1 }, { ...egg, portions: o }), name).toBe(want);
+    }
+  });
+  test('portions tied on group and tier resolve to the middle weight, in any row order', () => {
+    const sausage = [{ label: '1 patty', grams: 35 }, { label: '1 breakfast size link', grams: 20 }, { label: '1 bun-size or griller link', grams: 75 }, { label: '1 slice', grams: 15 }];
+    for (const o of [sausage, [...sausage].reverse(), [...sausage.slice(2), ...sausage.slice(0, 2)]]) {
+      expect(quantityToGrams({ count: 1 }, { ...egg, portions: o })).toBe(35);
+    }
+  });
+  test('an explicit fragment unit still wins: 2 slices of banana', () => {
+    expect(quantityToGrams({ count: 2, unitLabel: 'slice' }, { ...egg, portions: [{ label: '1 banana', grams: 126 }, { label: '1 slice', grams: 6 }] })).toBe(12);
   });
   test('a food with no portions at all has no serving', () => {
     expect(quantityToGrams({ count: 1 }, { ...egg, portions: [] })).toBeNull();

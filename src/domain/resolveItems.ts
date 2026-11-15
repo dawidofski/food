@@ -31,7 +31,7 @@ const UNIT_ALIASES: Record<string, string> = {
 // Leading words of portion labels that are measuring units, not servings. Matching is on the
 // label's FIRST word only, so "1 can (12 fl oz)" (first word "can") is a container, not a measure.
 const SUB_SERVING = new Set([
-  'fl', 'oz', 'cubic', 'surface', 'tbsp', 'tsp', 'lb', 'g', 'gram', 'ml', 'l', 'pint', 'quart', 'gallon', 'liter', 'litre',
+  'fl', 'oz', 'cubic', 'surface', 'linear', 'tbsp', 'tsp', 'lb', 'g', 'gram', 'ml', 'l', 'pint', 'quart', 'gallon', 'liter', 'litre',
 ]);
 const MIDDLE_SIZE = /\b(medium|regular)\b/;
 const OTHER_SIZE = /\b(small|large|big)\b/;
@@ -56,18 +56,28 @@ function parsePortionLabel(label: string): { n: number; word: string; words: str
 }
 
 const NOT_A_SERVING = /guideline amount|^topping per /i;
-const CONTAINER = new Set(['can', 'bottle', 'package', 'packet', 'bar', 'box', 'carton', 'pouch', 'jar']);
+// In preference order: a can is the natural single serving of a drink before a bottle.
+const CONTAINERS = ['can', 'bottle', 'package', 'packet', 'bar', 'box', 'carton', 'pouch', 'jar'];
+// Words naming a FRACTION of the food, not a serving of it. A whole item in the same group must
+// beat these ("1 banana" 126 g over "1 slice" 6 g). Genuine wholes are deliberately absent:
+// stick, patty, tail, whole, loaf, link, fillet. Ignored when the user named the unit themselves.
+const FRAGMENT_WORDS = new Set([
+  'slice', 'piece', 'pat', 'chunk', 'cube', 'wedge', 'sliver', 'bone', 'bite', 'strip', 'square', 'half', 'quarter',
+]);
 
 /**
  * Lower is better. Orders portions of the same group: a real container (so cola is the can, not
- * the fast-food "medium drink"), middle size, plain, other sizes, then qualified variants.
+ * the fast-food "medium drink"), middle size, plain, other sizes, fragments of the food, then
+ * qualified variants. Ties are broken by label and weight in choosePortion, never by dataset order.
  */
-function tier(label: string, word: string): number {
+function tier(label: string, word: string, words: string[], explicitUnit: boolean): number {
   const l = label.toLowerCase();
-  if (QUALIFIED.test(l)) return 4;
-  if (CONTAINER.has(word)) return 0;
+  if (QUALIFIED.test(l)) return 5;
+  const c = CONTAINERS.indexOf(word);
+  if (c >= 0) return c / 100;
   if (MIDDLE_SIZE.test(l)) return 1;
   if (OTHER_SIZE.test(l)) return 3;
+  if (!explicitUnit && words.some((w) => FRAGMENT_WORDS.has(w))) return 4;
   return 2;
 }
 
@@ -117,13 +127,18 @@ function choosePortion(q: Quantity, food: DatasetFood): { grams: number; label?:
     .filter((c) => !NOT_A_SERVING.test(c.p.label))
     .filter((c) => c.word !== '' && Number.isFinite(c.p.grams) && c.p.grams > 0)
     .filter((c) => (wanted === undefined ? true : c.words.includes(wanted)));
-  const rank = (c: (typeof candidates)[number]) => [wanted === undefined ? group(c.word, c.p.label) : 0, tier(c.p.label, c.word), c.i];
-  candidates.sort((a, b) => {
-    const ra = rank(a);
-    const rb = rank(b);
-    return ra[0]! - rb[0]! || ra[1]! - rb[1]! || a.p.grams - b.p.grams || (a.p.label < b.p.label ? -1 : a.p.label > b.p.label ? 1 : 0) || ra[2]! - rb[2]!;
-  });
-  const best = candidates[0];
+  const rank = (c: (typeof candidates)[number]) => [wanted === undefined ? group(c.word, c.p.label) : 0, tier(c.p.label, c.word, c.words, wanted !== undefined)];
+  if (candidates.length === 0) return null;
+  // Everything tied on (group, tier) is a set of equally plausible servings. Dataset row order
+  // must not decide among them (a rebuild could reorder), so take the middle one by weight, then
+  // label: the same "prefer the middle option" rule as sizes ("1 patty" 35 g among 20 g and 75 g
+  // links). Upper median, so two tied measures give the larger ("1 fl oz" over "1 tbsp").
+  const ranks = candidates.map(rank);
+  const top = ranks.reduce((best, r) => (r[0]! < best[0]! || (r[0] === best[0] && r[1]! < best[1]!) ? r : best));
+  const tied = candidates
+    .filter((_, i) => ranks[i]![0] === top[0] && ranks[i]![1] === top[1])
+    .sort((x, y) => x.p.grams - y.p.grams || (x.p.label < y.p.label ? -1 : x.p.label > y.p.label ? 1 : 0));
+  const best = tied[Math.floor(tied.length / 2)];
   if (!best) return null;
   const grams = boundedGrams((count * best.p.grams) / best.n);
   return grams === null ? null : { grams, label: best.p.label };

@@ -70,6 +70,19 @@ describe('pinned bare-count portions', () => {
     expect(r.refs[0]!.grams).toBe(244);
     expect(r.refs[0]!.portionLabel).toBe('1 cup');
   });
+  test('a banana is the whole 126 g banana, not a 6 g slice', () => {
+    const r = resolveText('a banana');
+    expect(r.refs[0]!.portionLabel).toBe('1 banana');
+    expect(r.refs[0]!.grams).toBe(126);
+  });
+  test('an apricot is the whole 35 g fruit, not a slice/chunk', () => {
+    expect(resolveText('an apricot').refs[0]!.grams).toBeCloseTo(35, 0);
+  });
+  test("cereal O's takes the single serving, not a 0.1 g piece", () => {
+    const r = resolveText("cereal o's");
+    expect(r.needsHelp).toEqual([]);
+    expect(r.refs[0]!.grams).toBeGreaterThanOrEqual(25);
+  });
   test('apple takes the medium (200 g)', () => expect(gramsOf('an apple')).toEqual([200]));
   test('two hot dogs is 114 g from "1 regular"', () => expect(gramsOf('two hot dogs')).toEqual([114]));
   test('a cola is the can, never a fluid ounce', () => {
