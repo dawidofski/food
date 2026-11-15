@@ -47,6 +47,11 @@ describe('nutrient math', () => {
     expect(energyShare(31, 'satFatG', 2834)).toBeCloseTo(0.0984, 3);
   });
 
+  test('energyShare returns 0 rather than Infinity when energy is zero or negative', () => {
+    expect(energyShare(31, 'satFatG', 0)).toBe(0);
+    expect(energyShare(31, 'satFatG', -100)).toBe(0);
+  });
+
   test('mergeClassification takes the worst case', () => {
     const r = mergeClassification([base({ novaGroup: 1 }), base({ novaGroup: 4, processedMeat: true })]);
     expect(r.novaGroup).toBe(4);

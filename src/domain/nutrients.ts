@@ -74,6 +74,8 @@ export function energyShare(
   key: 'satFatG' | 'addedSugarsG' | 'transFatG',
   energyKcal: number,
 ): number {
+  // No positive energy figure means no basis for a share: report 0, never Infinity/NaN.
+  if (!(energyKcal > 0)) return 0;
   const kcalPerG = key === 'addedSugarsG' ? 4 : 9;
   return (nutrientG * kcalPerG) / energyKcal;
 }
