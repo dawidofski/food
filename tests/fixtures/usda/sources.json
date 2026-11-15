@@ -1,0 +1,6 @@
+{
+  "fdcRelease": "FNDDS 2021-2023 (FoodData Central survey_food_csv, release 2024-10-31) - test fixture slice",
+  "fpedRelease": "FPED 2021-2023 (per 100 g of FNDDS 2021-2023 foods) - test fixture slice",
+  "fpedYearUsed": "2021-2023",
+  "fpedMatchesFndds": true
+}
