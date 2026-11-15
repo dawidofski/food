@@ -43,8 +43,58 @@ describe('nutrient math', () => {
     expect('sodiumMg' in total).toBe(false);
   });
 
+  test('a measured zero is kept, not treated as absent', () => {
+    const r = scalePer100g({ sodiumMg: 0 }, 50);
+    expect('sodiumMg' in r).toBe(true);
+    expect(r.sodiumMg).toBe(0);
+  });
+
+  test('summing measured zeros gives a present zero with known coverage', () => {
+    const { total, coverage } = sumNutrients([{ sodiumMg: 0 }, { sodiumMg: 0 }]);
+    expect('sodiumMg' in total).toBe(true);
+    expect(total.sodiumMg).toBe(0);
+    expect(coverage.sodiumMg).toBe('known');
+  });
+
+  test('a measured zero plus an unknown is a present zero with partial coverage', () => {
+    const { total, coverage } = sumNutrients([{ sodiumMg: 0 }, {}]);
+    expect(total.sodiumMg).toBe(0);
+    expect(coverage.sodiumMg).toBe('partial');
+  });
+
+  test('a non-zero value present in every input is known coverage', () => {
+    const { total, coverage } = sumNutrients([{ addedSugarsG: 12 }, { addedSugarsG: 3 }]);
+    expect(total.addedSugarsG).toBe(15);
+    expect(coverage.addedSugarsG).toBe('known');
+  });
+
+  test('a present but undefined value is unknown, not NaN', () => {
+    const { total, coverage } = sumNutrients([{ sodiumMg: undefined as never }]);
+    expect('sodiumMg' in total).toBe(false);
+    expect(coverage.sodiumMg).toBe('unknown');
+  });
+
+  test('a NaN value is unknown: absent from the total, partial coverage with a real value', () => {
+    const { total, coverage } = sumNutrients([{ sodiumMg: NaN }, { sodiumMg: 5 }]);
+    expect(total.sodiumMg).toBe(5);
+    expect(coverage.sodiumMg).toBe('partial');
+  });
+
+  test('scalePer100g with a non-finite grams argument returns an empty set', () => {
+    expect(scalePer100g({ sodiumMg: 100 }, NaN)).toEqual({});
+  });
+
+  test('scalePer100g omits a present-but-undefined value', () => {
+    const r = scalePer100g({ sodiumMg: undefined as never }, 50);
+    expect('sodiumMg' in r).toBe(false);
+  });
+
   test('energyShare expresses saturated fat as a share of energy', () => {
     expect(energyShare(31, 'satFatG', 2834)).toBeCloseTo(0.0984, 3);
+  });
+
+  test('energyShare uses 4 kcal/g for added sugars', () => {
+    expect(energyShare(10, 'addedSugarsG', 200)).toBeCloseTo(0.2);
   });
 
   test('energyShare returns 0 rather than Infinity when energy is zero or negative', () => {
@@ -56,5 +106,30 @@ describe('nutrient math', () => {
     const r = mergeClassification([base({ novaGroup: 1 }), base({ novaGroup: 4, processedMeat: true })]);
     expect(r.novaGroup).toBe(4);
     expect(r.processedMeat).toBe(true);
+  });
+
+  test('mergeClassification ORs every boolean flag', () => {
+    const r = mergeClassification([
+      base({ redMeat: true }),
+      base({ sweetDrink: true }),
+      base({ alcohol: true }),
+      base({ refinedGrain: true }),
+      base({ vegetable: true }),
+      base({ fruit: true }),
+      base({ legume: true }),
+      base({ oilyFish: true }),
+    ]);
+    expect(r).toEqual(
+      base({
+        redMeat: true,
+        sweetDrink: true,
+        alcohol: true,
+        refinedGrain: true,
+        vegetable: true,
+        fruit: true,
+        legume: true,
+        oilyFish: true,
+      }),
+    );
   });
 });

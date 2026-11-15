@@ -5,12 +5,22 @@ import {
   type NutrientSet,
 } from '@/types/nutrients';
 
-/** Scales a per-100g set to a gram amount. Absent keys stay absent (unknown). */
+/** A value counts as known only when it is a finite number. Absent, undefined, NaN and Infinity are unknown. */
+function isKnownValue(v: number | undefined): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/**
+ * Scales a per-100g set to a gram amount. Unknown values stay absent.
+ * A non-finite gram amount yields an empty set rather than NaN values.
+ */
 export function scalePer100g(per100g: NutrientSet, grams: number): NutrientSet {
   const out: NutrientSet = {};
+  if (!Number.isFinite(grams)) return out;
   for (const key of NUTRIENT_KEYS) {
-    if (key in per100g) {
-      out[key] = (per100g[key] as number) * (grams / 100);
+    const v = per100g[key];
+    if (isKnownValue(v)) {
+      out[key] = v * (grams / 100);
     }
   }
   return out;
@@ -25,13 +35,13 @@ export function sumNutrients(sets: NutrientSet[]): { total: NutrientSet; coverag
   const total: NutrientSet = {};
   const coverage: Coverage = {};
   for (const key of NUTRIENT_KEYS) {
-    const withKey = sets.filter((s) => key in s);
-    if (withKey.length === 0) {
+    const values = sets.map((s) => s[key]).filter(isKnownValue);
+    if (values.length === 0) {
       coverage[key] = 'unknown';
       continue;
     }
-    coverage[key] = withKey.length === sets.length ? 'known' : 'partial';
-    total[key] = withKey.reduce((acc, s) => acc + (s[key] as number), 0);
+    coverage[key] = values.length === sets.length ? 'known' : 'partial';
+    total[key] = values.reduce((acc, v) => acc + v, 0);
   }
   return { total, coverage };
 }
