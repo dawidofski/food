@@ -25,14 +25,19 @@ const KITCHEN_UNITS: Record<string, string> = {
   piece: 'piece', pieces: 'piece',
 };
 
-const NUMERIC = /^(-?(?:\d+(?:\.\d+)?|\.\d+)(?:\/\d+(?:\.\d+)?)?)/;
+// Numbers: thousands groups ("1,000"), decimal point or decimal comma ("1.5", "1,5"), fractions.
+// A comma followed by exactly three digits after a 1-3 digit group not starting with 0 is read as a
+// thousands separator ("1,000" = 1000); any other digit,digit comma is a decimal comma (Dutch
+// "1,5" = 1.5, "0,500" = 0.5). A deliberate guess: "1,000" is ambiguous and this is the common case.
+const NUMERIC = /^(-?(?:[1-9]\d{0,2}(?:,\d{3})+(?!\d)(?:\.\d+)?|\d+(?:[.,]\d+)?|[.,]\d+)(?:\/\d+(?:\.\d+)?)?)/;
 const MIXED = /^(-?\d+) (\d+)\/(\d+)(?![\d.\/])/;
 const WORD_NUM = new RegExp(`^(${Object.keys(NUMBER_WORDS).join('|')})(?![a-z])`);
 const UNIT = /^\s*([a-z]+)(?![a-z])/;
 
 function parseNumeric(token: string): number | null {
   const [a, b] = token.split('/');
-  const n = Number(a);
+  const plain = /^-?[1-9]\d{0,2}(?:,\d{3})+(?!\d)/.test(a!) ? a!.replace(/,/g, '') : a!.replace(',', '.');
+  const n = Number(plain);
   if (b === undefined) return Number.isFinite(n) ? n : null;
   const d = Number(b);
   if (d === 0) return null;
@@ -71,7 +76,7 @@ export function parseQuantity(text: string): { quantity: Quantity; rest: string 
   const mixed = MIXED.exec(t);
   if (mixed) {
     const d = Number(mixed[3]);
-    if (d === 0) return null;
+    if (d === 0 || t[mixed[0].length] === '%') return null;
     const whole = Number(mixed[1]);
     const frac = Number(mixed[2]) / d;
     const n = (mixed[1]!.startsWith('-') ? -1 : 1) * (Math.abs(whole) + frac);
@@ -80,6 +85,8 @@ export function parseQuantity(text: string): { quantity: Quantity; rest: string 
 
   const num = NUMERIC.exec(t);
   if (num) {
+    // "2% milk", "100% orange juice": the number names the food, it is not a quantity.
+    if (t[num[0].length] === '%') return null;
     const n = parseNumeric(num[1]!);
     return n === null ? null : finish(n, t.slice(num[0].length));
   }

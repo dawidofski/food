@@ -6,7 +6,8 @@ const MAX_INPUT = 1000;
 const MAX_UNPARSEABLE = 100;
 
 const FILLER = /^(?:(?:i|we)(?:'ve| have)?\s+)?(?:just\s+|also\s+)?(?:ate|eaten|had|drank|drunk|consumed|eat|drink|have)\s+/;
-const SPLIT = /\s*[,;+\n\r]\s*/;
+// A comma between digits is a decimal comma ("1,5 kg"), not a list separator.
+const SPLIT = /\s*(?:(?<!\d),|,(?!\d)|[;+\n\r])\s*/;
 
 // Compound dish names that contain " and " but are ONE food. Splitting on " and " is right by
 // default ("eggs and bacon" is two foods), so add dishes here when they would be torn apart.
@@ -14,7 +15,8 @@ const SPLIT = /\s*[,;+\n\r]\s*/;
 const COMPOUND_FOODS = [
   'mac and cheese', 'macaroni and cheese', 'salt and pepper', 'fish and chips', 'bangers and mash',
   'oil and vinegar', 'peaches and cream', 'biscuits and gravy', 'chicken and rice', 'beans and rice',
-  'ham and cheese', 'surf and turf',
+  'ham and cheese', 'surf and turf', 'half and half', 'peanut butter and jelly', 'bread and butter',
+  'cookies and cream', 'rice and beans',
 ];
 const COMPOUND_RE = new RegExp(String.raw`(?<!\p{L})(?:${COMPOUND_FOODS.join('|')})(?!\p{L})`, 'giu');
 const GLUE = '\u0001';
@@ -49,7 +51,9 @@ export function parseEntry(text: string): { items: ParsedItem[]; unparseable: st
   for (const piece of stripFiller(t).split(SPLIT).flatMap(splitSegment)) {
     const fragment = stripFiller(piece.trim());
     if (!fragment) continue;
-    const parsed = parseQuantity(fragment);
+    // A number word followed by "and" is part of a name ("half and half"), not a quantity.
+    const q = parseQuantity(fragment);
+    const parsed = q && /^and(?![\p{L}])/u.test(q.rest) ? null : q;
     const quantity: Quantity = parsed ? parsed.quantity : { count: 1 };
     const foodQuery = (parsed ? parsed.rest : fragment).replace(/[.!?]+$/, '').trim();
     if (plausibleFood(foodQuery)) items.push({ rawFragment: fragment, quantity, foodQuery });

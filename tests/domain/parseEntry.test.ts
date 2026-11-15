@@ -21,11 +21,18 @@ describe('parseEntry', () => {
     expect(unparseable).toEqual([]);
   });
 
-  // Review Focus 1: empty text or text containing no words yields no items
-  test.each(['', '   ', '🍕🍕', '...', '!?, ,'])('input with no words yields no items: %s', (t) => {
+  // Review Focus 1: empty text or text containing no words yields no items.
+  // Whitespace-only is nothing to report; symbol-only text is reported once as unparseable.
+  test.each([
+    ['', []],
+    ['   ', []],
+    ['🍕🍕', ['🍕🍕']],
+    ['...', ['...']],
+    ['!?, ,', ['!?']],
+  ])('input with no words yields no items: %s', (t, expected) => {
     const { items, unparseable } = parseEntry(t);
     expect(items).toEqual([]);
-    expect(unparseable.length === 0 || unparseable.length === 1).toBe(true);
+    expect(unparseable).toEqual(expected);
   });
 
   test('a 2,000-character string does not crash and is capped at 1,000 characters', () => {
@@ -51,6 +58,25 @@ describe('parseEntry', () => {
       ['mac and cheese', { count: 2 }],
       ['cola', { count: 1 }],
     ]);
+  });
+
+  test('more compound dishes stay whole', () => {
+    for (const d of ['half and half', 'peanut butter and jelly', 'bread and butter', 'cookies and cream', 'rice and beans']) {
+      expect(parseEntry(d).items.map((i) => i.foodQuery)).toEqual([d]);
+    }
+  });
+
+  test('a decimal comma is not a separator; a list comma still is', () => {
+    expect(parseEntry('1,5 kg rice').items.map((i) => [i.foodQuery, i.quantity])).toEqual([['rice', { grams: 1500 }]]);
+    expect(parseEntry('1.5 kg rice').items.map((i) => [i.foodQuery, i.quantity])).toEqual([['rice', { grams: 1500 }]]);
+    expect(parseEntry('1,000 g rice').items.map((i) => [i.foodQuery, i.quantity])).toEqual([['rice', { grams: 1000 }]]);
+    expect(parseEntry('2 eggs,3 apples').items.map((i) => i.foodQuery)).toEqual(['eggs', 'apples']);
+  });
+
+  test('percent names a food and is not a quantity', () => {
+    for (const [t, q] of [['2% milk', '2% milk'], ['1% milk', '1% milk'], ['0% yogurt', '0% yogurt'], ['100% orange juice', '100% orange juice']]) {
+      expect(parseEntry(t!).items.map((i) => [i.foodQuery, i.quantity])).toEqual([[q, { count: 1 }]]);
+    }
   });
 
   test('commas, plus and newlines always split, even inside a compound', () => {
@@ -104,6 +130,6 @@ describe('parseEntry', () => {
 
   test('input is capped at 1000 characters', () => {
     const t = 'apple, '.repeat(300);
-    expect(parseEntry(t).items.length).toBeLessThanOrEqual(143);
+    expect(parseEntry(t).items.length).toBe(143);
   });
 });
