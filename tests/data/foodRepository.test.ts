@@ -102,3 +102,33 @@ test('fetch URLs are built from BASE_URL without double slashes', async () => {
   expect(urls[1]).toBe(`${import.meta.env.BASE_URL.replace(/\/?$/, '/')}data/${FILE}`);
   for (const u of urls) expect(u.replace('://', '')).not.toContain('//');
 });
+
+test('a failed load retries on the next call', async () => {
+  await loadFoods(() => Promise.reject(new Error('offline')) as any);
+  expect(datasetState()).toBe('failed');
+  await loadFoods(datasetFetch());
+  expect(datasetState()).toBe('ready');
+  expect(searchFoods('apple')[0]!.food.id).toBe('f-apple');
+});
+
+test('plurals are normalised on both sides', async () => {
+  await loadFixture();
+  expect(searchFoods('hot dogs')[0]!.food.id).toBe('f-frankfurter');
+  expect(searchFoods('apples')[0]!.food.id).toBe('f-apple');
+});
+
+test('every query word must be present: cola does not match chocolate', async () => {
+  await loadFixture();
+  expect(searchFoods('cola')).toEqual([]);
+});
+
+test('the query-synonym map covers colloquialisms', async () => {
+  await loadFixture();
+  expect(searchFoods('sweets')[0]!.food.id).toBe('f-choc'); // dataset synonym
+  expect(searchFoods('toast')[0]!.food.id).toBe('f-bread');
+});
+
+test('multi-word queries match regardless of word order', async () => {
+  await loadFixture();
+  expect(searchFoods('white bread')[0]!.food.id).toBe('f-bread');
+});

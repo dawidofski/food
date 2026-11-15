@@ -2,29 +2,126 @@
   {
     "id": "f-frankfurter",
     "name": "Frankfurter, beef",
-    "synonyms": ["hot dog", "wiener"],
-    "per100g": { "energyKcal": 300, "proteinG": 11, "sodiumMg": 1000 },
-    "portions": [{ "label": "1 frankfurter", "grams": 45 }],
-    "classification": { "processedMeat": true, "redMeat": true, "sweetDrink": false, "alcohol": false, "novaGroup": 4, "refinedGrain": false, "vegetable": false, "fruit": false, "legume": false, "oilyFish": false },
+    "synonyms": [
+      "hot dog",
+      "wiener"
+    ],
+    "per100g": {
+      "energyKcal": 300,
+      "proteinG": 11,
+      "sodiumMg": 1000
+    },
+    "portions": [
+      {
+        "label": "1 frankfurter",
+        "grams": 45
+      }
+    ],
+    "classification": {
+      "processedMeat": true,
+      "redMeat": true,
+      "sweetDrink": false,
+      "alcohol": false,
+      "novaGroup": 4,
+      "refinedGrain": false,
+      "vegetable": false,
+      "fruit": false,
+      "legume": false,
+      "oilyFish": false
+    },
     "allergens": []
   },
   {
     "id": "f-apple",
     "name": "Apple, raw",
     "synonyms": [],
-    "per100g": { "energyKcal": 52 },
-    "portions": [{ "label": "1 medium", "grams": 182 }],
-    "classification": { "processedMeat": false, "redMeat": false, "sweetDrink": false, "alcohol": false, "novaGroup": 1, "refinedGrain": false, "vegetable": false, "fruit": true, "legume": false, "oilyFish": false },
+    "per100g": {
+      "energyKcal": 52
+    },
+    "portions": [
+      {
+        "label": "1 medium",
+        "grams": 182
+      }
+    ],
+    "classification": {
+      "processedMeat": false,
+      "redMeat": false,
+      "sweetDrink": false,
+      "alcohol": false,
+      "novaGroup": 1,
+      "refinedGrain": false,
+      "vegetable": false,
+      "fruit": true,
+      "legume": false,
+      "oilyFish": false
+    },
     "allergens": [],
-    "fped": { "vegCupEq": 0, "fruitCupEq": 1, "wholeGrainOzEq": 0 }
+    "fped": {
+      "vegCupEq": 0,
+      "fruitCupEq": 1,
+      "wholeGrainOzEq": 0
+    }
   },
   {
     "id": "f-bread",
     "name": "Bread, white",
-    "synonyms": ["toast"],
-    "per100g": { "energyKcal": 265, "carbG": 49 },
-    "portions": [{ "label": "1 slice", "grams": 28 }],
-    "classification": { "processedMeat": false, "redMeat": false, "sweetDrink": false, "alcohol": false, "novaGroup": 3, "refinedGrain": true, "vegetable": false, "fruit": false, "legume": false, "oilyFish": false },
-    "allergens": ["gluten"]
+    "synonyms": [
+      "toast"
+    ],
+    "per100g": {
+      "energyKcal": 265,
+      "carbG": 49
+    },
+    "portions": [
+      {
+        "label": "1 slice",
+        "grams": 28
+      }
+    ],
+    "classification": {
+      "processedMeat": false,
+      "redMeat": false,
+      "sweetDrink": false,
+      "alcohol": false,
+      "novaGroup": 3,
+      "refinedGrain": true,
+      "vegetable": false,
+      "fruit": false,
+      "legume": false,
+      "oilyFish": false
+    },
+    "allergens": [
+      "gluten"
+    ]
+  },
+  {
+    "id": "f-choc",
+    "name": "Chocolate candy",
+    "synonyms": [
+      "sweets"
+    ],
+    "per100g": {
+      "energyKcal": 500
+    },
+    "portions": [
+      {
+        "label": "1 bar",
+        "grams": 40
+      }
+    ],
+    "classification": {
+      "processedMeat": false,
+      "redMeat": false,
+      "sweetDrink": false,
+      "alcohol": false,
+      "novaGroup": 4,
+      "refinedGrain": false,
+      "vegetable": false,
+      "fruit": false,
+      "legume": false,
+      "oilyFish": false
+    },
+    "allergens": []
   }
 ]
