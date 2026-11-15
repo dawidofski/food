@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import fixture from '../fixtures/foods.fixture.json';
 import {
+  QUERY_SYNONYMS,
   datasetState,
   getFood,
   loadFoods,
@@ -45,9 +46,33 @@ test('searchFoods matches a synonym', async () => {
 
 test('searchFoods respects limit and getFood finds by id', async () => {
   await loadFixture();
-  expect(searchFoods('a', 1).length).toBeLessThanOrEqual(1);
+  expect(searchFoods('cookie').length).toBe(2); // the limit is what cuts it down, not a thin query
+  expect(searchFoods('cookie', 1).length).toBe(1);
   expect(getFood('f-apple')?.name).toBe('Apple, raw');
   expect(getFood('nope')).toBeUndefined();
+});
+
+test('equal-ranked hits come back in one total order, whatever the dataset order', async () => {
+  await loadFixture();
+  const first = searchFoods('cookie').map((h) => h.food.id);
+  resetFoodRepository();
+  await loadFoods(datasetFetch(JSON.stringify([...fixture].reverse())));
+  const reversed = searchFoods('cookie').map((h) => h.food.id);
+  expect(reversed).toEqual(first);
+  // Name, not Fuse's dataset-index fallback: a dataset rebuild cannot reorder these.
+  expect(first).toEqual(['f-cookie-almond', 'f-cookie-oatmeal']);
+});
+
+test('meta.json is fetched with no-cache, so a stale meta cannot name a deleted file', async () => {
+  const spy = datasetFetch();
+  await loadFoods(spy);
+  const [metaUrl, metaInit] = spy.mock.calls[0] as [string, RequestInit | undefined];
+  expect(String(metaUrl)).toContain('data/meta.json');
+  expect(metaInit?.cache).toBe('no-cache');
+});
+
+test('QUERY_SYNONYMS is frozen, like the phrase map derived from it at import time', () => {
+  expect(Object.isFrozen(QUERY_SYNONYMS)).toBe(true);
 });
 
 test('a failed fetch leaves the app in a failed state, not a throw', async () => {

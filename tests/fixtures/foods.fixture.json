@@ -96,6 +96,67 @@
     ]
   },
   {
+    "id": "f-cookie-almond",
+    "name": "Cookie, almond",
+    "synonyms": [],
+    "per100g": {
+      "energyKcal": 480,
+      "sodiumMg": 353
+    },
+    "portions": [
+      {
+        "label": "1 cookie",
+        "grams": 15
+      }
+    ],
+    "classification": {
+      "processedMeat": false,
+      "redMeat": false,
+      "sweetDrink": false,
+      "alcohol": false,
+      "novaGroup": 4,
+      "refinedGrain": true,
+      "vegetable": false,
+      "fruit": false,
+      "legume": false,
+      "oilyFish": false
+    },
+    "allergens": [
+      "gluten",
+      "nuts"
+    ]
+  },
+  {
+    "id": "f-cookie-oatmeal",
+    "name": "Cookie, oatmeal",
+    "synonyms": [],
+    "per100g": {
+      "energyKcal": 450,
+      "sodiumMg": 340
+    },
+    "portions": [
+      {
+        "label": "1 cookie",
+        "grams": 15
+      }
+    ],
+    "classification": {
+      "processedMeat": false,
+      "redMeat": false,
+      "sweetDrink": false,
+      "alcohol": false,
+      "novaGroup": 4,
+      "refinedGrain": true,
+      "vegetable": false,
+      "fruit": false,
+      "legume": false,
+      "oilyFish": false
+    },
+    "allergens": [
+      "gluten"
+    ]
+  },
+  {
     "id": "f-choc",
     "name": "Chocolate candy",
     "synonyms": [

@@ -51,6 +51,46 @@ test.each(['zucchini', 'courgette', 'zucchinis', 'courgettes'])('"%s" resolves t
   expect(hit.food.per100g.sodiumMg).toBeLessThan(10);
 });
 
+test('a compound query falls back to the unmapped words when the mapped ones match nothing', () => {
+  // zucchini -> "summer squash" turns "zucchini bread" into "summer squash bread", which no
+  // food carries; the real zucchini baked goods are only reachable through the fallback.
+  expect(top('zucchini bread')!.food.name).toBe('Bread, zucchini');
+  expect(top('zucchini muffin')!.food.name).toBe('Muffin, zucchini');
+  expect(top('zucchini cake')!.food.name).toBe('Cake or cupcake, zucchini');
+});
+
+// "-ies" is spelled the same for cookie/cookies and candy/candies, so the singulariser has to
+// try both forms; mapping it to "y" alone made 93 cookie, 22 pie and 5 brownie foods unreachable.
+test.each([
+  ['cookies', 'cookie'],
+  ['pies', 'pie'],
+  ['brownies', 'brownie'],
+])('the plural "%s" finds exactly what the singular "%s" finds', (plural, singular) => {
+  const forPlural = top(plural);
+  const forSingular = top(singular);
+  expect(forSingular, `no hit for ${singular}`).toBeDefined();
+  expect(forPlural, `no hit for ${plural}`).toBeDefined();
+  expect(forPlural!.food.id).toBe(forSingular!.food.id);
+  expect(forPlural!.food.name).toMatch(new RegExp(singular, 'i'));
+});
+
+test('"cookies" lands on the plain cookie, not on the one food named in the plural', () => {
+  expect(top('cookies')!.food.name).toBe('Cookie, NFS');
+});
+
+test('an "-ies" query also reaches the "y" spelling, without reaching a near word', () => {
+  // "candie" is one edit from "candied", so the typo tolerance has to stay off for a word
+  // whose singular was guessed: a candy apple is not a sweet.
+  expect(top('candies')!.food.name).toMatch(/^Candy/);
+  expect(top('candies')!.food.id).toBe(top('candy')!.food.id);
+});
+
+test('a singular query reaches a food the dataset names in the plural', () => {
+  expect(top('strawberry')!.food.name).toBe('Strawberries, raw');
+  expect(top('strawberries')!.food.id).toBe(top('strawberry')!.food.id);
+  expect(top('cherries')!.food.name).toBe('Cherries, raw');
+});
+
 test('penne and bare pasta resolve to plain refined "Pasta, cooked", outranking every qualified variant', () => {
   for (const q of ['penne', 'pasta', 'fusilli']) {
     const hit = top(q)!;
@@ -73,6 +113,19 @@ test('apple, eggs and salmon resolve to plain variants', () => {
 test('hot dogs and hot dog resolve to the same food', () => {
   expect(top('hot dogs')!.food.id).toBe(top('hot dog')!.food.id);
   expect(top('hot dog')!.food.name).toMatch(/^Hot dog, /);
+});
+
+/** The measurement harness: prints the top hit per query so a regression is visible in CI output. */
+test('the measured top-hit table', () => {
+  const measured = [...QUERIES, 'zucchini', 'zucchini bread', 'cookies', 'pies', 'brownies'];
+  const rows = measured.map((q) => {
+    const hit = top(q);
+    if (!hit) return `${q.padEnd(14)} NO HIT`;
+    const na = hit.food.per100g.sodiumMg;
+    return `${q.padEnd(14)} ${hit.score.toFixed(4)} ${hit.food.name} (Na ${na ?? 'unknown'})`;
+  });
+  console.log(`\n${rows.join('\n')}\n`);
+  expect(rows.filter((r) => r.endsWith('NO HIT'))).toHaveLength(UNRESOLVABLE.length);
 });
 
 test('every hit contains every query word, so no confident wrong matches', () => {
