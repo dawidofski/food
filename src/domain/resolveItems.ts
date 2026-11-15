@@ -36,7 +36,13 @@ const SUB_SERVING = new Set([
 const MIDDLE_SIZE = /\b(medium|regular)\b/;
 const OTHER_SIZE = /\b(small|large|big)\b/;
 // Variants that are not the ordinary item: they lose to a plain label of the same group.
-const QUALIFIED = /\b(not eaten|without|no |mini|miniature|cocktail|extra|jumbo|king|thin|thick|crust|nfs|school|child|senior|foot ?long)\b|\bno\b/;
+// `dry` belongs here: "1 cup, dry, yields" measures a cup of the DRY food and gives the weight it
+// becomes once cooked (barley 740 g, cream of wheat 965 g), which is roughly four servings, so it
+// must lose to the plain "1 cup, cooked" of the same food. Only `dry`, never a bare "yield":
+// "yield after cooking" marks genuine cooked whole items ("1 medium slice (yield after cooking)"
+// for bacon, "1 rib", "1 breast quarter"), and demoting those made bacon resolve to "1 cup,
+// pieces" (8 g -> 80 g) and french fries to a single 5 g fry. Measured on the real dataset.
+const QUALIFIED = /\b(not eaten|without|no |mini|miniature|cocktail|extra|jumbo|king|thin|thick|crust|nfs|school|child|senior|foot ?long|dry)\b|\bno\b/;
 
 function unitWord(w: string): string {
   const x = w.toLowerCase().replace(/[^a-z]/g, '');
@@ -75,10 +81,13 @@ function tier(label: string, word: string, words: string[], explicitUnit: boolea
   if (QUALIFIED.test(l)) return 5;
   const c = CONTAINERS.indexOf(word);
   if (c >= 0) return c / 100;
-  if (MIDDLE_SIZE.test(l)) return 1;
-  if (OTHER_SIZE.test(l)) return 3;
-  if (!explicitUnit && words.some((w) => FRAGMENT_WORDS.has(w))) return 4;
-  return 2;
+  const size = MIDDLE_SIZE.test(l) ? 1 : OTHER_SIZE.test(l) ? 3 : 2;
+  // A "medium slice" is still a slice: a fragment loses to any whole item of the same group
+  // whatever size word it carries, or "1 medium slice" (60 g) beats "1 breast" (130 g). The size
+  // ladder still orders the fragments among themselves (white bread takes the regular slice),
+  // and a fragment still beats a qualified variant, so this only refines the old tier 4.
+  if (!explicitUnit && words.some((w) => FRAGMENT_WORDS.has(w))) return 4 + size / 10;
+  return size;
 }
 
 /**
@@ -104,8 +113,9 @@ function boundedGrams(g: number): number | null {
  *   1. whole items and containers (medium, regular, piece, slice, can, bottle...), by label tier;
  *   2. a cup (FNDDS's canonical serving: rice, milk);
  *   3. sub-serving measures (fl oz, oz, tbsp...), only as a last resort.
- * Within a group, a middle size beats small/large (apple takes "1 medium"), and qualified variants
- * ("crust not eaten", "cocktail/miniature") lose; ties keep dataset order. Only a food with no
+ * Within a group, a middle size beats small/large (apple takes "1 medium"), a fragment of the food
+ * loses to a whole one at any size, and qualified variants ("crust not eaten", "cocktail", "dry")
+ * lose; ties are settled by weight, never by dataset order. Only a food with no
  * usable portion at all returns null. The gate shows the user the chosen label and grams before
  * anything is saved, so a defaulted serving is visible and correctable.
  */

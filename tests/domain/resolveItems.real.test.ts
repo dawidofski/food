@@ -94,6 +94,24 @@ describe('pinned bare-count portions', () => {
     expect(r.refs[0]!.grams).toBeGreaterThanOrEqual(40);
     expect(r.refs[0]!.portionLabel ?? '').not.toMatch(/crust/i);
   });
+  test('barley is a cooked cup (about 170 g), not a dry cup yielding 740 g', () => {
+    const r = resolveText('barley');
+    expect(r.needsHelp).toEqual([]);
+    expect(r.refs[0]!.portionLabel).toBe('1 cup, cooked');
+    expect(r.refs[0]!.grams).toBe(170);
+  });
+  test('cream of wheat is a cooked cup (about 240 g), not a dry cup yielding 965 g', () => {
+    const r = resolveText('cream of wheat');
+    expect(r.needsHelp).toEqual([]);
+    expect(r.refs[0]!.portionLabel).toBe('1 cup, cooked');
+    expect(r.refs[0]!.grams).toBe(240);
+  });
+  test('a chicken breast is the whole breast, not a 60 g medium slice', () => {
+    const r = resolveText('a chicken breast');
+    expect(r.needsHelp).toEqual([]);
+    expect(r.refs[0]!.portionLabel).toBe('1 breast');
+    expect(r.refs[0]!.grams).toBeGreaterThanOrEqual(120);
+  });
   test('an explicit unit still wins over the ranking', () => {
     const r = resolveText('2 tbsp olive oil');
     expect(r.needsHelp).toEqual([]);

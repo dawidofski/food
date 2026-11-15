@@ -213,6 +213,46 @@ describe('quantityToGrams', () => {
       expect(quantityToGrams({ count: 1 }, { ...egg, portions: o })).toBe(35);
     }
   });
+  test('a cup of the dry food never beats the cooked cup', () => {
+    // FNDDS states some staples both ways: "1 cup, dry, yields <cooked grams>" is a conversion
+    // row for a cup of DRY grain (about four servings once cooked), not a serving of the food.
+    const barley = [{ label: '1 cup, dry, yields', grams: 740 }, { label: '1 cup, cooked', grams: 170 }];
+    const creamOfWheat = [{ label: '1 cup, dry, yields', grams: 965 }, { label: '1 cup, cooked', grams: 240 }, { label: '1 oz, dry, yields', grams: 170 }];
+    for (const [portions, want] of [[barley, 170], [creamOfWheat, 240]] as const) {
+      for (const o of [portions, [...portions].reverse(), [...portions.slice(1), ...portions.slice(0, 1)]]) {
+        expect(quantityToGrams({ count: 1 }, { ...egg, portions: o })).toBe(want);
+      }
+    }
+  });
+  test('a sized fragment is still a fragment: a medium slice never beats a whole breast', () => {
+    // Real "Chicken breast, rotisserie, skin eaten" rows. The slice carries a size word, so the
+    // fragment demotion has to outrank the middle-size promotion or a 60 g slice wins.
+    const breast = [
+      { label: '1 cup, cooked, diced', grams: 135 }, { label: '1 breast', grams: 130 },
+      { label: '1 small or thin slice', grams: 30 }, { label: '1 medium slice', grams: 60 },
+      { label: '1 large or thick slice', grams: 85 }, { label: '1 oz, cooked', grams: 28.35 },
+      { label: '1 breast quarter (yield after cooking, bone removed)', grams: 155 },
+    ];
+    // Every rotation and its reverse: the pick must not depend on the row order at all.
+    for (let k = 0; k < breast.length; k++) {
+      const rotated = [...breast.slice(k), ...breast.slice(0, k)];
+      for (const o of [rotated, [...rotated].reverse()]) {
+        expect(quantityToGrams({ count: 1 }, { ...egg, portions: o }), `rotation ${k}`).toBe(130);
+      }
+    }
+    // The user naming the unit still overrides the demotion.
+    expect(quantityToGrams({ count: 2, unitLabel: 'slice' }, { ...egg, portions: breast })).toBe(120);
+  });
+  test('among fragments the size ladder still applies: the medium slice, not the largest', () => {
+    const whiteBread = [
+      { label: '1 small or thin/very thin slice', grams: 24 }, { label: '1 medium or regular slice', grams: 28 },
+      { label: '1 large or thick slice', grams: 43 }, { label: '1 slice, crust not eaten', grams: 13 },
+      { label: '1 slice, snack-size', grams: 10 }, { label: '1 cup', grams: 40 }, { label: '1 cubic inch', grams: 2.8 },
+    ];
+    for (const o of [whiteBread, [...whiteBread].reverse()]) {
+      expect(quantityToGrams({ count: 1 }, { ...egg, portions: o })).toBe(28);
+    }
+  });
   test('an explicit fragment unit still wins: 2 slices of banana', () => {
     expect(quantityToGrams({ count: 2, unitLabel: 'slice' }, { ...egg, portions: [{ label: '1 banana', grams: 126 }, { label: '1 slice', grams: 6 }] })).toBe(12);
   });
