@@ -25,18 +25,19 @@ const KITCHEN_UNITS: Record<string, string> = {
   piece: 'piece', pieces: 'piece',
 };
 
-// Numbers: thousands groups ("1,000"), decimal point or decimal comma ("1.5", "1,5"), fractions.
-// A comma followed by exactly three digits after a 1-3 digit group not starting with 0 is read as a
-// thousands separator ("1,000" = 1000); any other digit,digit comma is a decimal comma (Dutch
-// "1,5" = 1.5, "0,500" = 0.5). A deliberate guess: "1,000" is ambiguous and this is the common case.
-const NUMERIC = /^(-?(?:[1-9]\d{0,2}(?:,\d{3})+(?!\d)(?:\.\d+)?|\d+(?:[.,]\d+)?|[.,]\d+)(?:\/\d+(?:\.\d+)?)?)/;
+// Numbers: decimal point or decimal comma ("1.5", "1,5"), and fractions.
+// A comma between digits is ALWAYS a decimal separator, never a thousands separator. This app treats
+// it that way because its user writes Dutch: "1,500 kg" means 1.5 kg, and "1,000 g" reads as 1 g.
+// Do not "helpfully" restore thousands handling: understating a gram count is far safer than
+// inflating one 1000x, and nobody types 1,000 g for a kilo.
+const NUMERIC = /^(-?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:\/\d+(?:\.\d+)?)?)/;
 const MIXED = /^(-?\d+) (\d+)\/(\d+)(?![\d.\/])/;
 const WORD_NUM = new RegExp(`^(${Object.keys(NUMBER_WORDS).join('|')})(?![a-z])`);
 const UNIT = /^\s*([a-z]+)(?![a-z])/;
 
 function parseNumeric(token: string): number | null {
   const [a, b] = token.split('/');
-  const plain = /^-?[1-9]\d{0,2}(?:,\d{3})+(?!\d)/.test(a!) ? a!.replace(/,/g, '') : a!.replace(',', '.');
+  const plain = a!.replace(',', '.');
   const n = Number(plain);
   if (b === undefined) return Number.isFinite(n) ? n : null;
   const d = Number(b);

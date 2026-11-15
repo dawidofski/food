@@ -33,11 +33,12 @@ describe('parseQuantity', () => {
     }
   });
 
-  test('decimal comma and thousands comma', () => {
+  test('a comma between digits is always a decimal comma', () => {
     expect(parseQuantity('1,5 kg rice')).toEqual({ quantity: { grams: 1500 }, rest: 'rice' });
     expect(parseQuantity('0,25 l milk')).toEqual({ quantity: { grams: 250 }, rest: 'milk' });
     expect(parseQuantity('0,500 kg rice')!.quantity).toEqual({ grams: 500 });
-    expect(parseQuantity('1,000 g rice')).toEqual({ quantity: { grams: 1000 }, rest: 'rice' });
+    expect(parseQuantity('1,000 g rice')).toEqual({ quantity: { grams: 1 }, rest: 'rice' });
+    expect(parseQuantity('1,500 kg rice')).toEqual({ quantity: { grams: 1500 }, rest: 'rice' });
     expect(parseQuantity('1.5 kg rice')!.quantity).toEqual({ grams: 1500 });
   });
 

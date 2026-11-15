@@ -69,7 +69,7 @@ describe('parseEntry', () => {
   test('a decimal comma is not a separator; a list comma still is', () => {
     expect(parseEntry('1,5 kg rice').items.map((i) => [i.foodQuery, i.quantity])).toEqual([['rice', { grams: 1500 }]]);
     expect(parseEntry('1.5 kg rice').items.map((i) => [i.foodQuery, i.quantity])).toEqual([['rice', { grams: 1500 }]]);
-    expect(parseEntry('1,000 g rice').items.map((i) => [i.foodQuery, i.quantity])).toEqual([['rice', { grams: 1000 }]]);
+    expect(parseEntry('1,000 g rice').items.map((i) => [i.foodQuery, i.quantity])).toEqual([['rice', { grams: 1 }]]);
     expect(parseEntry('2 eggs,3 apples').items.map((i) => i.foodQuery)).toEqual(['eggs', 'apples']);
   });
 
