@@ -3,3 +3,6 @@ dist/
 .env*
 *.key
 .superpowers/
+
+# unrelated project that landed in this folder - not part of the food diary
+weekly-review/
