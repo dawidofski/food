@@ -166,7 +166,9 @@ describe('quantityToGrams', () => {
       ...egg, id: 'milk',
       portions: [{ label: '1 cup', grams: 244 }, { label: '1 individual school container', grams: 244 }, { label: 'Guideline amount per fl oz of beverage', grams: 2.5 }],
     };
-    expect(resolveItems([{ rawFragment: 'milk', quantity: { count: 1 }, foodQuery: 'milk' }], lookupOf([milk])).refs[0]!.portionLabel).toBe('1 cup');
+    expect(quantityToGrams({ count: 1 }, milk)).toBe(244);
+    expect(quantityToGrams({ count: 1 }, { ...milk, portions: milk.portions.slice(1) })).toBe(244);
+    expect(quantityToGrams({ count: 1 }, { ...milk, portions: milk.portions.slice(2) })).toBeNull();
   });
   test('a food with no portions at all has no serving', () => {
     expect(quantityToGrams({ count: 1 }, { ...egg, portions: [] })).toBeNull();
