@@ -12,6 +12,7 @@
     "build:data": "node scripts/build-food-db.ts"
   },
   "dependencies": {
+    "fuse.js": "7.5.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
