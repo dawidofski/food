@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { buildFoodDb } from '../../scripts/build-food-db';
 import type { DatasetFood } from '@/types/food';
+import type { NutrientKey } from '@/types/nutrients';
+import { classifyByFoodGroup, classifyFood, allergensFor, GENERIC_FALLBACK } from '../../scripts/classification';
 
 const FIXTURES = 'tests/fixtures/usda';
 
@@ -73,6 +75,15 @@ describe('buildFoodDb', () => {
     expect(f.per100g.proteinG).toBeCloseTo(4.2);
   });
 
+  test.each<NutrientKey>(['sodiumMg', 'vitaminDUg', 'folateUg', 'fibreG', 'potassiumMg'])(
+    'blank USDA amount for %s stays absent (mg, ug and g families), not 0',
+    (key) => {
+      const f = find(/^Test food, no FPED$/);
+      expect(key in f.per100g).toBe(false);
+      expect(f.per100g[key]).toBeUndefined();
+    },
+  );
+
   test('added sugars come from FPED teaspoon equivalents when FPED has a value', () => {
     const cola = find(/^Soft drink, cola$/);
     expect(cola.per100g.addedSugarsG).toBeGreaterThan(0);
@@ -110,6 +121,33 @@ describe('buildFoodDb', () => {
       for (const v of Object.values(f.per100g)) {
         expect(typeof v === 'number' && Number.isFinite(v) && v >= 0).toBe(true);
       }
+    }
+  });
+});
+
+describe('classification lookups', () => {
+  test('a per-food override beats its group default', () => {
+    // 22601040 = fresh bacon/side pork, filed under category 2604 (cured: processedMeat true by default)
+    expect(classifyByFoodGroup('2604').processedMeat).toBe(true);
+    const fresh = classifyFood('22601040', '2604');
+    expect(fresh.processedMeat).toBe(false);
+    expect(fresh.redMeat).toBe(true);
+    expect(fresh.novaGroup).toBe(3);
+    // a food without an override keeps the group default
+    expect(classifyFood('22600100', '2604').processedMeat).toBe(true);
+  });
+
+  test('an unknown category falls back to the generic flags', () => {
+    expect(classifyByFoodGroup('0000')).toEqual(GENERIC_FALLBACK);
+    expect(classifyFood('00000000', '0000')).toEqual(GENERIC_FALLBACK);
+    expect(classifyByFoodGroup('0000')).not.toBe(GENERIC_FALLBACK);
+  });
+
+  test('inherited object keys never match a lookup', () => {
+    for (const k of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(classifyByFoodGroup(k)).toEqual(GENERIC_FALLBACK);
+      expect(classifyFood(k, k)).toEqual(GENERIC_FALLBACK);
+      expect(allergensFor(k, k)).toEqual([]);
     }
   });
 });
