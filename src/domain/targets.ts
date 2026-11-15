@@ -32,7 +32,7 @@ function isPositive(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n) && n > 0;
 }
 
-/** Whole years completed on `on`, from an ISO date of birth. Uses UTC calendar fields. NaN if dob is invalid. */
+/** Whole years completed on `on`, from an ISO date of birth. Uses UTC calendar fields: callers pass a date whose UTC day is the intended day. NaN if dob is invalid. */
 export function ageOn(dob: string, on: Date): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dob);
   if (!m) return NaN;
@@ -95,11 +95,16 @@ export function computeTargets(p: Profile | null, on: Date): Targets {
     isPositive(p.heightCm) &&
     Number.isFinite(age) &&
     age >= 0 &&
-    p.sex in SEX_CONSTANT &&
-    p.activityLevel in ACTIVITY_FACTORS;
-  const base = complete
+    Object.hasOwn(SEX_CONSTANT, p.sex) &&
+    Object.hasOwn(ACTIVITY_FACTORS, p.activityLevel);
+  const derived = complete
     ? derive(p.heightCm, weight, age, p.sex, p.activityLevel, false)
-    : genericTargets();
+    : undefined;
+  // Belt and braces: any non-finite derived target falls back to generic.
+  const base =
+    derived !== undefined && Object.values(derived).every((v) => typeof v !== 'number' || Number.isFinite(v))
+      ? derived
+      : genericTargets();
   const overrides: Partial<Targets> = {};
   for (const [k, v] of Object.entries(p.overrides ?? {})) {
     if (typeof v === 'number' && Number.isFinite(v)) (overrides as Record<string, number>)[k] = v;

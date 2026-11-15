@@ -40,6 +40,24 @@ describe('targets', () => {
     const t = computeTargets(null, ON);
     expect(t.isGeneric).toBe(true);
     expect(t.sodiumMg).toBe(2000);
+    expect(t.rmrKcal).toBe(1516); // 175cm, 70kg, age 40, unspecified, light
+    expect(t.energyKcal).toBe(2084);
+    for (const v of Object.values(t)) {
+      if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
+  test('ageOn on the exact birthday is the new age', () => {
+    expect(ageOn('1991-06-15', new Date('2026-06-15'))).toBe(35);
+  });
+
+  test.each([
+    ['invalid dob', { dob: 'not-a-date' }],
+    ['inherited-key sex', { sex: 'constructor' as never }],
+    ['inherited-key activityLevel', { activityLevel: 'toString' as never }],
+  ])('corrupt profile (%s) falls back to finite generic targets', (_n, patch) => {
+    const t = computeTargets({ ...ownerProfile, ...patch }, ON);
+    expect(t.isGeneric).toBe(true);
     for (const v of Object.values(t)) {
       if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
     }
