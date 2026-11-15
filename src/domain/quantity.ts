@@ -26,6 +26,7 @@ const KITCHEN_UNITS: Record<string, string> = {
 };
 
 const NUMERIC = /^(-?(?:\d+(?:\.\d+)?|\.\d+)(?:\/\d+(?:\.\d+)?)?)/;
+const MIXED = /^(-?\d+) (\d+)\/(\d+)(?![\d.\/])/;
 const WORD_NUM = new RegExp(`^(${Object.keys(NUMBER_WORDS).join('|')})(?![a-z])`);
 const UNIT = /^\s*([a-z]+)(?![a-z])/;
 
@@ -65,6 +66,17 @@ function stripOf(s: string): string {
 export function parseQuantity(text: string): { quantity: Quantity; rest: string } | null {
   const t = text.toLowerCase().replace(/\s+/g, ' ').trim();
   if (!t) return null;
+
+  // Mixed fraction first: "1 1/2 cups".
+  const mixed = MIXED.exec(t);
+  if (mixed) {
+    const d = Number(mixed[3]);
+    if (d === 0) return null;
+    const whole = Number(mixed[1]);
+    const frac = Number(mixed[2]) / d;
+    const n = (mixed[1]!.startsWith('-') ? -1 : 1) * (Math.abs(whole) + frac);
+    return Number.isFinite(n) ? finish(n, t.slice(mixed[0].length)) : null;
+  }
 
   const num = NUMERIC.exec(t);
   if (num) {

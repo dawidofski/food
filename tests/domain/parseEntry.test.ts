@@ -12,11 +12,50 @@ describe('parseEntry', () => {
     expect(parseEntry('pizza').items[0]!.quantity).toEqual({ count: 1 });
   });
 
-  // Review Focus 1 — empty or unparseable text
-  test.each(['', '   ', 'asdf', '🍕🍕', 'x'.repeat(2000)])('unparseable input yields no items: %s', (t) => {
+  // This layer does not judge whether a word names a food: without the dataset a nonsense word
+  // is indistinguishable from a brand name or loanword. Task 7 resolves each phrase against the
+  // dataset and routes misses to needsHelp, which is the authoritative path.
+  test('a word that is not a known food is still an item, left for Task 7 to resolve', () => {
+    const { items, unparseable } = parseEntry('asdf');
+    expect(items.map((i) => [i.foodQuery, i.quantity])).toEqual([['asdf', { count: 1 }]]);
+    expect(unparseable).toEqual([]);
+  });
+
+  // Review Focus 1: empty text or text containing no words yields no items
+  test.each(['', '   ', '🍕🍕', '...', '!?, ,'])('input with no words yields no items: %s', (t) => {
     const { items, unparseable } = parseEntry(t);
     expect(items).toEqual([]);
     expect(unparseable.length === 0 || unparseable.length === 1).toBe(true);
+  });
+
+  test('a 2,000-character string does not crash and is capped at 1,000 characters', () => {
+    const { items } = parseEntry('x'.repeat(2000));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.foodQuery).toHaveLength(1000);
+  });
+
+  test('compound dishes are not split on "and"; ordinary pairs still are', () => {
+    expect(parseEntry('mac and cheese').items.map((i) => i.foodQuery)).toEqual(['mac and cheese']);
+    expect(parseEntry('Fish And Chips').items.map((i) => i.foodQuery)).toEqual(['fish and chips']);
+    expect(parseEntry('eggs and bacon').items.map((i) => i.foodQuery)).toEqual(['eggs', 'bacon']);
+    const { items } = parseEntry('two hot dogs and a cola');
+    expect(items.map((i) => [i.foodQuery, i.quantity])).toEqual([
+      ['hot dogs', { count: 2 }],
+      ['cola', { count: 1 }],
+    ]);
+  });
+
+  test('a compound next to another food: only the compound stays whole', () => {
+    const { items } = parseEntry('2 mac and cheese and a cola');
+    expect(items.map((i) => [i.foodQuery, i.quantity])).toEqual([
+      ['mac and cheese', { count: 2 }],
+      ['cola', { count: 1 }],
+    ]);
+  });
+
+  test('commas, plus and newlines always split, even inside a compound', () => {
+    expect(parseEntry('mac, cheese').items).toHaveLength(2);
+    expect(parseEntry('salt + pepper').items).toHaveLength(2);
   });
 
   test('strips leading filler', () => {

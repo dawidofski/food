@@ -21,6 +21,12 @@ describe('parseQuantity', () => {
     expect(parseQuantity('half a banana')).toEqual({ quantity: { count: 0.5 }, rest: 'banana' });
   });
 
+  test('mixed fractions', () => {
+    expect(parseQuantity('1 1/2 cups rice')).toEqual({ quantity: { count: 1.5, unitLabel: 'cup' }, rest: 'rice' });
+    expect(parseQuantity('2 1/2 kg potatoes')).toEqual({ quantity: { grams: 2500 }, rest: 'potatoes' });
+    expect(parseQuantity('1 1/0 cups rice')).toBeNull();
+  });
+
   test('unit attached to the number', () => {
     expect(parseQuantity('500g penne')).toEqual({ quantity: { grams: 500 }, rest: 'penne' });
   });
