@@ -6,7 +6,7 @@ import {
 } from '@/types/nutrients';
 
 /** A value counts as known only when it is a finite number. Absent, undefined, NaN and Infinity are unknown. */
-function isKnownValue(v: number | undefined): v is number {
+export function isKnownValue(v: number | undefined): v is number {
   return typeof v === 'number' && Number.isFinite(v);
 }
 
