@@ -12,8 +12,8 @@ const fromDisk = (async (url: string) => {
 
 const ACCEPT = 0.25;
 // Unresolvable by design: Dutch foods absent from USDA, and foods whose only dataset
-// equivalent is a different food (passata -> salted cooking sauce, courgette -> pickled zucchini).
-const UNRESOLVABLE = ['frikandel', 'bitterballen', 'passata', 'courgette'];
+// equivalent is a different food (passata -> salted cooking sauce).
+const UNRESOLVABLE = ['frikandel', 'bitterballen', 'passata'];
 const QUERIES = [
   'hot dogs', 'hot dog', 'cola', 'penne', 'passata', 'white bread', 'cheddar cheese', 'yoghurt',
   'apple', 'eggs', 'salmon', 'bitterballen', 'frikandel', 'coke', 'crisps', 'aubergine',
@@ -41,9 +41,14 @@ test.each(UNRESOLVABLE)('"%s" is correctly unresolvable', (q) => {
   expect(searchFoods(q)).toEqual([]);
 });
 
-test('passata and courgette are not re-added to the query synonym map', () => {
+test('passata is not re-added to the query synonym map', () => {
   expect(QUERY_SYNONYMS).not.toHaveProperty('passata');
-  expect(QUERY_SYNONYMS).not.toHaveProperty('courgette');
+});
+
+test.each(['zucchini', 'courgette', 'zucchinis', 'courgettes'])('"%s" resolves to fresh summer squash, never the pickled entry', (q) => {
+  const hit = top(q)!;
+  expect(hit.food.name).toBe('Summer squash, green, raw');
+  expect(hit.food.per100g.sodiumMg).toBeLessThan(10);
 });
 
 test('penne and bare pasta resolve to plain refined "Pasta, cooked", outranking every qualified variant', () => {

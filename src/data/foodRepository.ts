@@ -24,7 +24,7 @@ export interface FoodHit {
  * Curated colloquialisms the dataset does not carry. Keys and values are plain
  * lowercase phrases; both go through the same normalisation as queries. Extend freely, but
  * only when the target is nutritionally the SAME food. If the dataset has no equivalent
- * entry (passata, courgette: its only zucchini is pickled), the right answer is no hit, so
+ * entry (passata), the right answer is no hit, so
  * the user adds their own food rather than logging plausible-looking wrong numbers.
  * Deliberately absent: chips (UK fries vs US crisps), mince (beef, lamb or pork), sweets.
  */
@@ -33,6 +33,11 @@ export const QUERY_SYNONYMS: Record<string, string> = {
   pepsi: 'cola',
   crisps: 'potato chips',
   aubergine: 'eggplant',
+  // USDA's zucchini is summer squash; the dataset's only "Zucchini" food is pickled (Na 951).
+  // The map replaces the query, so it wins over the direct name match.
+  zucchini: 'summer squash green raw',
+  zucchinis: 'summer squash green raw', // the "-is" plural guard keeps this unsingularised
+  courgette: 'summer squash green raw',
   yoghurt: 'yogurt',
   penne: 'pasta',
   fusilli: 'pasta',
