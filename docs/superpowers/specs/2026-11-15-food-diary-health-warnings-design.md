@@ -653,3 +653,36 @@ check them while reading:
 15. Your profile is asked on first run and never committed to the public repository (§12).
 16. Unknown nutrients stay unknown, never zero: affected rules stay silent, and daily
     totals show a known floor with a coverage note (§10a.1).
+
+## Verification log
+
+### Nutrient rules (Task 11), checked 2026-11-16
+
+Sources were read from WHO's own pages and documents (the sodium guideline text, the 2023 saturated and trans fat
+guideline PDF, the WHO sugars news item and fact sheets). Where a page gave a statement only in summary, the table
+says so. The values in the §9.3 table above are superseded by this log.
+
+| Rule | Plan figure | What the source says | Result |
+|---|---|---|---|
+| Sodium, daily | > 2,000 mg (WHO) | WHO Guideline: Sodium intake for adults and children (2012): "a reduction to <2 g/day sodium (5 g/day salt) in adults (strong recommendation)". Blood-pressure evidence rated high quality. Also on WHO's sodium fact sheet. | **Confirmed.** Level MODERATE above 2,000 mg. HIGH from 1.5 times the figure, a presentation grading that is not a WHO number. |
+| Sodium, single entry | > 600 mg | The guideline and fact sheet state intake as an average daily figure. Neither gives any figure for a single meal or serving. 600 mg is not a published guideline. | **Changed to qualitative.** Fires only when one entry alone exceeds WHO's whole-day figure. The card states that WHO sets no single-serving limit. No 600 mg anywhere. |
+| Added sugar, daily | > 10% of energy; 5% better | WHO Guideline: Sugars intake (2015): free sugars below 10% of total energy (strong); a further reduction below 5%, about 25 g (conditional). | **Confirmed, with a caveat.** MODERATE above 10%; INFO above 5% (conditional). WHO's measure is *free* sugars (adds juice and honey sugars); the diary counts *added* sugars, so it can understate. The card says so. Certainty of the sugar evidence was not read at source, so strength is declared 'moderate', not 'strong'. |
+| Added sugar, single entry | > 15 g | WHO states no per-serving limit (the article gives examples such as a can of soda only). 15 g is not a published figure. | **Changed to qualitative.** INFO above the day's 5% figure, MODERATE above the day's 10% figure, on one entry, with a card saying no single-serving limit exists. No 15 g anywhere. |
+| Saturated fat, daily | > 10% of energy | WHO 2023 guideline: "reduce saturated fatty acid intake to 10% of total energy intake (strong recommendation)". Certainty of evidence for that recommendation: moderate, from trials with cardiovascular outcomes. Going below 10% is a separate conditional recommendation on very-low-certainty evidence. | **Confirmed.** MODERATE above 10%. No sub-10% tier. Strength declared 'moderate' (certainty), not 'strong' (recommendation). Alternative offered (polyunsaturated fat) is WHO's own strong replacement recommendation. |
+| Trans fat | any industrial; day > 1% of energy | WHO 2023: "reduce trans-fatty acid intake to 1% of total energy intake (strong recommendation)", moderate certainty. The definition covers all trans fat, ruminant and industrial alike. The remark is that foods with *high levels* of industrial trans fat should largely be avoided. | **Changed.** Food data does not separate industrial from ruminant trans fat, so "any industrial trans fat" cannot be detected, and "any trans fat" would fire on milk. The rule fires HIGH only when one entry alone exceeds the whole-day 1% figure, and says so. Strength declared 'moderate'. |
+
+Cross-cutting findings:
+
+- Every WHO figure is a population recommendation for usual intake. Each daily card says one day above it is not by
+  itself a problem, and no card attributes disease to one serving.
+- Single-entry cards compare one entry with a whole-day figure and say plainly that no single-serving guideline exists.
+  They are the only place the app applies a daily figure to one entry, and they exist partly so a day with incomplete
+  data (where the daily rule stays silent by its coverage gate) still gets a card when one entry is large.
+- No rule was dropped.
+- Citation conclusions are WHO's own words. The sugars conclusion joins two sentences from the WHO sugars news item
+  and labels each with the strength WHO gives it ("their" dropped from the first); the other three are single
+  sentences from the guideline text.
+- Not checked at source: the sugars guideline's per-outcome certainty ratings (the full document could not be
+  fetched; the WHO page and news item were read). Declared 'moderate' accordingly.
+- The 2012 sodium guideline covers adults and, adjusted for energy needs, children aged 2 to 15. The app's targets use
+  the adult figure; a child's profile would need a scaled figure (not implemented).
