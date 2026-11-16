@@ -246,14 +246,22 @@ export async function getProfile(): Promise<Profile | null> {
 }
 
 export async function putProfile(p: Profile): Promise<void> {
+  // JSON.stringify would turn NaN/Infinity into null silently, so validate before writing.
+  assertFiniteNumber('heightCm', p.heightCm);
+  for (const w of p.weightLog) assertFiniteNumber(`weightLog ${w.date} kg`, w.kg);
+  if (p.overrides) assertFiniteValues('overrides', p.overrides as Record<string, number | undefined>);
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
 }
 
 /**
- * The only hard delete. localStorage (profile, including date of birth) goes first, so a failure
- * midway never leaves the personal data behind while the entries are already gone.
+ * The only hard delete. localStorage (profile, including date of birth) is attempted first and
+ * IndexedDB is then cleared unconditionally, so blocked storage never stops the diary being wiped.
+ * If the localStorage sweep failed, its error is rethrown AFTER the IndexedDB clear: the caller can
+ * then say "your diary was cleared, but your profile could not be removed".
  */
 export async function eraseEverything(): Promise<void> {
+  let sweepError: unknown;
+  let swept = true;
   try {
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -261,8 +269,9 @@ export async function eraseEverything(): Promise<void> {
       if (k?.startsWith(LS_PREFIX)) keys.push(k);
     }
     keys.forEach(k => localStorage.removeItem(k));
-  } catch {
-    // Storage disabled or blocked: still wipe IndexedDB rather than wipe nothing.
+  } catch (err) {
+    swept = false;
+    sweepError = err;
   }
 
   const d = await db();
@@ -273,4 +282,5 @@ export async function eraseEverything(): Promise<void> {
     tx.objectStore('batches').clear(),
     tx.done,
   ]);
+  if (!swept) throw sweepError;
 }

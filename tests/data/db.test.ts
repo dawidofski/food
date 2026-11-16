@@ -307,26 +307,26 @@ describe('review fixes: time handling', () => {
 
 describe('review fixes: no NaN or Infinity in storage', () => {
   test.each([NaN, Infinity, -Infinity])('addEntry rejects %s in nutrients', async bad => {
-    await expect(addEntry(entry({ id: 'n', nutrients: { energyKcal: bad } }))).rejects.toThrow();
+    await expect(addEntry(entry({ id: 'n', nutrients: { energyKcal: bad } }))).rejects.toThrow(RangeError);
     expect(await getEntry('n')).toBeUndefined();
   });
 
   test('addEntry rejects a non-finite gram amount', async () => {
     await expect(
       addEntry(entry({ id: 'g', items: [{ source: 'dataset', foodId: 'x', grams: NaN }] })),
-    ).rejects.toThrow();
+    ).rejects.toThrow(RangeError);
   });
 
   test('reviseEntry rejects NaN and leaves the original active', async () => {
     await addEntry(entry({ id: 'a' }));
-    await expect(reviseEntry('a', entryFields({ nutrients: { proteinG: NaN } }))).rejects.toThrow();
+    await expect(reviseEntry('a', entryFields({ nutrients: { proteinG: NaN } }))).rejects.toThrow(RangeError);
     expect((await getEntry('a'))!.state).toBe('active');
     expect(await allEntriesIncludingTombstones()).toHaveLength(1);
   });
 
   test('putBatch rejects non-finite nutrients or portions', async () => {
-    await expect(putBatch(batch({ id: 'b', nutrientsPerPortion: { energyKcal: Infinity } }))).rejects.toThrow();
-    await expect(putBatch(batch({ id: 'b', portionsRemaining: NaN }))).rejects.toThrow();
+    await expect(putBatch(batch({ id: 'b', nutrientsPerPortion: { energyKcal: Infinity } }))).rejects.toThrow(RangeError);
+    await expect(putBatch(batch({ id: 'b', portionsRemaining: NaN }))).rejects.toThrow(RangeError);
     expect(await getBatch('b')).toBeUndefined();
   });
 
@@ -368,12 +368,12 @@ describe('round 3: custom foods, batch fields, delete result, erase, abort', () 
   });
 
   test.each([NaN, Infinity, -Infinity])('putCustomFood rejects %s in nutrientsPer100g', async bad => {
-    await expect(putCustomFood(customFood({ nutrientsPer100g: { proteinG: bad } }))).rejects.toThrow();
+    await expect(putCustomFood(customFood({ nutrientsPer100g: { proteinG: bad } }))).rejects.toThrow(RangeError);
     expect(await getCustomFood('cf')).toBeUndefined();
   });
 
   test.each([NaN, Infinity])('putCustomFood rejects %s referencePortion grams', async bad => {
-    await expect(putCustomFood(customFood({ referencePortion: { label: 'x', grams: bad } }))).rejects.toThrow();
+    await expect(putCustomFood(customFood({ referencePortion: { label: 'x', grams: bad } }))).rejects.toThrow(RangeError);
     expect(await getCustomFood('cf')).toBeUndefined();
   });
 
@@ -383,13 +383,13 @@ describe('round 3: custom foods, batch fields, delete result, erase, abort', () 
   });
 
   test.each([NaN, Infinity])('putBatch rejects %s totalCookedGrams', async bad => {
-    await expect(putBatch(batch({ id: 'b', totalCookedGrams: bad }))).rejects.toThrow();
+    await expect(putBatch(batch({ id: 'b', totalCookedGrams: bad }))).rejects.toThrow(RangeError);
     expect(await getBatch('b')).toBeUndefined();
   });
 
   test.each([NaN, Infinity])('putBatch rejects %s in ingredient ref grams', async bad => {
     const ingredients = [{ text: 'rice', refs: [{ source: 'dataset' as const, foodId: 'r', grams: bad }] }];
-    await expect(putBatch(batch({ id: 'b', ingredients }))).rejects.toThrow();
+    await expect(putBatch(batch({ id: 'b', ingredients }))).rejects.toThrow(RangeError);
     expect(await getBatch('b')).toBeUndefined();
   });
 
@@ -409,7 +409,7 @@ describe('round 3: custom foods, batch fields, delete result, erase, abort', () 
     expect(await deleteEntry('s')).toBe(false);
   });
 
-  test('eraseEverything still clears IndexedDB when the localStorage sweep throws', async () => {
+  test('eraseEverything clears IndexedDB then rethrows when the localStorage sweep throws', async () => {
     await addEntry(entry({ id: 'a' }));
     await putCustomFood(customFood());
     localStorage.setItem(`${LS_PREFIX}settings`, '{}');
@@ -417,25 +417,72 @@ describe('round 3: custom foods, batch fields, delete result, erase, abort', () 
       throw new Error('storage blocked');
     });
     try {
-      await expect(eraseEverything()).resolves.toBeUndefined();
+      await expect(eraseEverything()).rejects.toThrow('storage blocked');
     } finally {
       spy.mockRestore();
     }
+    // The error surfaces, but only after IndexedDB was cleared unconditionally.
     expect(await allEntriesIncludingTombstones()).toEqual([]);
     expect(await allCustomFoods()).toEqual([]);
   });
 
-  test('a failing put surfaces the original error, not an abort InvalidStateError', async () => {
+  test('a failing put surfaces the original error even when abort itself throws', async () => {
     await addEntry(entry({ id: 'a' }));
     const unclonable = (() => 1) as unknown as string;
     const next = entryFields({ items: [{ source: 'dataset', foodId: 'x', grams: 1, portionLabel: unclonable }] });
-    const err = await reviseEntry('a', next).then(
-      () => null,
-      (e: unknown) => e as Error,
-    );
+    const abort = vi.spyOn(IDBTransaction.prototype, 'abort').mockImplementation(() => {
+      throw new DOMException('already finished', 'InvalidStateError');
+    });
+    let err: Error | null = null;
+    try {
+      err = await reviseEntry('a', next).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+    } finally {
+      abort.mockRestore();
+    }
     expect(err).not.toBeNull();
-    expect(err!.name).not.toBe('InvalidStateError');
+    expect(err!.name).toBe('DataCloneError');
+  });
+
+  test('a failing put leaves the original active and writes nothing', async () => {
+    await addEntry(entry({ id: 'a' }));
+    const unclonable = (() => 1) as unknown as string;
+    const next = entryFields({ items: [{ source: 'dataset', foodId: 'x', grams: 1, portionLabel: unclonable }] });
+    await expect(reviseEntry('a', next)).rejects.toThrow();
     expect((await getEntry('a'))!.state).toBe('active');
     expect(await allEntriesIncludingTombstones()).toHaveLength(1);
+  });
+
+  describe('putProfile guard', () => {
+    test.each([NaN, Infinity, -Infinity])('rejects %s heightCm', async bad => {
+      await expect(putProfile({ ...profileFixture, heightCm: bad })).rejects.toThrow(RangeError);
+      expect(await getProfile()).toBeNull();
+    });
+
+    test.each([NaN, Infinity])('rejects %s in weightLog kg', async bad => {
+      await expect(
+        putProfile({ ...profileFixture, weightLog: [{ date: '2026-01-02', kg: bad }] }),
+      ).rejects.toThrow(RangeError);
+      expect(await getProfile()).toBeNull();
+    });
+
+    test.each([NaN, Infinity])('rejects %s in numeric overrides', async bad => {
+      await expect(putProfile({ ...profileFixture, overrides: { sodiumMg: bad } })).rejects.toThrow(RangeError);
+      expect(await getProfile()).toBeNull();
+    });
+
+    test('a rejected write does not clobber an existing stored profile', async () => {
+      await putProfile(profileFixture);
+      await expect(putProfile({ ...profileFixture, heightCm: NaN })).rejects.toThrow(RangeError);
+      expect(await getProfile()).toStrictEqual(profileFixture);
+    });
+
+    test('a valid profile with overrides round-trips', async () => {
+      const p = { ...profileFixture, overrides: { sodiumMg: 1500 } };
+      await putProfile(p);
+      expect(await getProfile()).toStrictEqual(p);
+    });
   });
 });
