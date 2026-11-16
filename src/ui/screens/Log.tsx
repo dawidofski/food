@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { useHoldUpdates } from '@/state/updates';
 import { defaultDeps, useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
 import EntryRow from '@/ui/components/EntryRow';
@@ -41,6 +42,9 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
     setEditorName(null);
     void flow.submit(draft);
   };
+
+  // Typed text and an open food editor are unsaved work too.
+  useHoldUpdates(draft.trim() !== '' || editorName !== null);
 
   const gateOpen = flow.stage === 'gate' || flow.stage === 'questions';
 

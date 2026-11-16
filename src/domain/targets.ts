@@ -131,17 +131,17 @@ function genericTargets(): Targets {
 export function computeTargets(p: Profile | null, on: Date): Targets {
   if (p === null) return genericTargets();
   const weight = currentWeightKg(p);
-  const age = ageOn(p.dob, on);
-  const complete =
+  const age = p.dob === undefined ? NaN : ageOn(p.dob, on);
+  const { heightCm, sex, activityLevel } = p;
+  const derived =
     weight !== undefined &&
-    isPositive(p.heightCm) &&
+    isPositive(heightCm) &&
     Number.isFinite(age) &&
     age >= 0 &&
-    Object.hasOwn(SEX_CONSTANT, p.sex) &&
-    Object.hasOwn(ACTIVITY_FACTORS, p.activityLevel);
-  const derived = complete
-    ? derive(p.heightCm, weight, age, p.sex, p.activityLevel, false)
-    : undefined;
+    sex !== undefined && Object.hasOwn(SEX_CONSTANT, sex) &&
+    activityLevel !== undefined && Object.hasOwn(ACTIVITY_FACTORS, activityLevel)
+      ? derive(heightCm, weight, age, sex, activityLevel, false)
+      : undefined;
   // Belt and braces: any non-finite derived target falls back to generic.
   const base =
     derived !== undefined && Object.values(derived).every((v) => typeof v !== 'number' || Number.isFinite(v))

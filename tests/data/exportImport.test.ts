@@ -132,6 +132,14 @@ describe('export and import', () => {
     expect((await allEntriesIncludingTombstones()).map((e) => e.id)).not.toContain('only-local');
   });
 
+  test('a profile holding only flags round-trips', async () => {
+    await putProfile({ weightLog: [], flaggedAllergens: ['peanuts'], conditions: [] });
+    const blob = await exportAll();
+    await eraseEverything();
+    await importAll(file(blob), 'replace');
+    expect(await getProfile()).toEqual({ weightLog: [], flaggedAllergens: ['peanuts'], conditions: [] });
+  });
+
   test('replace with a file that has no profile removes the local one', async () => {
     await putProfile(ownerProfile);
     const parsed = JSON.parse(await (await exportAll()).text());

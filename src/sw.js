@@ -41,5 +41,8 @@ precacheAndRoute(self.__WB_MANIFEST);
 // A reload or an installed-app launch while offline still gets the app shell.
 registerRoute(new NavigationRoute(createHandlerBoundToURL(new URL('index.html', self.registration.scope).href)));
 
-self.skipWaiting();
+// A new version waits until the page asks for it (see src/state/updates.ts), so an update never lands mid-entry.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 clientsClaim();

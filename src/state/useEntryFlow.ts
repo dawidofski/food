@@ -1,3 +1,4 @@
+import { useHoldUpdates } from '@/state/updates';
 import { useCallback, useRef, useState } from 'react';
 import { addEntry, decrementBatchPortion, deleteEntry, entriesBetween, getProfile, reviseEntry } from '@/data/db';
 import { batchHasCustomIngredient, batchWeightKnown, portionsFor, refreshBatches, withBatches } from '@/domain/batches';
@@ -211,6 +212,8 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const [lastText, setLastText] = useState('');
   const [storedCount, setStoredCount] = useState(0);
   const [genericTargets, setGenericTargets] = useState(false);
+  // A part-finished entry (resolving, questions, the gate) must not be lost to an app update.
+  useHoldUpdates(stage !== 'idle' && stage !== 'committed');
   const session = useRef<Session | null>(null);
   const seq = useRef(0);
   /** What resolved when some items did not, kept so the person may continue without the unresolved ones. */

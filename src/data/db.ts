@@ -264,7 +264,7 @@ export async function getProfile(): Promise<Profile | null> {
 
 export async function putProfile(p: Profile): Promise<void> {
   // JSON.stringify would turn NaN/Infinity into null silently, so validate before writing.
-  assertFiniteNumber('heightCm', p.heightCm);
+  if (p.heightCm !== undefined) assertFiniteNumber('heightCm', p.heightCm);
   for (const w of p.weightLog) assertFiniteNumber(`weightLog ${w.date} kg`, w.kg);
   if (p.overrides) assertFiniteValues('overrides', p.overrides as Record<string, number | undefined>);
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));

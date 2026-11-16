@@ -1,3 +1,4 @@
+import { useHoldUpdates } from '@/state/updates';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { allCustomFoods } from '@/data/db';
 import {
@@ -52,6 +53,7 @@ type Props = {
  * state is kept as the raw text, and the only text-to-number step is parseNutrientField.
  */
 export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDeleted }: Props) {
+  useHoldUpdates(true); // mounted only while editing
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [name, setName] = useState(food?.name ?? initialName);
   const [synonyms, setSynonyms] = useState(food?.synonyms.join(', ') ?? '');

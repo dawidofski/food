@@ -32,10 +32,12 @@ export function weightProblem(kg: number): string | null {
 export const fieldClass = 'min-h-12 w-full rounded-lg border-2 border-slate-400 bg-white px-3 text-base';
 
 export function BodyDataForm({
-  initial, onSaved, submitLabel,
+  initial, base, onSaved, submitLabel,
 }: {
   /** The existing profile when editing; null on first run, where every field starts empty. */
   initial: Profile | null;
+  /** A profile that has no body data yet (it may hold allergens): its other fields are kept when this form saves. */
+  base?: Profile | null;
   onSaved: (p: Profile) => void;
   submitLabel: string;
 }) {
@@ -66,8 +68,9 @@ export function BodyDataForm({
     const next: Profile = initial
       ? { ...initial, heightCm: h, dob, sex: sex as Sex, activityLevel: activity as ActivityLevel }
       : {
+          ...(base ?? { flaggedAllergens: [], conditions: [] }),
           heightCm: h, dob, sex: sex as Sex, activityLevel: activity as ActivityLevel,
-          weightLog: [{ date: today, kg: Math.round(w * 10) / 10 }], flaggedAllergens: [], conditions: [],
+          weightLog: [...(base?.weightLog ?? []).filter((x) => x.date !== today), { date: today, kg: Math.round(w * 10) / 10 }],
         };
     setSaving(true);
     try {

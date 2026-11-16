@@ -1,3 +1,4 @@
+import { useHoldUpdates } from '@/state/updates';
 import { useCallback, useEffect, useState } from 'react';
 import { allBatches } from '@/data/db';
 import { datasetLookup } from '@/data/datasetLookup';
@@ -123,6 +124,7 @@ export default function BatchBuilder({ deps = defaultBatchDeps, onLogPortion }: 
 }
 
 function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?: Batch | undefined; onSaved: () => void; onCancel: () => void }) {
+  useHoldUpdates(true); // mounted only while the form is open
   const [name, setName] = useState(batch?.name ?? '');
   const [lines, setLines] = useState(batch?.ingredients.map((i) => i.text).join('\n') ?? '');
   const [portions, setPortions] = useState(batch ? String(batch.portionCount) : '4');

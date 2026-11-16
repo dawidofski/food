@@ -22,11 +22,11 @@ export type Targets = {
 };
 
 export type Profile = {
-  heightCm: number;
+  heightCm?: number;
   /** ISO date, YYYY-MM-DD. */
-  dob: string;
-  sex: Sex;
-  activityLevel: ActivityLevel;
+  dob?: string;
+  sex?: Sex;
+  activityLevel?: ActivityLevel;
   weightLog: { date: string; kg: number }[];
   flaggedAllergens: string[];
   conditions: string[];

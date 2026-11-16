@@ -54,28 +54,26 @@ export default function ProfileSettings() {
 
   if (profile === undefined) return null;
 
-  if (profile === null) {
-    return (
-      <section aria-labelledby="body-h" className={section}>
-        <h2 id="body-h" className="text-lg font-semibold">Body data</h2>
-        <p className="text-sm">
-          Not set up yet. Until it is, targets use general adult guidelines, and the allergen, weight and target settings below become
-          available once it is.
-        </p>
-        <BodyDataForm initial={null} submitLabel="Save body data" onSaved={setProfile} />
-      </section>
-    );
-  }
+  const base: Profile = profile ?? { weightLog: [], flaggedAllergens: [], conditions: [] };
+  const hasBody =
+    profile !== null &&
+    profile.heightCm !== undefined && profile.dob !== undefined && profile.sex !== undefined && profile.activityLevel !== undefined;
 
   return (
     <>
       <section aria-labelledby="body-h" className={section}>
         <h2 id="body-h" className="text-lg font-semibold">Body data</h2>
-        <BodyDataForm initial={profile} submitLabel="Save body data" onSaved={setProfile} />
+        {!hasBody && (
+          <p className="text-sm">
+            Optional. It only sharpens your calorie and protein targets. Until it is set up, targets use general adult guidelines.
+            The allergen and condition settings below do not need it.
+          </p>
+        )}
+        <BodyDataForm initial={hasBody ? profile : null} base={profile} submitLabel="Save body data" onSaved={setProfile} />
       </section>
-      <WeightLog profile={profile} save={save} />
+      {hasBody && <WeightLog profile={base} save={save} />}
       <FlagList
-        profile={profile}
+        profile={base}
         save={save}
         field="flaggedAllergens"
         heading="Allergens I react to"
@@ -83,14 +81,14 @@ export default function ProfileSettings() {
         help="Use the ordinary word, such as peanuts, soy, dairy, wheat or shellfish. A word the app does not recognise is not ignored: it is reported on every entry as something that could not be checked. Allergen tags in the food database are indicative and incomplete, so a food with no tag may still contain the allergen."
       />
       <FlagList
-        profile={profile}
+        profile={base}
         save={save}
         field="conditions"
         heading="Conditions"
         addLabel="Add condition"
         help="Kept on this device with your profile."
       />
-      <Overrides profile={profile} save={save} />
+      <Overrides profile={base} save={save} />
       {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
     </>
   );

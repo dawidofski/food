@@ -153,7 +153,7 @@ describe('settings: the DeepSeek key', () => {
 describe('settings: body data, weight log, allergens, conditions, overrides', () => {
   test('without a profile it offers setup, with nothing prefilled', async () => {
     render(<Settings />);
-    expect(await screen.findByText(/general adult guidelines/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/general adult guidelines/i)).length).toBeGreaterThan(0);
     expect((screen.getByLabelText(/height/i) as HTMLInputElement).value).toBe('');
   });
 
@@ -243,6 +243,58 @@ describe('settings: body data, weight log, allergens, conditions, overrides', ()
     await click(/save overrides/i);
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect((await getProfile())?.overrides).toBeUndefined();
+  });
+});
+
+describe('allergens without body data', () => {
+  test('an allergen can be flagged with no body data, and a food carrying it then raises the CRITICAL card', async () => {
+    const { defaultDeps } = await import('@/state/useEntryFlow');
+    const { loadFoods, resetFoodRepository } = await import('@/data/foodRepository');
+    const fromDisk = (async (url: string) => {
+      const rel = String(url).replace(import.meta.env.BASE_URL, '');
+      const body = readFileSync(resolve(__dirname, '../../public', rel), 'utf8');
+      return { ok: true, status: 200, text: async () => body } as Response;
+    }) as typeof fetch;
+    resetFoodRepository();
+    await loadFoods(fromDisk);
+
+    render(<Settings />);
+    await screen.findByLabelText(/add allergen/i);
+    type(/add allergen/i, 'peanuts');
+    await click(/^add allergen$/i);
+    await waitFor(async () => expect((await getProfile())?.flaggedAllergens).toEqual(['peanuts']));
+    const p = await getProfile();
+    expect(p?.heightCm).toBeUndefined();
+    expect(p?.dob).toBeUndefined();
+    expect(computeTargets(p, new Date()).isGeneric).toBe(true);
+    // The body form is still empty and still offered.
+    expect((screen.getByLabelText(/height/i) as HTMLInputElement).value).toBe('');
+    cleanup();
+
+    render(<Log deps={{ ...defaultDeps, loadData: () => loadFoods(fromDisk) }} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'peanut brittle' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^log$/i }));
+    });
+    const cards = await screen.findAllByTestId('warning-card');
+    expect(cards.some((c) => c.getAttribute('data-level') === 'CRITICAL')).toBe(true);
+  }, 60_000);
+
+  test('body data entered afterwards keeps the flagged allergens', async () => {
+    await putProfile({ weightLog: [], flaggedAllergens: ['peanuts'], conditions: ['x'] });
+    render(<Settings />);
+    await screen.findByLabelText(/height/i);
+    type(/height/i, '180');
+    type(/date of birth/i, '1990-05-05');
+    type(/sex/i, 'female');
+    type(/activity/i, 'moderate');
+    type(/^weight/i, '70');
+    await click(/save body data/i);
+    await waitFor(async () => expect((await getProfile())?.heightCm).toBe(180));
+    const p = await getProfile();
+    expect(p?.flaggedAllergens).toEqual(['peanuts']);
+    expect(p?.conditions).toEqual(['x']);
+    expect(p?.weightLog).toHaveLength(1);
   });
 });
 

@@ -184,10 +184,11 @@ function batch(v: unknown, i: number): Batch {
 
 function profile(v: unknown): Profile {
   const o = obj(v, 'profile');
-  num(o.heightCm, 'profile height');
-  isoDay(o.dob, 'profile date of birth');
-  oneOf(o.sex, ['male', 'female', 'unspecified'], 'profile sex');
-  oneOf(o.activityLevel, ['sedentary', 'light', 'moderate', 'active', 'veryActive'], 'profile activity level');
+  // Body data is optional (a profile may hold only flags); when present it must be valid.
+  if (o.heightCm !== undefined) num(o.heightCm, 'profile height');
+  if (o.dob !== undefined) isoDay(o.dob, 'profile date of birth');
+  if (o.sex !== undefined) oneOf(o.sex, ['male', 'female', 'unspecified'], 'profile sex');
+  if (o.activityLevel !== undefined) oneOf(o.activityLevel, ['sedentary', 'light', 'moderate', 'active', 'veryActive'], 'profile activity level');
   arr(o.weightLog, 'profile weight log').forEach((w, i) => {
     const wo = obj(w, `weight ${i + 1}`);
     isoDay(wo.date, `weight ${i + 1} date`);
