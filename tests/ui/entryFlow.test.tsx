@@ -409,3 +409,49 @@ describe('alternatives and recents', () => {
 });
 
 void addEntry;
+
+describe('a "no" to a safety question is remembered per food', () => {
+  test('after saying no once about rice, rice commits without asking again, in a fresh session', async () => {
+    await typeAndSubmit('rice');
+    await screen.findByText(/room temperature/i);
+    await click(/^no$/i);
+    await waitFor(async () => expect(await entriesToday()).toHaveLength(1));
+    cleanup();
+    await typeAndSubmit('rice');
+    await waitFor(async () => expect(await entriesToday()).toHaveLength(2));
+    expect(screen.queryByText(/room temperature/i)).not.toBeInTheDocument();
+  });
+
+  test('a yes is never remembered: the question is asked again', async () => {
+    await typeAndSubmit('rice');
+    await screen.findByText(/room temperature/i);
+    await click(/^yes$/i);
+    await click(/cancel/i);
+    cleanup();
+    await typeAndSubmit('rice');
+    expect(await screen.findByText(/room temperature/i)).toBeInTheDocument();
+  });
+
+  test('erase everything forgets the remembered answers', async () => {
+    await typeAndSubmit('rice');
+    await screen.findByText(/room temperature/i);
+    await click(/^no$/i);
+    await waitFor(async () => expect(await entriesToday()).toHaveLength(1));
+    cleanup();
+    await eraseEverything();
+    await typeAndSubmit('rice');
+    expect(await screen.findByText(/room temperature/i)).toBeInTheDocument();
+  });
+});
+
+describe('fail visibly when only some foods lose their identity', () => {
+  test('a ref whose food the lookup cannot return is reported, not silently dropped', async () => {
+    const apple = food('ap', 'Apple', [{ label: '1 medium', grams: 180 }]);
+    const pear = food('pe', 'Pear', [{ label: '1 medium', grams: 180 }]);
+    const base = lookupOf([apple, pear]);
+    const deps: FlowDeps = { ...fakeDeps([apple, pear], []), lookup: { ...base, get: (s, id) => (id === 'pe' ? undefined : base.get(s, id)) } };
+    await typeAndSubmit('an apple and a pear', deps);
+    const note = await screen.findByTestId('check-note');
+    expect(note.textContent).toMatch(/could not be identified/i);
+  });
+});

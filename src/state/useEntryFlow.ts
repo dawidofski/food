@@ -16,6 +16,7 @@ import { computeTargets } from '@/domain/targets';
 import { dayTotals, weekContext } from '@/domain/totals';
 import { unusualServing, type UnusualServing } from '@/domain/unusualServing';
 import { catalogue } from '@/rules/catalogue';
+import { foodsAskedAbout, rememberedAnswers, rememberNo } from '@/state/safetyMemory';
 import { evaluate } from '@/rules/engine';
 import type { Context, FoodIdentity, Rule, RuleFailure, SafetyQuestion, WarningCard } from '@/rules/types';
 import type { DiaryEntry, FoodRef, FoodSource, Resolution } from '@/types/diary';
@@ -201,6 +202,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const [stage, setStage] = useState<FlowStage>('idle');
   const [cards, setCards] = useState<WarningCard[]>([]);
   const [questions, setQuestions] = useState<SafetyQuestion[]>([]);
+  const questionsRef = useRef<SafetyQuestion[]>([]);
   const [failures, setFailures] = useState<RuleFailure[]>([]);
   const [lines, setLines] = useState<ResolvedLine[]>([]);
   const [unresolved, setUnresolved] = useState<ParsedItem[]>([]);
@@ -308,13 +310,21 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   );
 
   const evaluateSession = useCallback(
-    async (s: Session, answers: Record<string, boolean>, allowInstantCommit: boolean) => {
-      const out = evaluate(depsRef.current.rules, { ...s.base, answers });
+    async (s: Session, initialAnswers: Record<string, boolean>, allowInstantCommit: boolean) => {
+      let answers = initialAnswers;
+      let out = evaluate(depsRef.current.rules, { ...s.base, answers });
+      // A "no" given before, for these very foods, answers the question without asking again.
+      const remembered = rememberedAnswers(depsRef.current.rules, out.questions, s.base);
+      if (Object.keys(remembered).length > 0) {
+        answers = { ...answers, ...remembered };
+        out = evaluate(depsRef.current.rules, { ...s.base, answers });
+      }
       const all = [...s.carried, ...out.failures];
       s.answers = answers;
       setCards(out.cards);
       cardsRef.current = out.cards;
       setQuestions(out.questions);
+      questionsRef.current = out.questions;
       setFailures(all);
       failuresRef.current = all;
       if (out.questions.length > 0) {
@@ -399,6 +409,14 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
           profile = null;
         }
         const foods = identities(resolution.refs, d.lookup);
+        // Fail visibly: when only SOME refs lose their food, the engine (which reports only an empty list) stays silent,
+        // and the safety rules would read as "checked, nothing found" for the foods they never saw.
+        if (foods.length > 0 && foods.length < resolution.refs.length) {
+          carried.push({
+            ruleId: 'food-identity', category: 'safety',
+            message: `${resolution.refs.length - foods.length} of the foods in this entry could not be identified, so the safety checks did not cover them`,
+          });
+        }
         const s: Session = {
           text, resolution, lines: lns, foods, answers: {}, viewedAlternatives: false, viaAi, carried, ...(revises ? { revises } : {}),
           base: {
@@ -462,6 +480,10 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     (answerKey: string, yes: boolean) => {
       const s = session.current;
       if (!s) return;
+      if (!yes) {
+        const q = questionsRef.current.find((x) => x.answerKey === answerKey);
+        if (q) rememberNo(answerKey, foodsAskedAbout(depsRef.current.rules, q, s.base));
+      }
       void evaluateSession(s, { ...s.answers, [answerKey]: yes }, true).catch((e: unknown) => {
         setError(`Something went wrong while checking this entry: ${e instanceof Error ? e.message : String(e)}`);
       });
