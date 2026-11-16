@@ -4,8 +4,9 @@ import Missing from '@/ui/screens/Missing';
 import BatchBuilder from '@/ui/screens/BatchBuilder';
 import Log from '@/ui/screens/Log';
 import MyFoods from '@/ui/screens/MyFoods';
+import Settings from '@/ui/screens/Settings';
 
-type Tab = 'log' | 'diary' | 'missing' | 'batches' | 'foods';
+type Tab = 'log' | 'diary' | 'missing' | 'batches' | 'foods' | 'settings';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('log');
@@ -28,12 +29,14 @@ export default function App() {
       {tab === 'missing' && <Missing />}
       {tab === 'batches' && <BatchBuilder onLogPortion={(text) => { setDraft(text); setTab('log'); }} />}
       {tab === 'foods' && <MyFoods />}
+      {tab === 'settings' && <Settings />}
       <nav aria-label="Main" className="sticky bottom-0 flex border-t border-slate-300 bg-white">
         {tabBtn('log', 'Log')}
         {tabBtn('diary', 'Diary')}
         {tabBtn('missing', 'Missing')}
         {tabBtn('batches', 'Batches')}
         {tabBtn('foods', 'My foods')}
+        {tabBtn('settings', 'Settings')}
       </nav>
     </>
   );

@@ -8,6 +8,9 @@ import { last7DayKeys, localDayRange } from '@/domain/dayBoundary';
 import type { FoodLookup } from '@/domain/foodLookup';
 import { parseEntry, type ParsedItem } from '@/domain/parseEntry';
 import { resolveItems } from '@/domain/resolveItems';
+import { applyAi, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
+import { interpretEntry } from '@/ai/deepseek';
+import { getApiKey, isAiEnabled } from '@/state/aiSettings';
 import { computeTargets } from '@/domain/targets';
 import { dayTotals, weekContext } from '@/domain/totals';
 import { unusualServing, type UnusualServing } from '@/domain/unusualServing';
@@ -17,7 +20,7 @@ import type { Context, FoodIdentity, Rule, RuleFailure, SafetyQuestion, WarningC
 import type { DiaryEntry, FoodRef, FoodSource, Resolution } from '@/types/diary';
 import type { Profile } from '@/types/profile';
 
-export type FlowStage = 'idle' | 'resolving' | 'needsHelp' | 'questions' | 'gate' | 'committed';
+export type FlowStage = 'idle' | 'resolving' | 'needsHelp' | 'aiReview' | 'questions' | 'gate' | 'committed';
 
 /** What one parsed item resolved to: the user's only check against a near-miss match. */
 export type ResolvedLine = {
@@ -50,6 +53,8 @@ export type FlowDeps = {
     reviseEntry?: typeof reviseEntry;
     deleteEntry?: typeof deleteEntry;
   };
+  /** The optional AI fallback for a phrase the local parser could not resolve. Absent means off. */
+  ai?: AiDeps;
 };
 
 export const defaultDeps: FlowDeps = {
@@ -64,6 +69,12 @@ export const defaultDeps: FlowDeps = {
   },
   isDataReady: () => datasetState() === 'ready',
   store: { addEntry, entriesBetween, getProfile, reviseEntry, deleteEntry },
+  ai: {
+    isEnabled: isAiEnabled,
+    getKey: getApiKey,
+    isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
+    interpret: interpretEntry,
+  },
 };
 
 export type Outcome = { action: 'added' | 'cancelled'; lines: ResolvedLine[]; failures: RuleFailure[] };
@@ -78,6 +89,8 @@ type Session = {
   viewedAlternatives: boolean;
   /** Failures from reading history, carried into every evaluation's note. */
   carried: RuleFailure[];
+  /** True when the model helped read the entry, so it is stored as 'ai' and the person saw it flagged. */
+  viaAi: boolean;
   /** Set when this entry corrects an existing one: it is stored as a revision, keeping the original time. */
   revises?: Revises;
 };
@@ -92,6 +105,8 @@ export type EntryFlow = {
   failures: RuleFailure[];
   lines: ResolvedLine[];
   unresolved: ParsedItem[];
+  /** While stage is 'aiReview': how the model read each unresolved phrase. Nothing runs until the person accepts it. */
+  aiReadings: AiReading[];
   /** True when the food database could not be loaded, so nothing could be matched. */
   dataMissing: boolean;
   viewingAlternatives: boolean;
@@ -110,6 +125,10 @@ export type EntryFlow = {
   cancel: () => Promise<void>;
   /** Drops the pending entry without storing anything and returns to the text field. */
   edit: () => void;
+  /** Accept the model's reading and go on to the checks, which run on the dataset's numbers as usual. */
+  acceptAi: () => Promise<void>;
+  /** Discard the model's reading and fall back to manual entry. */
+  rejectAi: () => void;
   /** Continue with the foods that did resolve, leaving the unresolved ones out (the person chose this). */
   continueWithout: () => Promise<void>;
   dismissOutcome: () => void;
@@ -182,6 +201,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const [failures, setFailures] = useState<RuleFailure[]>([]);
   const [lines, setLines] = useState<ResolvedLine[]>([]);
   const [unresolved, setUnresolved] = useState<ParsedItem[]>([]);
+  const [aiReadings, setAiReadings] = useState<AiReading[]>([]);
   const [dataMissing, setDataMissing] = useState(false);
   const [viewingAlternatives, setViewingAlternatives] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -191,7 +211,8 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const session = useRef<Session | null>(null);
   const seq = useRef(0);
   /** What resolved when some items did not, kept so the person may continue without the unresolved ones. */
-  const pendingResolution = useRef<{ items: ParsedItem[]; resolution: Resolution } | null>(null);
+  const pendingResolution = useRef<{ items: ParsedItem[]; resolution: Resolution; viaAi?: boolean } | null>(null);
+  const aiPending = useRef<AiApplied | null>(null);
   const revisesRef = useRef<Revises | null>(null);
   const depsRef = useRef(deps);
   depsRef.current = deps;
@@ -203,6 +224,8 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     setFailures([]);
     setLines([]);
     setUnresolved([]);
+    setAiReadings([]);
+    aiPending.current = null;
     setViewingAlternatives(false);
   }, []);
 
@@ -216,7 +239,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       id: globalThis.crypto.randomUUID(),
       at: s.revises ? s.revises.at : d.now().toISOString(),
       rawText: s.text,
-      resolution: s.resolution.refs.some((r) => r.source === 'batch') ? 'batch' : 'local',
+      resolution: s.resolution.refs.some((r) => r.source === 'batch') ? 'batch' : s.viaAi ? 'ai' : 'local',
       items: s.resolution.refs.map((r) => (r.source === 'batch' && batchHasCustomIngredient(r.foodId) ? { ...r, selfReported: true } : r)),
       nutrients: s.resolution.nutrients,
       coverage: s.resolution.coverage,
@@ -302,7 +325,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   );
 
   const run = useCallback(
-    async (text: string, resolutionOverride?: { items: ParsedItem[]; resolution: Resolution }) => {
+    async (text: string, resolutionOverride?: { items: ParsedItem[]; resolution: Resolution }, viaAi = false) => {
       const revises = revisesRef.current;
       const my = ++seq.current;
       const d = depsRef.current;
@@ -324,9 +347,25 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
         const lns = describeLines(items, resolution, d.lookup);
         setLines(lns);
         setUnresolved(resolution.needsHelp);
+        if (!resolutionOverride && ready && resolution.needsHelp.length > 0) {
+          // Keep the local result first: declining the model's reading falls back to it.
+          pendingResolution.current = { items, resolution };
+          // Only the unresolved phrase leaves the device, and only when the person switched this on.
+          // The reading is shown for correction BEFORE any rule runs; a failure here is silent.
+          const applied = await applyAi(items, resolution, d.lookup, d.ai).catch(() => null);
+          if (my !== seq.current) return;
+          if (applied) {
+            aiPending.current = applied;
+            setLines(describeLines(applied.items, applied.resolution, d.lookup));
+            setUnresolved(applied.resolution.needsHelp);
+            setAiReadings(applied.readings);
+            setStage('aiReview');
+            return;
+          }
+        }
         if (resolution.needsHelp.length > 0 || resolution.refs.length === 0) {
           // Keep what did resolve so "continue without" can use it; nothing is stored yet.
-          pendingResolution.current = { items, resolution };
+          pendingResolution.current = { items, resolution, ...(viaAi ? { viaAi } : {}) };
           setStage('needsHelp');
           return;
         }
@@ -354,7 +393,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
         }
         const foods = identities(resolution.refs, d.lookup);
         const s: Session = {
-          text, resolution, lines: lns, foods, answers: {}, viewedAlternatives: false, carried, ...(revises ? { revises } : {}),
+          text, resolution, lines: lns, foods, answers: {}, viewedAlternatives: false, viaAi, carried, ...(revises ? { revises } : {}),
           base: {
             pending: resolution,
             foods,
@@ -391,8 +430,25 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     const p = pendingResolution.current;
     const text = lastText;
     if (!p || p.resolution.refs.length === 0) return;
-    await run(text, { items: p.items, resolution: { ...p.resolution, needsHelp: [] } });
+    await run(text, { items: p.items, resolution: { ...p.resolution, needsHelp: [] } }, p.viaAi === true);
   }, [run, lastText]);
+
+  const acceptAi = useCallback(async () => {
+    const a = aiPending.current;
+    if (!a) return;
+    await run(lastText, { items: a.items, resolution: a.resolution }, true);
+  }, [run, lastText]);
+
+  const rejectAi = useCallback(() => {
+    const p = pendingResolution.current;
+    if (!p) return;
+    const d = depsRef.current;
+    aiPending.current = null;
+    setAiReadings([]);
+    setLines(describeLines(p.items, p.resolution, d.lookup));
+    setUnresolved(p.resolution.needsHelp);
+    setStage('needsHelp');
+  }, []);
 
   const answer = useCallback(
     (answerKey: string, yes: boolean) => {
@@ -436,7 +492,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   }, []);
 
   return {
-    stage, cards, questions, failures, lines, unresolved, dataMissing, viewingAlternatives, outcome, error, lastText,
-    storedCount, submit, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, dismissOutcome,
+    stage, cards, questions, failures, lines, unresolved, aiReadings, dataMissing, viewingAlternatives, outcome, error, lastText,
+    storedCount, submit, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
   };
 }

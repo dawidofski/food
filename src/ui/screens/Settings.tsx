@@ -1,0 +1,134 @@
+import { useState, type FormEvent } from 'react';
+import { clearApiKey, getApiKey, isAiSwitchedOn, maskKey, setAiSwitch, setApiKey } from '@/state/aiSettings';
+
+/**
+ * Settings: the optional DeepSeek fallback. It is off until a key is entered and the person turns it on,
+ * and what it sends is stated here, above the control that enables it.
+ */
+export default function Settings() {
+  const [key, setKey] = useState<string | null>(() => getApiKey());
+  const [on, setOn] = useState<boolean>(() => isAiSwitchedOn());
+  const [draft, setDraft] = useState('');
+  const [replacing, setReplacing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      setApiKey(draft);
+      if (getApiKey() === null) return;
+      // Saving is the consent: the disclosure above this button says exactly what will be sent.
+      setAiSwitch(true);
+      setKey(getApiKey());
+      setOn(true);
+      setDraft('');
+      setReplacing(false);
+      setError(null);
+    } catch {
+      setError('The key could not be saved: this browser is not allowing local storage.');
+    }
+  };
+
+  const toggle = (next: boolean) => {
+    try {
+      setAiSwitch(next);
+      setOn(next);
+      setError(null);
+    } catch {
+      setError('That could not be saved: this browser is not allowing local storage.');
+    }
+  };
+
+  const remove = () => {
+    clearApiKey();
+    setKey(null);
+    setOn(false);
+    setDraft('');
+    setReplacing(false);
+  };
+
+  const showForm = key === null || replacing;
+
+  return (
+    <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
+      <h1 className="text-xl font-semibold">Settings</h1>
+
+      <section aria-labelledby="ai-heading" className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
+        <h2 id="ai-heading" className="text-lg font-semibold">AI help for foods I can&rsquo;t match</h2>
+        <p className="text-sm">
+          Optional, and off by default. When a food you type is not in the database, the app can ask DeepSeek, an AI service, which
+          food in the database you probably meant.
+        </p>
+        <ul className="list-disc space-y-1 pl-5 text-sm">
+          <li>
+            The text of the one phrase it could not match is sent to DeepSeek, a third party outside your device, and is handled under
+            DeepSeek&rsquo;s own data policy.
+          </li>
+          <li>
+            Only that single unresolved phrase is sent, with a list of food names from the database. Your diary, your profile, your
+            targets and your totals are never sent.
+          </li>
+          <li>
+            The AI never supplies nutrition. It can only pick a food from the database; every number still comes from that database, and
+            you check its reading before anything is saved.
+          </li>
+          <li>Your key stays in this browser only. It is not part of the app&rsquo;s code and is removed if you erase everything.</li>
+        </ul>
+
+        {key !== null && (
+          <div className="space-y-2">
+            <p className="text-sm">
+              Key saved: <code data-testid="masked-key" className="rounded bg-slate-100 px-1">{maskKey(key)}</code>
+            </p>
+            <label className="flex min-h-11 items-center gap-2 text-base">
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={(e) => toggle(e.target.checked)}
+                className="size-6"
+              />
+              Use DeepSeek for foods I can&rsquo;t match
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {!replacing && (
+                <button type="button" onClick={() => setReplacing(true)} className="min-h-11 rounded-lg border border-slate-400 px-4">
+                  Replace key
+                </button>
+              )}
+              <button type="button" onClick={remove} className="min-h-11 rounded-lg border border-slate-400 px-4">
+                Remove key
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showForm && (
+          <form onSubmit={save} className="space-y-2">
+            <label htmlFor="deepseek-key" className="block text-sm font-medium">DeepSeek API key</label>
+            <input
+              id="deepseek-key"
+              type="password"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              className="min-h-12 w-full rounded-lg border-2 border-slate-400 px-3"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={draft.trim() === ''} className="min-h-12 rounded-lg bg-slate-900 px-4 text-white disabled:opacity-50">
+                Save key and turn on DeepSeek
+              </button>
+              {replacing && (
+                <button type="button" onClick={() => { setReplacing(false); setDraft(''); }} className="min-h-12 rounded-lg border border-slate-400 px-4">
+                  Keep the current key
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+
+        {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+      </section>
+    </main>
+  );
+}

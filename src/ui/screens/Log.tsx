@@ -115,6 +115,34 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
         </section>
       )}
 
+      {flow.stage === 'aiReview' && (
+        <section data-testid="ai-review" className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
+          <p className="font-medium">
+            I didn&rsquo;t recognise part of that, so DeepSeek (an AI) was asked to read it. Please check its reading before anything is checked or saved.
+          </p>
+          <ul className="space-y-1">
+            {flow.aiReadings.map((r) => (
+              <li key={r.phrase} className="text-sm">
+                AI read &ldquo;{r.phrase}&rdquo; as: {r.reads.join(' and ')}
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-slate-700">
+            The AI only matched your words to a food in the database. The amounts below come from the database, not from the AI.
+          </p>
+          {flow.lines.length > 0 && <ResolvedLines lines={flow.lines} />}
+          <div className="flex flex-col gap-2">
+            <button type="button" onClick={() => void flow.acceptAi()} className="min-h-12 rounded-lg bg-slate-900 px-4 text-left text-white">
+              Use this reading
+            </button>
+            <button type="button" onClick={flow.rejectAi} className="min-h-12 rounded-lg border border-slate-400 px-4 text-left">
+              Don&rsquo;t use it
+            </button>
+            <button type="button" onClick={flow.edit} className="min-h-11 text-left text-sm underline">Change what I typed</button>
+          </div>
+        </section>
+      )}
+
       {flow.outcome && (
         <section role="status" data-testid="outcome" className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
           {flow.outcome.action === 'added' ? (
