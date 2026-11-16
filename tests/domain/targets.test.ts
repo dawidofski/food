@@ -98,4 +98,35 @@ describe('targets', () => {
       if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
     }
   });
+
+  describe('micronutrient reference intakes', () => {
+    const keys = ['calciumMg', 'ironMg', 'magnesiumMg', 'zincMg', 'vitaminCMg', 'vitaminDUg', 'vitaminB12Ug', 'folateUg', 'potassiumMg'] as const;
+
+    test('every micronutrient the dataset carries has a positive finite reference', () => {
+      for (const sex of ['male', 'female', 'unspecified'] as const) {
+        const t = computeTargets({ ...ownerProfile, sex }, ON);
+        for (const k of keys) {
+          const v = t.micronutrients[k];
+          expect(Number.isFinite(v) && (v ?? 0) > 0, `${sex} ${k}`).toBe(true);
+        }
+      }
+      for (const k of keys) expect(computeTargets(null, ON).micronutrients[k]).toBeGreaterThan(0);
+    });
+
+    test('iron differs by sex and unspecified takes the higher reference', () => {
+      const m = computeTargets({ ...ownerProfile, sex: 'male' }, ON).micronutrients.ironMg!;
+      const f = computeTargets({ ...ownerProfile, sex: 'female' }, ON).micronutrients.ironMg!;
+      const u = computeTargets({ ...ownerProfile, sex: 'unspecified' }, ON).micronutrients.ironMg!;
+      expect(m).toBe(8);
+      expect(f).toBe(18);
+      expect(u).toBe(Math.max(m, f));
+    });
+
+    test('pins the adult 19-50 values', () => {
+      expect(computeTargets({ ...ownerProfile, sex: 'male' }, ON).micronutrients).toEqual({
+        calciumMg: 1000, ironMg: 8, magnesiumMg: 420, zincMg: 11, vitaminCMg: 90, vitaminDUg: 15,
+        vitaminB12Ug: 2.4, folateUg: 400, potassiumMg: 3400,
+      });
+    });
+  });
 });

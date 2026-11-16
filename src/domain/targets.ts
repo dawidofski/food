@@ -1,3 +1,4 @@
+import type { NutrientKey } from '@/types/nutrients';
 import type { ActivityLevel, Profile, Sex, Targets } from '@/types/profile';
 
 export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
@@ -27,6 +28,35 @@ const GENERIC = {
 };
 
 const SODIUM_MG = 2000; // WHO
+
+type MicroRef = Partial<Record<NutrientKey, number>>;
+
+/**
+ * Adult (19-50) reference intakes: US/Canada DRI RDAs, and the 2019 Adequate Intake for potassium. They are population
+ * planning values, not personal requirements. 'unspecified' takes the HIGHER iron reference (a deliberate over-inclusion:
+ * 18 mg is the female 19-50 RDA) and the LOWER of the two for every other nutrient, so no gap is announced that
+ * only one sex's figure would produce. Magnesium uses the 31-50 band. Recorded in the design document's verification log.
+ */
+const MICRO_MALE: MicroRef = {
+  calciumMg: 1000, ironMg: 8, magnesiumMg: 420, zincMg: 11, vitaminCMg: 90, vitaminDUg: 15,
+  vitaminB12Ug: 2.4, folateUg: 400, potassiumMg: 3400,
+};
+const MICRO_FEMALE: MicroRef = {
+  calciumMg: 1000, ironMg: 18, magnesiumMg: 320, zincMg: 8, vitaminCMg: 75, vitaminDUg: 15,
+  vitaminB12Ug: 2.4, folateUg: 400, potassiumMg: 2600,
+};
+
+function microsFor(sex: Sex): MicroRef {
+  if (sex === 'male') return { ...MICRO_MALE };
+  if (sex === 'female') return { ...MICRO_FEMALE };
+  const out: MicroRef = {};
+  for (const k of Object.keys(MICRO_MALE) as NutrientKey[]) {
+    const a = MICRO_MALE[k]!;
+    const b = MICRO_FEMALE[k]!;
+    out[k] = k === 'ironMg' ? Math.max(a, b) : Math.min(a, b);
+  }
+  return out;
+}
 
 function isPositive(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n) && n > 0;
@@ -78,6 +108,7 @@ function derive(
     addedSugarsG: Math.round((0.1 * energy) / 4),
     addedSugarsIdealG: Math.round((0.05 * energy) / 4),
     transFatG: Math.round((0.01 * energy) / 9),
+    micronutrients: microsFor(sex),
     isGeneric,
   };
 }

@@ -106,7 +106,7 @@ export function ctx(o: Opts = {}): Context {
     // Consistent with a 2,500 kcal day: 2,000 mg sodium, 10% / 5% of energy as sugar, 10% as saturated fat, 1% as trans fat.
     targets: {
       energyKcal: 2500, rmrKcal: 1900, proteinG: 100, proteinFloorG: 80, fibreG: 30, sodiumMg: 2000, satFatG: 28,
-      addedSugarsG: 63, addedSugarsIdealG: 31, transFatG: 3, isGeneric: false,
+      addedSugarsG: 63, addedSugarsIdealG: 31, transFatG: 3, micronutrients: {}, isGeneric: false,
     },
     profile: { ...ownerProfile, flaggedAllergens: o.flagged ?? [] },
     now: new Date(`2026-11-15T${String(o.hour ?? 12).padStart(2, '0')}:00:00`),

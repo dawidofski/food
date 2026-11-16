@@ -886,3 +886,33 @@ Allergen flags (same task): dataset tags are the EU's 14 group names, so a flag 
 "wheat" would have matched nothing. A synonym map now maps those (and "tree nut", almond, cashew, seafood and similar) to the
 tags; a flag that reaches no tag raises a safety `failures` entry instead of silence. "wheat" maps to the gluten tag although a
 wheat allergy is not coeliac disease: the dataset has no finer tag, and an extra card costs less than a missed one.
+
+
+### Micronutrient reference intakes (Task 17), 2026-11-16
+
+Used for the "standing gaps" in the what's-missing view (`Targets.micronutrients`). **These were NOT verified at source in
+this task.** The NIH Office of Dietary Supplements fact sheets (ods.od.nih.gov) answered HTTP 403 to every request, and the
+NCBI bookshelf DRI tables returned a bot-check page. The only page that could be read was the Wikipedia "Dietary
+Reference Intake" article, whose table gives only the highest value across all ages from nine up, so it cross-checks the
+maxima (male magnesium 420 mg, male zinc 11 mg, vitamin C 90 mg, B12 2.4 ug, folate 400 ug, potassium 3,400 / 2,600 mg,
+female iron 18 mg) and nothing else. The figures below are the National Academies DRI values for adults aged 19-50 as
+recalled, and **must be checked against the NIH ODS fact sheets or the NASEM DRI tables before anyone relies on them.**
+
+| Nutrient | Male 19-50 | Female 19-50 | 'unspecified' | Kind |
+|---|---|---|---|---|
+| Calcium | 1,000 mg | 1,000 mg | 1,000 mg | RDA |
+| Iron | 8 mg | 18 mg | 18 mg (the higher, as specified) | RDA |
+| Magnesium (31-50 band) | 420 mg | 320 mg | 320 mg (lower) | RDA |
+| Zinc | 11 mg | 8 mg | 8 mg (lower) | RDA |
+| Vitamin C | 90 mg | 75 mg | 75 mg (lower) | RDA |
+| Vitamin D | 15 ug | 15 ug | 15 ug | RDA (600 IU) |
+| Vitamin B12 | 2.4 ug | 2.4 ug | 2.4 ug | RDA |
+| Folate | 400 ug DFE | 400 ug DFE | 400 ug | RDA |
+| Potassium | 3,400 mg | 2,600 mg | 2,600 mg (lower) | AI (2019) |
+
+Choices: 'unspecified' takes the higher iron reference and the lower of the two for every other nutrient, so no gap is
+announced that only one sex's figure would produce. Age is not modelled: values are the 19-50 band, so a woman over 50 (iron
+8 mg, calcium 1,200 mg) or a person under 19 is not served by them. They are population planning figures, not personal
+requirements, and the view says so. A gap is stated only over days with complete data for that nutrient (known coverage and
+full energy-covered share), needs at least 4 such days, and only when the nutrient was under the reference on 80% or more of
+them.

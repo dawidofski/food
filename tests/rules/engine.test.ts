@@ -63,7 +63,7 @@ function ctx(o: Opts = {}): Context {
     },
     targets: {
       energyKcal: 2500, rmrKcal: 1900, proteinG: 100, proteinFloorG: 80, fibreG: 30, sodiumMg: 2000, satFatG: 28,
-      addedSugarsG: 50, addedSugarsIdealG: 25, transFatG: 2, isGeneric: false,
+      addedSugarsG: 50, addedSugarsIdealG: 25, transFatG: 2, micronutrients: {}, isGeneric: false,
     },
     profile: ownerProfile,
     now: new Date('2026-11-15T12:00:00'),

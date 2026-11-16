@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { addEntry, decrementBatchPortion, entriesBetween, getProfile } from '@/data/db';
+import { addEntry, decrementBatchPortion, deleteEntry, entriesBetween, getProfile, reviseEntry } from '@/data/db';
 import { batchHasCustomIngredient, batchWeightKnown, portionsFor, refreshBatches, withBatches } from '@/domain/batches';
 import { datasetLookup } from '@/data/datasetLookup';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
@@ -46,6 +46,9 @@ export type FlowDeps = {
     addEntry: typeof addEntry;
     entriesBetween: typeof entriesBetween;
     getProfile: () => Promise<Profile | null>;
+    /** Optional so a caller that never corrects an entry need not supply them; the diary falls back to the real store. */
+    reviseEntry?: typeof reviseEntry;
+    deleteEntry?: typeof deleteEntry;
   };
 };
 
@@ -60,7 +63,7 @@ export const defaultDeps: FlowDeps = {
     await refreshBatches().catch(() => undefined);
   },
   isDataReady: () => datasetState() === 'ready',
-  store: { addEntry, entriesBetween, getProfile },
+  store: { addEntry, entriesBetween, getProfile, reviseEntry, deleteEntry },
 };
 
 export type Outcome = { action: 'added' | 'cancelled'; lines: ResolvedLine[]; failures: RuleFailure[] };
@@ -75,7 +78,12 @@ type Session = {
   viewedAlternatives: boolean;
   /** Failures from reading history, carried into every evaluation's note. */
   carried: RuleFailure[];
+  /** Set when this entry corrects an existing one: it is stored as a revision, keeping the original time. */
+  revises?: Revises;
 };
+
+/** The entry being corrected. `at` is when the food was eaten, which a correction does not change. */
+export type Revises = { id: string; at: string };
 
 export type EntryFlow = {
   stage: FlowStage;
@@ -93,7 +101,8 @@ export type EntryFlow = {
   lastText: string;
   /** Bumps whenever an entry (including a cancelled one) is stored, so lists can refresh. */
   storedCount: number;
-  submit: (text: string) => Promise<void>;
+  /** With `revises`, the entry is stored as a revision of that entry, and only once the gate has been passed. */
+  submit: (text: string, opts?: { revises?: Revises }) => Promise<void>;
   answer: (answerKey: string, yes: boolean) => void;
   addAnyway: () => Promise<void>;
   showAlternatives: () => void;
@@ -183,6 +192,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const seq = useRef(0);
   /** What resolved when some items did not, kept so the person may continue without the unresolved ones. */
   const pendingResolution = useRef<{ items: ParsedItem[]; resolution: Resolution } | null>(null);
+  const revisesRef = useRef<Revises | null>(null);
   const depsRef = useRef(deps);
   depsRef.current = deps;
 
@@ -200,9 +210,11 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     const s = session.current;
     if (!s) return false;
     const d = depsRef.current;
+    // Abandoning a correction changes nothing: the original stays exactly as it was.
+    if (s.revises && action === 'cancelled') return true;
     const entry: DiaryEntry = {
       id: globalThis.crypto.randomUUID(),
-      at: d.now().toISOString(),
+      at: s.revises ? s.revises.at : d.now().toISOString(),
       rawText: s.text,
       resolution: s.resolution.refs.some((r) => r.source === 'batch') ? 'batch' : 'local',
       items: s.resolution.refs.map((r) => (r.source === 'batch' && batchHasCustomIngredient(r.foodId) ? { ...r, selfReported: true } : r)),
@@ -220,13 +232,18 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     const fped = sumFped(s.resolution.refs);
     if (fped) entry.fped = fped;
     try {
-      await d.store.addEntry(entry);
+      if (s.revises) {
+        const { id: _id, ...fields } = entry;
+        await (d.store.reviseEntry ?? reviseEntry)(s.revises.id, fields);
+      } else {
+        await d.store.addEntry(entry);
+      }
     } catch (e) {
       setError(`This entry could not be saved: ${e instanceof Error ? e.message : String(e)}`);
       return false;
     }
     // A portion eaten comes off the fridge counter. The entry is already safe, so a counter failure must not undo it.
-    if (action !== 'cancelled') {
+    if (action !== 'cancelled' && !s.revises) {
       for (const ref of s.resolution.refs) {
         if (ref.source !== 'batch') continue;
         const per = d.lookup.get('batch', ref.foodId)?.portions[0]?.grams;
@@ -286,6 +303,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   const run = useCallback(
     async (text: string, resolutionOverride?: { items: ParsedItem[]; resolution: Resolution }) => {
+      const revises = revisesRef.current;
       const my = ++seq.current;
       const d = depsRef.current;
       setLastText(text);
@@ -326,6 +344,8 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
           });
         }
         if (my !== seq.current) return;
+        // The entry being corrected is about to be replaced, so it must not count toward its own gate.
+        if (revises) history = history.filter((e) => e.id !== revises.id);
         let profile: Profile | null = null;
         try {
           profile = await d.store.getProfile();
@@ -334,7 +354,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
         }
         const foods = identities(resolution.refs, d.lookup);
         const s: Session = {
-          text, resolution, lines: lns, foods, answers: {}, viewedAlternatives: false, carried,
+          text, resolution, lines: lns, foods, answers: {}, viewedAlternatives: false, carried, ...(revises ? { revises } : {}),
           base: {
             pending: resolution,
             foods,
@@ -358,8 +378,9 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   );
 
   const submit = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { revises?: Revises }) => {
       if (text.trim() === '') return;
+      revisesRef.current = opts?.revises ?? null;
       pendingResolution.current = null;
       await run(text);
     },
