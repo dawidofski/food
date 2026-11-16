@@ -7,9 +7,10 @@ import type { Profile } from '@/types/profile';
  * settings) live in localStorage under the `fd.` prefix. The profile is entered at first run and
  * never committed to the repository.
  *
- * "No silent add, no silent removal": entries are never hard-deleted. `deleteEntry` writes a
- * tombstone and `reviseEntry` supersedes the original. The only hard delete is `eraseEverything`.
- * Entry nutrients are snapshotted at commit time and nothing here recomputes them.
+ * "No silent add, no silent removal": entries are never hard-deleted and the API cannot rewrite
+ * history. `addEntry` is insert-only, `deleteEntry` tombstones an active row, `reviseEntry`
+ * supersedes the original. The only hard delete is `eraseEverything`. Entry nutrients are
+ * snapshotted at commit time and nothing here recomputes them.
  */
 
 interface FoodDiaryDB extends DBSchema {
@@ -20,20 +21,33 @@ interface FoodDiaryDB extends DBSchema {
 
 const DB_NAME = 'food-diary';
 const DB_VERSION = 1;
-const LS_PREFIX = 'fd.';
-const PROFILE_KEY = `${LS_PREFIX}profile`;
+/** Every localStorage key this app writes MUST go through `lsKey`, so `eraseEverything` can find it. */
+export const LS_PREFIX = 'fd.';
+export const lsKey = (name: string): string => `${LS_PREFIX}${name}`;
+const PROFILE_KEY = lsKey('profile');
 
 let dbPromise: Promise<IDBPDatabase<FoodDiaryDB>> | null = null;
 
 function db(): Promise<IDBPDatabase<FoodDiaryDB>> {
-  dbPromise ??= openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, {
-    upgrade(d) {
-      const entries = d.createObjectStore('entries', { keyPath: 'id' });
-      entries.createIndex('at', 'at');
-      d.createObjectStore('customFoods', { keyPath: 'id' });
-      d.createObjectStore('batches', { keyPath: 'id' });
-    },
-  });
+  if (!dbPromise) {
+    const opening = openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, {
+      upgrade(d, oldVersion) {
+        if (oldVersion < 1) {
+          const entries = d.createObjectStore('entries', { keyPath: 'id' });
+          // INVARIANT: `at` is always a canonical UTC ISO string (toISOString), so lexicographic
+          // index order is chronological order. Every write path goes through normaliseAt.
+          entries.createIndex('at', 'at');
+          d.createObjectStore('customFoods', { keyPath: 'id' });
+          d.createObjectStore('batches', { keyPath: 'id' });
+        }
+      },
+    });
+    // A failed open must not be cached for the life of the page.
+    opening.catch(() => {
+      if (dbPromise === opening) dbPromise = null;
+    });
+    dbPromise = opening;
+  }
   return dbPromise;
 }
 
@@ -41,10 +55,43 @@ function newId(): string {
   return globalThis.crypto.randomUUID();
 }
 
+// ---- validation helpers ----
+
+function normaliseAt(at: string): string {
+  const t = new Date(at).getTime();
+  if (!Number.isFinite(t)) throw new RangeError(`Invalid datetime: ${at}`);
+  return new Date(t).toISOString();
+}
+
+function assertFiniteValues(label: string, set: Record<string, number | undefined>): void {
+  for (const [k, v] of Object.entries(set)) {
+    // An absent key means unknown and is fine; a present key must be a real number.
+    if (v !== undefined && !Number.isFinite(v)) throw new RangeError(`${label}.${k} is not finite`);
+  }
+}
+
+function assertEntryFinite(e: Omit<DiaryEntry, 'id'>): void {
+  assertFiniteValues('nutrients', e.nutrients);
+  for (const it of e.items) {
+    if (!Number.isFinite(it.grams)) throw new RangeError(`item ${it.foodId} grams is not finite`);
+  }
+}
+
 // ---- entries ----
 
-export async function putEntry(e: DiaryEntry): Promise<void> {
-  await (await db()).put('entries', e);
+/**
+ * Insert-only. An existing id fails with a ConstraintError, so a tombstone cannot be resurrected
+ * and a superseded row cannot be clobbered. An entry must arrive `active` with no `supersededBy`
+ * or `revisionOf`: those belong to `reviseEntry` and `deleteEntry` alone. `at` is normalised to UTC ISO.
+ */
+export async function addEntry(e: DiaryEntry): Promise<void> {
+  if (e.state !== 'active') throw new Error(`addEntry: state must be 'active', got '${e.state}'`);
+  if (e.supersededBy !== undefined || e.revisionOf !== undefined) {
+    throw new Error('addEntry: supersededBy and revisionOf are set only by reviseEntry');
+  }
+  assertEntryFinite(e);
+  const row: DiaryEntry = { ...e, at: normaliseAt(e.at) };
+  await (await db()).add('entries', row);
 }
 
 export async function getEntry(id: string): Promise<DiaryEntry | undefined> {
@@ -52,12 +99,15 @@ export async function getEntry(id: string): Promise<DiaryEntry | undefined> {
 }
 
 /**
- * Entries eaten in [fromISO, toISO], ordered by time. Only `state: 'active'` entries, and never a
- * `cancelled` one: a cancelled entry is kept for the learning history but was never eaten, so it
- * must not reach a nutritional total.
+ * Entries eaten in [fromISO, toISO] (inclusive), ordered by time; `[]` when from > to. Only
+ * `state: 'active'` entries, and never a `cancelled` one: a cancelled entry is kept for the
+ * learning history but was never eaten, so it must not reach a nutritional total.
  */
 export async function entriesBetween(fromISO: string, toISO: string): Promise<DiaryEntry[]> {
-  const rows = await (await db()).getAllFromIndex('entries', 'at', IDBKeyRange.bound(fromISO, toISO));
+  const from = normaliseAt(fromISO);
+  const to = normaliseAt(toISO);
+  if (from > to) return [];
+  const rows = await (await db()).getAllFromIndex('entries', 'at', IDBKeyRange.bound(from, to));
   return rows.filter(e => e.state === 'active' && e.userAction !== 'cancelled');
 }
 
@@ -72,36 +122,44 @@ export async function allEntriesIncludingTombstones(): Promise<DiaryEntry[]> {
  * be revised (revising a superseded one would fork the chain; a deleted one would resurrect it).
  */
 export async function reviseEntry(originalId: string, next: Omit<DiaryEntry, 'id'>): Promise<DiaryEntry> {
+  assertEntryFinite(next);
+  const at = normaliseAt(next.at);
   const tx = (await db()).transaction('entries', 'readwrite');
+  // Attach early so any throw below cannot leave an unhandled rejection on tx.done.
+  const done = tx.done.catch(() => undefined);
   const original = await tx.store.get(originalId);
-  if (!original) {
+  if (!original || original.state !== 'active') {
     tx.abort();
-    await tx.done.catch(() => undefined);
-    throw new Error(`Cannot revise unknown entry ${originalId}`);
+    await done;
+    throw new Error(
+      original
+        ? `Cannot revise entry ${originalId}: state is ${original.state}`
+        : `Cannot revise unknown entry ${originalId}`,
+    );
   }
-  if (original.state !== 'active') {
-    tx.abort();
-    await tx.done.catch(() => undefined);
-    throw new Error(`Cannot revise entry ${originalId}: state is ${original.state}`);
-  }
-  const revised: DiaryEntry = {
-    ...next,
-    id: newId(),
-    state: 'active',
-    revisionOf: originalId,
-  };
+  const revised: DiaryEntry = { ...next, at, id: newId(), state: 'active', revisionOf: originalId };
   delete revised.supersededBy;
-  await tx.store.put(revised);
-  await tx.store.put({ ...original, state: 'superseded', supersededBy: revised.id });
+  try {
+    await tx.store.put(revised);
+    await tx.store.put({ ...original, state: 'superseded', supersededBy: revised.id });
+  } catch (err) {
+    tx.abort();
+    await done;
+    throw err;
+  }
   await tx.done;
   return revised;
 }
 
-/** Tombstone only: the row survives with `state: 'deleted'`. A missing id is a no-op. */
+/**
+ * Tombstones an `active` row: it survives with `state: 'deleted'`. Any other row (missing,
+ * already deleted, or superseded) is a silent no-op; in particular a superseded row keeps its
+ * "replaced by a revision" fact and `supersededBy` link rather than being relabelled deleted.
+ */
 export async function deleteEntry(id: string): Promise<void> {
   const tx = (await db()).transaction('entries', 'readwrite');
   const row = await tx.store.get(id);
-  if (row) await tx.store.put({ ...row, state: 'deleted' });
+  if (row && row.state === 'active') await tx.store.put({ ...row, state: 'deleted' });
   await tx.done;
 }
 
@@ -122,6 +180,10 @@ export async function allCustomFoods(): Promise<CustomFood[]> {
 // ---- batches ----
 
 export async function putBatch(b: Batch): Promise<void> {
+  assertFiniteValues('nutrientsPerPortion', b.nutrientsPerPortion);
+  if (!Number.isFinite(b.portionsRemaining) || !Number.isFinite(b.portionCount)) {
+    throw new RangeError('batch portion counts must be finite');
+  }
   await (await db()).put('batches', b);
 }
 
@@ -137,7 +199,10 @@ export async function allBatches(): Promise<Batch[]> {
 export async function decrementBatchPortion(id: string): Promise<void> {
   const tx = (await db()).transaction('batches', 'readwrite');
   const row = await tx.store.get(id);
-  if (row) await tx.store.put({ ...row, portionsRemaining: Math.max(0, row.portionsRemaining - 1) });
+  if (row) {
+    const left = Number.isFinite(row.portionsRemaining) ? row.portionsRemaining : 0;
+    await tx.store.put({ ...row, portionsRemaining: Math.max(0, left - 1) });
+  }
   await tx.done;
 }
 
@@ -158,8 +223,18 @@ export async function putProfile(p: Profile): Promise<void> {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
 }
 
-/** The only hard delete: clears every store and every `fd.` localStorage key. */
+/**
+ * The only hard delete. localStorage (profile, including date of birth) goes first, so a failure
+ * midway never leaves the personal data behind while the entries are already gone.
+ */
 export async function eraseEverything(): Promise<void> {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k?.startsWith(LS_PREFIX)) keys.push(k);
+  }
+  keys.forEach(k => localStorage.removeItem(k));
+
   const d = await db();
   const tx = d.transaction(['entries', 'customFoods', 'batches'], 'readwrite');
   await Promise.all([
@@ -168,10 +243,4 @@ export async function eraseEverything(): Promise<void> {
     tx.objectStore('batches').clear(),
     tx.done,
   ]);
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k?.startsWith(LS_PREFIX)) keys.push(k);
-  }
-  keys.forEach(k => localStorage.removeItem(k));
 }

@@ -49,7 +49,7 @@ export type CustomFood = {
   id: string;
   name: string;
   /** An absent key means unknown, never zero. */
-  nutrientsPer100g: Partial<NutrientSet>;
+  nutrientsPer100g: NutrientSet;
   classification: ClassificationFlags;
   allergens: string[];
   referencePortion: { label: string; grams: number };
