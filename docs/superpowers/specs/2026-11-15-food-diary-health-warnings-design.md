@@ -664,12 +664,12 @@ says so. The values in the §9.3 table above are superseded by this log.
 
 | Rule | Plan figure | What the source says | Result |
 |---|---|---|---|
-| Sodium, daily | > 2,000 mg (WHO) | WHO Guideline: Sodium intake for adults and children (2012): "a reduction to <2 g/day sodium (5 g/day salt) in adults (strong recommendation)". Blood-pressure evidence rated high quality. Also on WHO's sodium fact sheet. | **Confirmed.** Level MODERATE above 2,000 mg. HIGH from 1.5 times the figure, a presentation grading that is not a WHO number. |
-| Sodium, single entry | > 600 mg | The guideline and fact sheet state intake as an average daily figure. Neither gives any figure for a single meal or serving. 600 mg is not a published guideline. | **Changed to qualitative.** Fires only when one entry alone exceeds WHO's whole-day figure. The card states that WHO sets no single-serving limit. No 600 mg anywhere. |
+| Sodium, daily | > 2,000 mg (WHO) | WHO Guideline: Sodium intake for adults and children (2012): "a reduction to <2 g/day sodium (5 g/day salt) in adults (strong recommendation)". Blood-pressure evidence rated high quality. Also on WHO's sodium fact sheet. | **Confirmed.** MODERATE above 2,000 mg, with no magnitude tier. Declared 'strong' because WHO rates blood-pressure evidence high quality; WHO rates evidence on cardiovascular outcomes lower, so the card says that and claims nothing about them. |
+| Sodium, single entry | > 600 mg | The guideline and fact sheet state intake as an average daily figure. Neither gives any figure for a single meal or serving. 600 mg is not a published guideline. | **Changed to qualitative.** MODERATE only when one entry alone exceeds WHO's whole-day figure. The card states that WHO sets no single-serving limit. No 600 mg anywhere. |
 | Added sugar, daily | > 10% of energy; 5% better | WHO Guideline: Sugars intake (2015): free sugars below 10% of total energy (strong); a further reduction below 5%, about 25 g (conditional). | **Confirmed, with a caveat.** MODERATE above 10%; INFO above 5% (conditional). WHO's measure is *free* sugars (adds juice and honey sugars); the diary counts *added* sugars, so it can understate. The card says so. Certainty of the sugar evidence was not read at source, so strength is declared 'moderate', not 'strong'. |
 | Added sugar, single entry | > 15 g | WHO states no per-serving limit (the article gives examples such as a can of soda only). 15 g is not a published figure. | **Changed to qualitative.** INFO above the day's 5% figure, MODERATE above the day's 10% figure, on one entry, with a card saying no single-serving limit exists. No 15 g anywhere. |
 | Saturated fat, daily | > 10% of energy | WHO 2023 guideline: "reduce saturated fatty acid intake to 10% of total energy intake (strong recommendation)". Certainty of evidence for that recommendation: moderate, from trials with cardiovascular outcomes. Going below 10% is a separate conditional recommendation on very-low-certainty evidence. | **Confirmed.** MODERATE above 10%. No sub-10% tier. Strength declared 'moderate' (certainty), not 'strong' (recommendation). Alternative offered (polyunsaturated fat) is WHO's own strong replacement recommendation. |
-| Trans fat | any industrial; day > 1% of energy | WHO 2023: "reduce trans-fatty acid intake to 1% of total energy intake (strong recommendation)", moderate certainty. The definition covers all trans fat, ruminant and industrial alike. The remark is that foods with *high levels* of industrial trans fat should largely be avoided. | **Changed.** Food data does not separate industrial from ruminant trans fat, so "any industrial trans fat" cannot be detected, and "any trans fat" would fire on milk. The rule fires HIGH only when one entry alone exceeds the whole-day 1% figure, and says so. Strength declared 'moderate'. |
+| Trans fat | any industrial; day > 1% of energy | WHO 2023: "reduce trans-fatty acid intake to 1% of total energy intake (strong recommendation)", moderate certainty. The definition covers all trans fat, ruminant and industrial alike. The remark is that foods with *high levels* of industrial trans fat should largely be avoided. | **Changed.** Food data does not separate industrial from ruminant trans fat, so "any industrial trans fat" cannot be detected, and "any trans fat" would fire on milk. The rule fires MODERATE only when one entry alone exceeds the whole-day 1% figure, and says so. WHO publishes no grade for one entry and the evidence is observational, so HIGH was not defensible. Strength declared 'moderate'. |
 
 Cross-cutting findings:
 
@@ -686,3 +686,25 @@ Cross-cutting findings:
   fetched; the WHO page and news item were read). Declared 'moderate' accordingly.
 - The 2012 sodium guideline covers adults and, adjusted for energy needs, children aged 2 to 15. The app's targets use
   the adult figure; a child's profile would need a scaled figure (not implemented).
+
+Rules fixed after review (same task):
+
+- **Strength mapping.** Declared `strength` is the certainty of evidence for the outcome the card names, not the strength
+  of WHO's recommendation. That is why saturated fat and trans fat are 'moderate' despite strong recommendations, and
+  why a future rule must not borrow a recommendation's authority for a weaker evidence base. The tone tests pin each
+  rule's strength so a change is a visible diff.
+- **No magnitude tiers; HIGH is for frequency.** §9.2 defines HIGH as significant concern "especially with frequent
+  consumption". One day or one entry larger than another is more of the same concern, not a different kind. All six
+  rules therefore top out at MODERATE (sugar also uses INFO for WHO's conditional 5% figure). The earlier sodium HIGH
+  tier (1.5 times the figure) and trans fat HIGH are removed. Escalation belongs to a weekly frequency rule, which does
+  not yet exist.
+- **Sugar cards** say only that 5% is a conditional recommendation and 10% a strong one; no reason is attributed to WHO.
+- **Entry cards qualify disease links.** Every entry-scope sentence naming a disease or outcome says the link concerns
+  usual intake; a tone test enforces it.
+- **Alternatives carry their own citation** (WHO's replacement recommendation, verbatim), and a test requires it.
+- **Units.** WHO's figures are shares of *intake* (percent of total energy intake). The app compares them with its
+  energy *target* (computeTargets), so on a day eaten above or below target the card is measured against the target, not
+  the day's actual energy.
+- **No daily trans-fat rule.** Trans fat is checked per entry only. A day's excess spread over several entries, none of
+  which exceeds the whole-day figure alone, stays silent. A daily rule would also need trans-fat day coverage, which USDA
+  data often lacks.
