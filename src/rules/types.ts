@@ -1,0 +1,103 @@
+import type { Level, Resolution } from '@/types/diary';
+import type { NutrientKey } from '@/types/nutrients';
+import type { Profile, Targets } from '@/types/profile';
+import type { DayTotals, WeekContext } from '@/domain/totals';
+
+export type { Level };
+
+export type EvidenceStrength = 'strong' | 'moderate' | 'limited' | 'uncertain';
+
+export type Citation = {
+  title: string;
+  publisher: string;
+  year: number;
+  url: string;
+  /** A short verbatim statement of what the source concludes. The app works offline; a URL alone is not content. */
+  conclusion: string;
+};
+
+export type Alternative = { label: string; reason: string };
+
+export type Evidence = {
+  strength: EvidenceStrength;
+  /** The issuing body: "IARC", "WHO", "EFSA". */
+  body: string;
+  /** Plain-language statement of what is actually shown. */
+  summary: string;
+  citation: Citation;
+  /** True forces hedged phrasing downstream: never "causes". */
+  isAssociational: boolean;
+};
+
+export type Horizon = 'occasional' | 'habitual' | 'both';
+
+export type Context = {
+  pending: Resolution;
+  today: DayTotals;
+  week: WeekContext;
+  targets: Targets;
+  profile: Profile | null;
+  /** The caller supplies the clock; nothing in the engine reads it. */
+  now: Date;
+  /** Answers to safety questions, keyed by SafetyPrompt.answerKey. Absent = unanswered. */
+  answers: Record<string, boolean>;
+};
+
+/** A hazard that depends on how the food was handled, which cannot be inferred from the food itself. */
+export type SafetyPrompt = {
+  /** Key under which the answer is stored in `Context.answers`. */
+  answerKey: string;
+  /** Whether this question is relevant to the pending entry at all. */
+  applies: (ctx: Context) => boolean;
+  question: string;
+};
+
+export type Rule = {
+  id: string;
+  title: string;
+  /** CRITICAL is reserved for 'safety'. `evaluate` throws when a 'nutrition' rule returns it. */
+  category: 'nutrition' | 'safety';
+  /** null = stay silent, which is the normal case. */
+  level: (ctx: Context) => Level | null;
+  concern: string;
+  cause: string;
+  evidence: Evidence;
+  horizon: Horizon;
+  portionNote: (ctx: Context) => string;
+  /** Omitted entirely when none is honest. */
+  alternatives?: Alternative[];
+
+  /** The rule stays silent if any of these is not known in the pending entry. Absent means unknown, never zero. */
+  requiresNutrients: NutrientKey[];
+  /**
+   * Which total the rule reads. 'entry' reads only the pending entry. 'daily' (the default) reads today's
+   * running total plus the pending entry, so the coverage gate applies. Defaulting to 'daily' fails safe:
+   * a rule that forgets to declare 'entry' goes silent rather than firing off an understated total.
+   */
+  scope?: 'entry' | 'daily';
+  /** Minimum share (0..1) of the day's energy with known values for each required nutrient. Default 0.8. */
+  minCoverage?: number;
+  /** Cards on the same nutrient merge into one. */
+  nutrientKey?: NutrientKey;
+  /** When set, the gate asks this question first; the rule is only evaluated once it is answered yes. */
+  safetyPrompt?: SafetyPrompt;
+};
+
+export type WarningCard = {
+  ruleId: string;
+  /** Rule ids merged into this card (same nutrient), excluding `ruleId`. */
+  mergedFrom: string[];
+  level: Level;
+  title: string;
+  concern: string;
+  cause: string;
+  evidence: Evidence;
+  horizon: Horizon;
+  portionNote: string;
+  alternatives: Alternative[];
+  nutrientKey?: NutrientKey;
+  /** Set when an input was only partly known, so the number may be understated. */
+  dataNote?: string;
+};
+
+export type SafetyQuestion = { ruleId: string; question: string; answerKey: string };
