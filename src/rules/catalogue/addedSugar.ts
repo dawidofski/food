@@ -23,8 +23,8 @@ const evidence: Evidence = {
   strength: 'moderate',
   body: 'WHO',
   summary:
-    'Higher free-sugars intake is associated with weight gain and with dental caries. The 10% figure is a strong ' +
-    'recommendation. The 5% figure is conditional because it rests on fewer studies.',
+    'Higher usual free-sugars intake is associated with weight gain and with dental caries. WHO makes the 10% ' +
+    'figure a strong recommendation and the 5% figure a conditional one.',
   citation,
   isAssociational: true,
 };
@@ -49,9 +49,10 @@ export const addedSugarEntryRule: Rule = {
   horizon: 'habitual',
   evidence,
   concern:
-    'This entry alone has more added sugar than WHO suggests for a whole day. WHO sets no limit for a single ' +
-    'serving, so this card marks the circumstance and is not a threshold. Higher sugars intake is associated with ' +
-    'weight gain and dental caries.' + CAVEAT,
+    "This entry alone has more added sugar than WHO's conditional figure of 5% of energy for a whole day, and the " +
+    "card is stronger above WHO's strong figure of 10%. WHO sets no limit for a single serving, so this card marks " +
+    'the circumstance and is not a threshold. Higher usual intake of sugars is associated with weight gain and ' +
+    'dental caries.' + CAVEAT,
   cause: 'Added sugars come from sweetened foods and drinks and from sugar added in cooking.',
   level: (ctx) => {
     const sugar = pending(ctx, 'addedSugarsG');
@@ -79,9 +80,9 @@ export const addedSugarDailyRule: Rule = {
   horizon: 'habitual',
   evidence,
   concern:
-    "With this entry, today's logged added sugar is above WHO's figure of 5% of energy, or above 10% when it is " +
-    'higher. The figures describe usual intake over time, and higher intake is associated with weight gain and ' +
-    'dental caries.' + CAVEAT,
+    "With this entry, today's logged added sugar is above WHO's conditional figure of 5% of energy. The card is " +
+    "stronger above WHO's strong figure of 10%. The figures describe usual intake over time, and higher usual " +
+    'intake is associated with weight gain and dental caries.' + CAVEAT,
   cause: 'Added sugars come from sweetened foods and drinks and from sugar added in cooking.',
   level: (ctx) => {
     const total = projectedDay(ctx, 'addedSugarsG');

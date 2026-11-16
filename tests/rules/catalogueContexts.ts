@@ -84,7 +84,7 @@ export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' |
   'sodium-entry': [{ ctx: ctx({ pendingSodium: 2400 }), level: 'MODERATE' }],
   'sodium-daily': [
     { ctx: ctx({ todaySodium: 1800, pendingSodium: 400 }), level: 'MODERATE' },
-    { ctx: ctx({ todaySodium: 2000, pendingSodium: 1240 }), level: 'HIGH' },
+    { ctx: ctx({ todaySodium: 2000, pendingSodium: 1240 }), level: 'MODERATE' },
   ],
   'added-sugar-entry': [
     { ctx: ctx({ pendingAddedSugar: 40 }), level: 'INFO' },
@@ -95,5 +95,5 @@ export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' |
     { ctx: ctx({ todayAddedSugar: 60, pendingAddedSugar: 20 }), level: 'MODERATE' },
   ],
   'saturated-fat-daily': [{ ctx: ctx({ todaySatFat: 25, pendingSatFat: 10 }), level: 'MODERATE' }],
-  'trans-fat': [{ ctx: ctx({ pendingTransFat: 4 }), level: 'HIGH' }],
+  'trans-fat': [{ ctx: ctx({ pendingTransFat: 4 }), level: 'MODERATE' }],
 };

@@ -16,7 +16,12 @@ export type Citation = {
   conclusion: string;
 };
 
-export type Alternative = { label: string; reason: string };
+export type Alternative = {
+  label: string;
+  reason: string;
+  /** The source's own replacement advice. An alternative with no citation is a taste, not evidence. */
+  citation?: Citation;
+};
 
 export type Evidence = {
   strength: EvidenceStrength;

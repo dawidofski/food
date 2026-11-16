@@ -7,7 +7,9 @@ import { pending, usable, whole } from './shared';
  *  - the 1% limit covers ALL trans fat, ruminant (dairy, meat) as well as industrial, and the food data does not
  *    separate them, so "any industrial trans fat" cannot be detected and "any amount" would fire on milk;
  *  - WHO's remark is that foods with HIGH levels of industrial trans fat should largely be avoided, not any amount.
- * The rule therefore fires only when one entry alone exceeds the whole-day 1% figure, and says so.
+ * The rule therefore fires only when one entry alone exceeds the whole-day 1% figure, and says so. MODERATE, not
+ * HIGH: WHO publishes no grade for one entry, the evidence is observational, and size of one entry is not frequency.
+ * There is no daily trans-fat rule, so a day's excess spread over several entries stays silent.
  */
 const citation: Citation = {
   title: 'Saturated fatty acid and trans-fatty acid intake for adults and children: WHO guideline',
@@ -23,8 +25,9 @@ const evidence: Evidence = {
   strength: 'moderate',
   body: 'WHO',
   summary:
-    'In observational studies, higher trans-fat intake is associated with higher risk of coronary heart disease and ' +
-    'death, in a dose-dependent way, with moderate certainty. WHO counts industrial and ruminant trans fat together.',
+    'In observational studies, higher usual trans-fat intake is associated with higher risk of coronary heart ' +
+    'disease and death, in a dose-dependent way, with moderate certainty. WHO counts industrial and ruminant trans ' +
+    'fat together.',
   citation,
   isAssociational: true,
 };
@@ -47,13 +50,19 @@ export const transFatRule: Rule = {
     {
       label: 'Polyunsaturated or plant monounsaturated fat in place of trans fat',
       reason: 'WHO recommends replacing trans fat with these fats, as a conditional recommendation.',
+      citation: {
+        title: citation.title, publisher: citation.publisher, year: citation.year, url: citation.url,
+        conclusion:
+          'WHO recommends replacing trans-fatty acids in the diet with polyunsaturated fatty acids or monounsaturated ' +
+          'fatty acids primarily from plant sources (conditional recommendation).',
+      },
     },
   ],
   level: (ctx) => {
     const trans = pending(ctx, 'transFatG');
     const limit = ctx.targets.transFatG;
     if (trans === null || !usable(limit)) return null;
-    return trans > limit ? 'HIGH' : null;
+    return trans > limit ? 'MODERATE' : null;
   },
   portionNote: (ctx) => {
     const trans = pending(ctx, 'transFatG');

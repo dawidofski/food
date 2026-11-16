@@ -18,8 +18,9 @@ describe('sodium', () => {
     expect(sodiumEntryRule.level(ctx({ pendingSodium: 400 }))).toBeNull();
   });
   test('daily rule compares today plus pending against 2000 mg', () => {
-    expect(sodiumDailyRule.level(ctx({ todaySodium: 2000, pendingSodium: 1240 }))).toBe('HIGH');
+    expect(sodiumDailyRule.level(ctx({ todaySodium: 2000, pendingSodium: 1240 }))).toBe('MODERATE'); // no magnitude tier: frequency, not size, escalates a card
     expect(sodiumDailyRule.level(ctx({ todaySodium: 1800, pendingSodium: 400 }))).toBe('MODERATE');
+    expect(sodiumDailyRule.level(ctx({ todaySodium: 9000, pendingSodium: 9000 }))).toBe('MODERATE');
     expect(sodiumDailyRule.level(ctx({ todaySodium: 300, pendingSodium: 200 }))).toBeNull();
     expect(sodiumDailyRule.level(ctx({ todaySodium: 1800, pendingSodium: 200 }))).toBeNull(); // exactly at the figure
   });
@@ -52,8 +53,8 @@ describe('saturated fat and trans fat', () => {
     expect(saturatedFatDailyRule.level(ctx({ todaySatFat: 25, pendingSatFat: 10 }))).toBe('MODERATE');
     expect(saturatedFatDailyRule.level(ctx({ todaySatFat: 10, pendingSatFat: 10 }))).toBeNull();
   });
-  test('trans fat fires HIGH only when one entry alone exceeds the whole-day 1% of energy; no "any amount" rule', () => {
-    expect(transFatRule.level(ctx({ pendingTransFat: 4 }))).toBe('HIGH');
+  test('trans fat fires MODERATE only when one entry alone exceeds the whole-day 1% of energy; no "any amount" rule', () => {
+    expect(transFatRule.level(ctx({ pendingTransFat: 4 }))).toBe('MODERATE');
     expect(transFatRule.level(ctx({ pendingTransFat: 2 }))).toBeNull(); // dairy-level amounts stay silent
     expect(transFatRule.level(ctx({ pendingTransFat: 0 }))).toBeNull();
   });

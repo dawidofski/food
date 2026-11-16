@@ -5,6 +5,9 @@ import { pending, projectedDay, usable, whole } from './shared';
  * Verified against the WHO sodium guideline (see the spec's Verification log). WHO states a recommendation for
  * average daily intake only. It publishes NO figure for a single serving, so the plan's "600 mg in one entry" is
  * not used: the entry rule compares one entry with WHO's whole-day figure and says so on the card.
+ * Strength 'strong' is the certainty for the outcome the card names, blood pressure (high quality). WHO rates its
+ * cardiovascular-outcome evidence lower, so the summary says that and the card claims nothing about those outcomes.
+ * No magnitude tier: HIGH means concern "especially with frequent consumption" and no weekly sodium rule exists.
  */
 const citation: Citation = {
   title: 'Guideline: Sodium intake for adults and children',
@@ -18,14 +21,12 @@ const evidence: Evidence = {
   strength: 'strong',
   body: 'WHO',
   summary:
-    'In trials, lower sodium intake lowers blood pressure in adults, and higher blood pressure is associated with ' +
-    'cardiovascular disease. WHO states its figure for average daily intake. It states none for a single serving.',
+    'In trials, lower sodium intake lowers blood pressure in adults, and WHO rates that evidence as high quality. ' +
+    'WHO rates the evidence for cardiovascular outcomes, which concern usual intake over time, as lower quality. ' +
+    'WHO states its figure for average daily intake. It states none for a single serving.',
   citation,
   isAssociational: false,
 };
-
-/** Presentation grading only, not a WHO figure: a day this many times the WHO figure is shown as HIGH. */
-const HIGH_AT_RATIO = 1.5;
 
 export const sodiumEntryRule: Rule = {
   id: 'sodium-entry',
@@ -70,8 +71,8 @@ export const sodiumDailyRule: Rule = {
   level: (ctx): Level | null => {
     const total = projectedDay(ctx, 'sodiumMg');
     const figure = ctx.targets.sodiumMg;
-    if (total === null || !usable(figure) || total <= figure) return null;
-    return total >= figure * HIGH_AT_RATIO ? 'HIGH' : 'MODERATE';
+    if (total === null || !usable(figure)) return null;
+    return total > figure ? 'MODERATE' : null;
   },
   portionNote: (ctx) => {
     const total = projectedDay(ctx, 'sodiumMg');
