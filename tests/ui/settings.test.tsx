@@ -398,6 +398,9 @@ describe('erasing from inside the app', () => {
     await click(/^settings$/i);
     await click(/^erase everything$/i);
     await click(/yes, erase everything/i);
+    // Settings also has a date-of-birth field, so wait for Settings itself to go before looking for first run's.
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /^settings$/i })).not.toBeInTheDocument(), { timeout: 5000 });
     expect(await screen.findByLabelText(/date of birth/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /skip|not now|later/i })).toBeInTheDocument();
   });
 });
