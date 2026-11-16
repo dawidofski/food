@@ -3,6 +3,7 @@ import { loadDatasetMeta, type DatasetMeta } from '@/data/foodRepository';
 import { clearApiKey, getApiKey, isAiSwitchedOn, maskKey, setAiSwitch, setApiKey } from '@/state/aiSettings';
 import { BackupSettings, EraseSettings } from './DataSettings';
 import ProfileSettings from './ProfileSettings';
+import ThemeSettings from './ThemeSettings';
 
 /**
  * Settings: body data and targets, the optional DeepSeek fallback, backup and erase. The fallback is off until a key
@@ -15,6 +16,7 @@ export default function Settings({ onErased }: { onErased?: () => void }) {
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
       <h1 className="text-xl font-semibold">Settings</h1>
+      <ThemeSettings key={`theme-${version}`} />
       <ProfileSettings key={`profile-${version}`} />
       <AiSettings key={`ai-${version}`} />
       <BackupSettings onImported={refresh} />
@@ -70,7 +72,7 @@ function AiSettings() {
 
   return (
     <>
-      <section aria-labelledby="ai-heading" className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
+      <section aria-labelledby="ai-heading" className="space-y-3 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
         <h2 id="ai-heading" className="text-lg font-semibold">AI help for foods I can&rsquo;t match</h2>
         <p className="text-sm">
           Optional, and off by default. When a food you type is not in the database, the app can ask DeepSeek, an AI service, what it means.
@@ -94,7 +96,7 @@ function AiSettings() {
         {key !== null && (
           <div className="space-y-2">
             <p className="text-sm">
-              Key saved: <code data-testid="masked-key" className="rounded bg-slate-100 px-1">{maskKey(key)}</code>
+              Key saved: <code data-testid="masked-key" className="rounded bg-slate-100 dark:bg-slate-800 px-1">{maskKey(key)}</code>
             </p>
             <label className="flex min-h-11 items-center gap-2 text-base">
               <input
@@ -107,11 +109,11 @@ function AiSettings() {
             </label>
             <div className="flex flex-wrap gap-2">
               {!replacing && (
-                <button type="button" onClick={() => setReplacing(true)} className="min-h-11 rounded-lg border border-slate-400 px-4">
+                <button type="button" onClick={() => setReplacing(true)} className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-4">
                   Replace key
                 </button>
               )}
-              <button type="button" onClick={remove} className="min-h-11 rounded-lg border border-slate-400 px-4">
+              <button type="button" onClick={remove} className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-4">
                 Clear key
               </button>
             </div>
@@ -128,14 +130,14 @@ function AiSettings() {
               onChange={(e) => setDraft(e.target.value)}
               autoComplete="off"
               spellCheck={false}
-              className="min-h-12 w-full rounded-lg border-2 border-slate-400 px-3"
+              className="min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 px-3"
             />
             <div className="flex flex-wrap gap-2">
-              <button type="submit" disabled={draft.trim() === ''} className="min-h-12 rounded-lg bg-slate-900 px-4 text-white disabled:opacity-50">
+              <button type="submit" disabled={draft.trim() === ''} className="min-h-12 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 text-white dark:text-slate-900 disabled:opacity-50">
                 Save key and turn on DeepSeek
               </button>
               {replacing && (
-                <button type="button" onClick={() => { setReplacing(false); setDraft(''); }} className="min-h-12 rounded-lg border border-slate-400 px-4">
+                <button type="button" onClick={() => { setReplacing(false); setDraft(''); }} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4">
                   Keep the current key
                 </button>
               )}
@@ -143,7 +145,7 @@ function AiSettings() {
           </form>
         )}
 
-        {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
       </section>
     </>
   );
@@ -158,7 +160,7 @@ function DataSourceSettings() {
     return () => { live = false; };
   }, []);
   return (
-    <section aria-labelledby="data-heading" data-testid="data-source" className="space-y-2 rounded-xl border-2 border-slate-400 p-3">
+    <section aria-labelledby="data-heading" data-testid="data-source" className="space-y-2 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
       <h2 id="data-heading" className="text-lg font-semibold">Where the food numbers come from</h2>
       {meta ? (
         <>

@@ -408,3 +408,20 @@ describe('erasing from inside the app', () => {
     expect(screen.getByRole('button', { name: /skip|not now|later/i })).toBeInTheDocument();
   });
 });
+
+describe('appearance setting', () => {
+  test('defaults to System, saves a choice, applies the dark class, and an erase puts it back', async () => {
+    render(<Settings />);
+    const radio = (n: string) => screen.getByRole('radio', { name: n }) as HTMLInputElement;
+    expect(radio('System').checked).toBe(true);
+    fireEvent.click(radio('Dark'));
+    expect(localStorage.getItem(lsKey('theme'))).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    fireEvent.click(radio('Light'));
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    fireEvent.click(radio('Dark'));
+    await act(async () => { await eraseEverything(); });
+    expect(localStorage.getItem(lsKey('theme'))).toBeNull();
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+});

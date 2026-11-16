@@ -4,6 +4,11 @@ import App from './App';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { updates } from './state/updates';
+import { applyTheme, watchSystemTheme } from './state/theme';
+
+// The inline script in index.html already chose the theme; this keeps System in step with the device.
+applyTheme();
+watchSystemTheme();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element #root not found');
