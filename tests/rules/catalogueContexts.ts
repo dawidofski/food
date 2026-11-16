@@ -1,10 +1,10 @@
 import type { Context } from '@/rules/types';
 import type { DayTotals } from '@/domain/totals';
-import { NUTRIENT_KEYS, type Coverage, type NutrientKey, type NutrientSet } from '@/types/nutrients';
+import { NUTRIENT_KEYS, type ClassificationFlags, type Coverage, type NutrientKey, type NutrientSet } from '@/types/nutrients';
 import { ownerProfile } from '../fixtures/profile';
 
-const flags = {
-  processedMeat: false, redMeat: false, sweetDrink: false, alcohol: false, novaGroup: 1 as const,
+const flags: ClassificationFlags = {
+  processedMeat: false, redMeat: false, sweetDrink: false, alcohol: false, novaGroup: 1,
   refinedGrain: false, vegetable: false, fruit: false, legume: false, oilyFish: false,
 };
 
@@ -20,11 +20,24 @@ export type Opts = {
   emptyDay?: boolean;
   /** Nutrients whose pending value is unknown (absent, coverage 'unknown'). */
   unknownPending?: NutrientKey[];
+  /** Flags on the pending entry (the merged worst case). Per-item flags come from `refs`. */
+  classification?: Partial<ClassificationFlags>;
+  /** Pending items, each with its own flags and grams. Defaults to one item carrying `classification`. */
+  refs?: { grams: number; flags?: Partial<ClassificationFlags> }[];
+  /** Grams of the single default pending item. */
+  pendingGrams?: number;
+  pendingEnergy?: number;
+  pendingFibre?: number;
+  pendingProtein?: number;
+  /** Week context, committed entries only (the pending entry is not in it). */
+  weekProcessedMeatOccasions?: number;
+  weekRedMeatGrams?: number;
+  weekAlcoholOccasions?: number;
 };
 
 /** Builds a context whose measured values are exactly the ones given. A nutrient not given is unknown, never zero. */
 export function ctx(o: Opts = {}): Context {
-  const pendingN: NutrientSet = { energyKcal: 300 };
+  const pendingN: NutrientSet = { energyKcal: o.pendingEnergy ?? 300 };
   const pendingC: Coverage = { energyKcal: 'known' };
   const set = (k: NutrientKey, v: number | undefined) => {
     if (v === undefined || o.unknownPending?.includes(k)) {
@@ -38,6 +51,8 @@ export function ctx(o: Opts = {}): Context {
   set('addedSugarsG', o.pendingAddedSugar);
   set('satFatG', o.pendingSatFat);
   set('transFatG', o.pendingTransFat);
+  set('fibreG', o.pendingFibre);
+  set('proteinG', o.pendingProtein);
 
   const todayN: NutrientSet = o.emptyDay
     ? {}
@@ -58,14 +73,19 @@ export function ctx(o: Opts = {}): Context {
     dayKey: '2026-11-15', entryCount: o.emptyDay ? 0 : 2, nutrients: todayN, coverage: todayC, energyCoveredShare: share,
     vegCupEq: 0, vegCoverage: 'known', hasVegetableFlag: false,
   };
+  const merged: ClassificationFlags = { ...flags, ...o.classification };
+  const refs = (o.refs ?? [{ grams: o.pendingGrams ?? 100, flags: o.classification }]).map((r, i) => ({
+    source: 'dataset' as const, foodId: `probe-${i}`, grams: r.grams, classification: { ...flags, ...r.flags },
+  }));
   return {
     pending: {
-      refs: [{ source: 'dataset', foodId: 'probe', grams: 100, classification: flags }],
-      nutrients: pendingN, coverage: pendingC, classification: flags, needsHelp: [], confidence: 1,
+      refs,
+      nutrients: pendingN, coverage: pendingC, classification: merged, needsHelp: [], confidence: 1,
     },
     today,
     week: {
-      days: [today], processedMeatOccasions: 0, redMeatGrams: 0, alcoholOccasions: 0,
+      days: [today], processedMeatOccasions: o.weekProcessedMeatOccasions ?? 0, redMeatGrams: o.weekRedMeatGrams ?? 0,
+      alcoholOccasions: o.weekAlcoholOccasions ?? 0,
       vegCupEqByDay: [0], daysWithoutVegetable: 0, daysVegetableUnknown: 0,
     },
     // Consistent with a 2,500 kcal day: 2,000 mg sodium, 10% / 5% of energy as sugar, 10% as saturated fat, 1% as trans fat.
@@ -96,4 +116,18 @@ export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' |
   ],
   'saturated-fat-daily': [{ ctx: ctx({ todaySatFat: 25, pendingSatFat: 10 }), level: 'MODERATE' }],
   'trans-fat': [{ ctx: ctx({ pendingTransFat: 4 }), level: 'MODERATE' }],
+  'processed-meat': [{ ctx: ctx({ classification: { processedMeat: true }, pendingGrams: 114 }), level: 'HIGH' }],
+  'processed-meat-frequency': [
+    { ctx: ctx({ classification: { processedMeat: true }, weekProcessedMeatOccasions: 2 }), level: 'INFO' },
+  ],
+  'red-meat-weekly': [
+    { ctx: ctx({ classification: { redMeat: true }, pendingGrams: 150, weekRedMeatGrams: 450 }), level: 'MODERATE' },
+  ],
+  alcohol: [
+    { ctx: ctx({ classification: { alcohol: true } }), level: 'MODERATE' },
+    { ctx: ctx({ classification: { alcohol: true }, weekAlcoholOccasions: 9 }), level: 'MODERATE' },
+  ],
+  'sweet-drink': [{ ctx: ctx({ classification: { sweetDrink: true }, pendingGrams: 330 }), level: 'INFO' }],
+  'ultra-processed': [{ ctx: ctx({ classification: { novaGroup: 4 } }), level: 'INFO' }],
+  'nutrient-density': [{ ctx: ctx({ pendingEnergy: 600, pendingFibre: 0.5, pendingProtein: 2 }), level: 'INFO' }],
 };

@@ -31,10 +31,20 @@ const LONG_TERM = /\b(usual|long-term|over time|habitual|habitually|regular|regu
 const EXPECTED_STRENGTH: Record<string, 'strong' | 'moderate' | 'limited' | 'uncertain'> = {
   'sodium-entry': 'strong', 'sodium-daily': 'strong', 'added-sugar-entry': 'moderate', 'added-sugar-daily': 'moderate',
   'saturated-fat-daily': 'moderate', 'trans-fat': 'moderate',
+  // Task 12. Strength is the certainty for the outcome named. Red meat is 'limited' because IARC's own wording for it is
+  // "limited evidence"; sweet drink is 'limited' because WHO rates its drink-specific cohort evidence low.
+  'processed-meat': 'strong', 'processed-meat-frequency': 'strong', 'red-meat-weekly': 'limited', alcohol: 'strong',
+  'sweet-drink': 'limited', 'ultra-processed': 'limited', 'nutrient-density': 'limited',
 };
 
+/**
+ * HIGH is for the nature of a concern ("especially with frequent consumption", spec 9.2), never for the size of a nutrient.
+ * One rule qualifies: processed meat (IARC Group 1, sufficient evidence). Adding to this list is a visible diff.
+ */
+const MAY_REACH_HIGH = new Set(['processed-meat']);
+
 test('the tone tests really run over the catalogue', () => {
-  expect(catalogue.length).toBeGreaterThanOrEqual(6);
+  expect(catalogue.length).toBeGreaterThanOrEqual(13);
   for (const r of catalogue) {
     expect(probes[r.id]?.length, `${r.id} has no probe for its portion note`).toBeGreaterThan(0);
     expect(EXPECTED_STRENGTH[r.id], `${r.id} has no pinned strength`).toBeDefined();
@@ -120,12 +130,18 @@ describe.each(catalogue)('$id', (rule) => {
 
   test("a 'strong' rating is bounded in the card text: it names the outcome it covers and what is rated lower", () => {
     if (rule.evidence.strength !== 'strong') return;
-    expect(rule.concern).toMatch(/strong rating is for blood pressure/i);
-    expect(rule.concern).toMatch(/lower quality/i);
-    expect(rule.concern).toMatch(/mortality[^.]*cardiovascular[^.]*stroke[^.]*coronary/i);
+    if (rule.id.startsWith('sodium')) {
+      expect(rule.concern).toMatch(/strong rating is for blood pressure/i);
+      expect(rule.concern).toMatch(/lower quality/i);
+      expect(rule.concern).toMatch(/mortality[^.]*cardiovascular[^.]*stroke[^.]*coronary/i);
+      return;
+    }
+    // Classification rules: a Group 1 label is about how sure the evidence is, and the card must say it is not a size of risk.
+    expect(rule.concern).toMatch(/how strong the evidence is, not how large the risk is/i);
   });
 
-  test('no probe reaches HIGH: size of one day or entry does not escalate, frequency would', () => {
+  test('no probe reaches HIGH unless the rule is on the pinned list: size of one day or entry does not escalate', () => {
+    if (MAY_REACH_HIGH.has(rule.id)) return;
     for (const p of probes[rule.id] ?? []) expect(['INFO', 'MODERATE']).toContain(rule.level(p.ctx));
   });
 });

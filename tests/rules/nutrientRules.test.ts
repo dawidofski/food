@@ -83,9 +83,12 @@ describe('through the engine', () => {
 });
 
 describe('catalogue', () => {
+  // These rules read classification flags or the week's counts and no nutrient, so the coverage gate cannot protect them
+  // and they declare none on purpose. Any other rule must declare what it reads.
+  const FLAG_ONLY = new Set(['processed-meat', 'processed-meat-frequency', 'red-meat-weekly', 'alcohol', 'sweet-drink', 'ultra-processed']);
   test('every nutrient rule declares its required nutrients and a nutrition category', () => {
     for (const r of catalogue) {
-      expect(r.requiresNutrients.length).toBeGreaterThan(0);
+      if (!FLAG_ONLY.has(r.id)) expect(r.requiresNutrients.length).toBeGreaterThan(0);
       expect(r.category).toBe('nutrition');
     }
   });
@@ -97,6 +100,9 @@ describe('catalogue', () => {
     expect(scope).toEqual({
       'sodium-entry': 'entry', 'sodium-daily': 'daily', 'added-sugar-entry': 'entry',
       'added-sugar-daily': 'daily', 'saturated-fat-daily': 'daily', 'trans-fat': 'entry',
+      // Weekly rules read the week and not one entry; 'daily' is the aggregate scope, so the usual-intake tone test applies.
+      'processed-meat': 'entry', 'processed-meat-frequency': 'daily', 'red-meat-weekly': 'daily', alcohol: 'entry',
+      'sweet-drink': 'entry', 'ultra-processed': 'entry', 'nutrient-density': 'entry',
     });
   });
   test.each(catalogue)('$id citation has no problems', (rule) => {

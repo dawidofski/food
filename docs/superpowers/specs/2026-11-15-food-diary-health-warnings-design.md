@@ -722,3 +722,47 @@ Second review round:
   mechanism word in an alternative's reason that its own citation does not contain.
 - **`Alternative.citation` is required** in the type, so an alternative without a source no longer compiles. The engine
   copies it per card, so a card cannot mutate the catalogue's citation.
+
+### Classification rules (Task 12), checked 2026-11-16
+
+Sources read: the IARC press release N. 240 for Monograph Volume 114 (PDF, text extracted); WHO's red and processed meat
+Q&A; WCRF's recommendation page; WHO/Europe's 4 January 2023 alcohol statement; the WHO 2015 sugars guideline (executive
+summary and evidence table, from a PDF copy, because WHO IRIS returned 403); SACN's 2025 rapid evidence update summary;
+WHO's May 2025 call for experts on ultra-processed food; WHO's healthy-diet fact sheet. The Volume 114 monograph itself and
+the IARC monograph on alcohol were not read; both are taken through the WHO and IARC statements named here.
+
+| Rule | Plan figure | What the source says | Result |
+|---|---|---|---|
+| Processed meat, entry | any entry HIGH; Group 1; "50 g a day, 18% higher relative risk" | IARC N. 240: Group 1 "based on sufficient evidence in humans that the consumption of processed meat causes colorectal cancer"; "each 50 gram portion of processed meat eaten daily increases the risk of colorectal cancer by 18%"; for an individual the risk "remains small". More than 800 studies, mainly prospective cohorts. | **Confirmed, with wording bounded.** HIGH on any processed-meat entry (the one HIGH in the catalogue: the nature of the concern, not a magnitude). The 18% is stated as relative and for a daily amount over years. The card says the Group 1 label is about the strength of evidence, not the size of risk. IARC's text says "increases"; the card says "associated with" for the 18%. 'strong'. No alternatives (see below). |
+| Processed meat, frequency | >= 3 occasions in 7 days | No source gives an occasions-per-week figure. IARC and WCRF speak of habitual or daily intake. | **Changed.** INFO only, silent unless the pending entry has processed meat. The count includes the pending entry. Three is the app's own point for showing a count, and the card says it is not a published figure. It marks a count, not a limit. |
+| Red meat, weekly | > ~500 g cooked in 7 days | WCRF: "limiting the amount of red meat we eat to 3 portions a week (350-500g or 12-18oz cooked weight)". IARC: Group 2A "based on limited evidence" in humans and strong mechanistic evidence, mainly colorectal. | **Confirmed as the top of WCRF's range; strength changed.** Fires above 500 g, including the pending entry's red-meat items. Declared 'limited' (not 'moderate'), because IARC's own word for the human evidence is limited. WCRF's figure is cooked weight and the diary records weight as logged, so the card says it is approximate. |
+| Alcohol | any amount; escalates with the weekly total | WHO/Europe 2023: IARC Group 1; "there is no safe amount that does not affect health"; "causes at least seven types of cancer"; risk "increases substantially as alcohol consumption increases"; evidence "cannot indicate the existence of a threshold". | **Escalation dropped.** The only count available is entries that contain alcohol, not drinks or units, and no threshold exists, so any escalation point would be invented. MODERATE on any alcohol entry, qualitative, with the card saying no threshold exists and that it counts entries, not drinks. 'strong' for the link to cancer. |
+| Sugar-sweetened drink | any SSB entry; moderate | WHO 2015: children with the highest intakes of sugar-sweetened beverages had greater odds of overweight or obesity (OR 1.55), rated LOW quality. Adult trials that raised sugars, mostly as drinks, found a weight increase; adult evidence overall moderate. No limit for a drink or a serving. | **Strength changed to 'limited'.** INFO on any sweet-drink entry, qualitative. The card names both ratings and the declared strength follows the lower, drink-specific one. |
+| Ultra-processed (NOVA 4) | high share of the day's energy; limited, associational | SACN 2025: "consistent associations", evidence "almost exclusively observational, with only one small RCT", "some confounding will remain", unclear whether the effect is from processing. WHO (May 2025) is still developing a guideline; it says a diet rich in highly processed foods is associated with increased risk. No source defines a high share. | **Trigger dropped; rule kept qualitative.** See below. INFO, 'limited', associational. |
+| Low nutrient density | high energy, low fibre, protein and micronutrients; moderate | No source gives a nutrient-density figure for an entry. WHO fact sheet: carbohydrate should come primarily from whole grains, vegetables, fruits and pulses; fibre at least 25 g a day. | **Changed.** The app's own comparison of one entry with its targets: INFO when the entry supplies at least a tenth of the day's energy target and a smaller share of both the fibre and protein targets. The tenth is labelled on the card as the app's choice. Micronutrients dropped (patchy data, no entry-level figure). 'limited', no health outcome named, no risk or disease wording. |
+
+The ultra-processed decision. The trigger "NOVA 4 at a high share of the day's energy" fails three ways: (1) no source says
+what a high share is, since the studies compare groups of people and report associations; (2) it cannot be computed, because
+the context holds a NOVA group per item and no per-item energy; (3) any trigger on the group alone risks flattening
+(anti-goal A4), since NOVA 4 holds packaged wholemeal bread and soft drinks alike. The source does support a hedged concern, so
+the rule fires INFO on a NOVA 4 entry (merged worst case, "at least one food") and the card says: the category is broad; the
+evidence is almost entirely observational with likely residual confounding; it is unclear whether processing or nutrient
+content explains the link; no threshold is established. An honest alternative is to drop the rule; this record keeps it
+because the cited bodies do report an association, and the card makes no claim beyond that. Revisit when WHO's guideline lands.
+
+Other findings:
+
+- **No alternatives on any of the six.** Neither IARC, WCRF, WHO nor SACN names a replacement food, and the tone tests
+  require an alternative to carry a source that states the replacement. The plan's worked example (chicken thigh, sardines,
+  turkey, with sodium figures) has no source and is not used.
+- **Declared strengths:** processed meat 'strong', frequency 'strong' (same IARC evidence), red meat 'limited', alcohol
+  'strong', sweet drink 'limited', ultra-processed 'limited', nutrient density 'limited'. Pinned in the tone tests.
+- **Strong rules say what the strong rating means.** The strong-rating test now requires every non-sodium strong rule to say
+  "how strong the evidence is, not how large the risk is", so a Group 1 label is not read as a size of risk.
+- **HIGH is pinned to one rule.** The "no probe reaches HIGH" test now exempts only `processed-meat`, listed by id.
+- **Flag-only rules declare no required nutrients.** Six rules read classification flags or week counts, so the coverage gate
+  cannot protect them; each says so in its header comment, and a test fixes the list.
+- **Citation caveats.** The WCRF citation year (2018) and title are descriptive, the page being undated and its real title
+  containing a word the tone tests prohibit. The Evidence type holds one citation, so red meat cites WCRF (the figure that
+  fires the card) and names IARC's classification in its summary. The alcohol conclusion joins two WHO/Europe sentences.
+- **Weekly rules** use scope 'daily', the aggregate scope, so the usual-intake tone test applies to them.
