@@ -50,7 +50,11 @@ export default function CoverageNote({
   }
   const n = typeof missingItems === 'number' && Number.isFinite(missingItems) && missingItems > 0 ? Math.round(missingItems) : null;
   const who = n === null ? 'Some items have' : n === 1 ? '1 item has' : `${n} items have`;
-  const floor = typeof value === 'number' && Number.isFinite(value) ? `at least ${whole(value)} ${unit}` : 'at least what is shown';
+  // A floor under half a unit would print as "at least 0 g", which reads as no data counted at all.
+  const floor =
+    typeof value === 'number' && Number.isFinite(value)
+      ? value > 0 && whole(value).startsWith('0') ? `under 1 ${unit} counted so far` : `at least ${whole(value)} ${unit}`
+      : 'at least what is shown';
   return (
     <p data-testid="coverage-note" className="text-sm text-amber-950">
       <span className="font-semibold">{floor}</span>

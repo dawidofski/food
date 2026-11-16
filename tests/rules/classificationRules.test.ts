@@ -267,3 +267,21 @@ describe('the classification rules as a group', () => {
     expect(out.cards[0]?.level).toBe('HIGH');
   });
 });
+
+describe('wording added in the cited-conclusion pass is pinned', () => {
+  test('alcohol: the conclusion carries WHO no-safe-level and no-threshold sentences', () => {
+    const c = alcoholRule.evidence.citation.conclusion;
+    expect(c).toMatch(/cannot talk about a so-called safe level of alcohol use/i);
+    expect(c).toMatch(/cannot indicate the existence of a threshold/i);
+  });
+  test('nutrient density: the card says the comparison is its own and the citation is background', () => {
+    expect(nutrientDensityRule.evidence.summary).toMatch(/entirely the app.s own comparison/i);
+    expect(nutrientDensityRule.evidence.summary).toMatch(/No guideline sets it/);
+    expect(nutrientDensityRule.evidence.summary).toMatch(/background on diet quality/i);
+  });
+  test('red meat: the conclusion and prose carry the IARC sites and limited-evidence wording', () => {
+    const all = [redMeatWeeklyRule.evidence.citation, ...(redMeatWeeklyRule.evidence.supportingCitations ?? [])].map((c) => c.conclusion).join(' ');
+    expect(all).toMatch(/pancreatic[\s\S]*prostate/i);
+    expect(`${redMeatWeeklyRule.evidence.summary} ${redMeatWeeklyRule.concern}`).toMatch(/limited evidence in humans and\s+strong mechanistic evidence/i);
+  });
+});

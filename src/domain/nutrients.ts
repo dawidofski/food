@@ -77,15 +77,3 @@ export function mergeClassification(flags: ClassificationFlags[]): Classificatio
   }
   return merged;
 }
-
-/** Share of total energy contributed by a nutrient: 9 kcal/g for fat, 4 kcal/g for sugar. */
-export function energyShare(
-  nutrientG: number,
-  key: 'satFatG' | 'addedSugarsG' | 'transFatG',
-  energyKcal: number,
-): number {
-  // No positive energy figure means no basis for a share: report 0, never Infinity/NaN.
-  if (!(energyKcal > 0)) return 0;
-  const kcalPerG = key === 'addedSugarsG' ? 4 : 9;
-  return (nutrientG * kcalPerG) / energyKcal;
-}

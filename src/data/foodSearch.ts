@@ -262,8 +262,8 @@ function collect(index: SearchIndex, qt: QueryToken[], limit: number): FoodHit[]
   hits.sort(
     (a, b) =>
       a.rank - b.rank ||
-      a.hit.food.name.localeCompare(b.hit.food.name) ||
-      a.hit.food.id.localeCompare(b.hit.food.id),
+      codePointCompare(a.hit.food.name, b.hit.food.name) ||
+      codePointCompare(a.hit.food.id, b.hit.food.id),
   );
   return hits.slice(0, limit).map((h) => h.hit);
 }
@@ -278,4 +278,9 @@ export function search(index: SearchIndex, query: string, limit = 10): FoodHit[]
   // mapped query finds nothing there is nothing to lose by trying the words as typed.
   const plain = queryTokens(query, false);
   return sameTokens(mapped, plain) ? [] : collect(index, plain, limit);
+}
+
+/** Locale-independent order (UTF-16 code units): which food a warning is about must not depend on the runtime's ICU data. */
+function codePointCompare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }

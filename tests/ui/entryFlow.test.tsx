@@ -455,3 +455,17 @@ describe('fail visibly when only some foods lose their identity', () => {
     expect(note.textContent).toMatch(/could not be identified/i);
   });
 });
+
+describe('the alternatives button', () => {
+  const apple = food('ap', 'Apple', [{ label: '1 medium', grams: 180 }]);
+  test('is not offered when no card carries an alternative', async () => {
+    await typeAndSubmit('an apple', fakeDeps([apple], [rule({ id: 'bare', level: () => 'HIGH' })]));
+    await screen.findByTestId('warning-card');
+    expect(screen.queryByRole('button', { name: /healthier alternatives/i })).not.toBeInTheDocument();
+  });
+  test('is offered when a card has one', async () => {
+    const alt = { label: 'x', reason: 'a reason long enough', citation: citation('WHO') };
+    await typeAndSubmit('an apple', fakeDeps([apple], [rule({ id: 'has', level: () => 'HIGH', alternatives: [alt] })]));
+    expect(await screen.findByRole('button', { name: /healthier alternatives/i })).toBeInTheDocument();
+  });
+});

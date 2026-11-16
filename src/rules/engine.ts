@@ -101,8 +101,12 @@ function merge(a: WarningCard, b: WarningCard): WarningCard {
   const [hi, lo] = RANK[b.level] > RANK[a.level] ? [b, a] : [a, b];
   const note = unique([hi.dataNote, lo.dataNote]).join(' ');
   const { dataNote: _dropped, ...rest } = hi;
+  // The absorbed card's alternatives are carried too, de-duplicated by label, so merging never hides a suggestion.
+  const seen = new Set(hi.alternatives.map((x) => x.label));
+  const carried = lo.alternatives.filter((x) => !seen.has(x.label));
   return {
     ...rest,
+    alternatives: [...hi.alternatives, ...carried],
     mergedFrom: [...hi.mergedFrom, lo.ruleId, ...lo.mergedFrom],
     merged: [...hi.merged, claimOf(lo), ...lo.merged],
     ...(note ? { dataNote: note } : {}),

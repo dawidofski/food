@@ -126,3 +126,9 @@ test('the synonym map stays frozen and free of the rejected entries', () => {
     expect(QUERY_SYNONYMS).not.toHaveProperty(k);
   }
 });
+
+test('ties break by code-point order, not by the runtime locale', () => {
+  // localeCompare would put "alpha" before "Zeta"; code-point order puts the capital first. Resolution must not vary by ICU.
+  const idx = buildSearchIndex([food('b', 'alpha cheese'), food('a', 'Zeta cheese')]);
+  expect(search(idx, 'cheese').map((h) => h.food.id)).toEqual(['a', 'b']);
+});

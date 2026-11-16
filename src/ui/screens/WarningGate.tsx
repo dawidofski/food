@@ -117,7 +117,7 @@ export default function WarningGate({ flow }: { flow: EntryFlow }) {
                   Add anyway
                 </button>
               )}
-              {!asking && flow.cards.length > 0 && (
+              {!asking && flow.cards.some((c) => c.alternatives.length > 0) && (
                 <button type="button" onClick={flow.showAlternatives} className={btn}>
                   Show healthier alternatives
                 </button>

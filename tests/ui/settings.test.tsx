@@ -389,3 +389,15 @@ describe('settings: data source and what cannot be checked', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('erasing from inside the app', () => {
+  test('an erase mid-session returns to first run', async () => {
+    await putProfile(ownerProfile);
+    render(<App />);
+    await screen.findByRole('heading', { name: /what did you eat/i });
+    await click(/^settings$/i);
+    await click(/^erase everything$/i);
+    await click(/yes, erase everything/i);
+    expect(await screen.findByLabelText(/date of birth/i)).toBeInTheDocument();
+  });
+});

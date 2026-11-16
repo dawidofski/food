@@ -448,3 +448,14 @@ describe('evaluate (additional invariants)', () => {
     expect(JSON.stringify(c)).toBe(before);
   });
 });
+
+describe('merging keeps the absorbed alternatives', () => {
+  const alt = (label: string) => ({ label, reason: 'a reason long enough', citation: { title: 't', publisher: 'p', year: 2020, url: 'https://example.org', conclusion: 'replace it with something else' } });
+  test('both alternatives survive, de-duplicated by label', () => {
+    const a = stub('a', () => 'MODERATE', { nutrientKey: 'sodiumMg', alternatives: [alt('one'), alt('shared')] });
+    const b = stub('b', () => 'INFO', { nutrientKey: 'sodiumMg', alternatives: [alt('shared'), alt('two')] });
+    const { cards } = evaluate([a, b], ctx());
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.alternatives.map((x) => x.label)).toEqual(['one', 'shared', 'two']);
+  });
+});

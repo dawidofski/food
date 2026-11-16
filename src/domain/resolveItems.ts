@@ -158,7 +158,7 @@ function choosePortion(q: Quantity, food: DatasetFood): { grams: number; label?:
   return grams === null ? null : { grams, label: best.p.label };
 }
 
-/** Grams for a quantity of a food, or null; see choosePortion for the rules. */
+/** Grams for a quantity of a food, or null; see choosePortion for the rules. Exported for tests only: production code reaches it through `resolveItems`. */
 export function quantityToGrams(q: Quantity, food: DatasetFood): number | null {
   return choosePortion(q, food)?.grams ?? null;
 }

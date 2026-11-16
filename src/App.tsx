@@ -50,7 +50,7 @@ export default function App() {
       {tab === 'missing' && <Missing />}
       {tab === 'batches' && <BatchBuilder onLogPortion={(text) => { setDraft(text); setTab('log'); }} />}
       {tab === 'foods' && <MyFoods />}
-      {tab === 'settings' && <Settings />}
+      {tab === 'settings' && <Settings onErased={() => { setDraft(''); setTab('log'); setSetup(isSetupSkipped() ? 'done' : 'needed'); }} />}
       <nav aria-label="Main" className="sticky bottom-0 flex border-t border-slate-300 bg-white">
         {tabBtn('log', 'Log')}
         {tabBtn('diary', 'Diary')}

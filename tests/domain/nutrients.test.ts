@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { ClassificationFlags } from '@/types/nutrients';
 import {
-  energyShare,
   mergeClassification,
   scalePer100g,
   sumNutrients,
@@ -87,19 +86,6 @@ describe('nutrient math', () => {
   test('scalePer100g omits a present-but-undefined value', () => {
     const r = scalePer100g({ sodiumMg: undefined as never }, 50);
     expect('sodiumMg' in r).toBe(false);
-  });
-
-  test('energyShare expresses saturated fat as a share of energy', () => {
-    expect(energyShare(31, 'satFatG', 2834)).toBeCloseTo(0.0984, 3);
-  });
-
-  test('energyShare uses 4 kcal/g for added sugars', () => {
-    expect(energyShare(10, 'addedSugarsG', 200)).toBeCloseTo(0.2);
-  });
-
-  test('energyShare returns 0 rather than Infinity when energy is zero or negative', () => {
-    expect(energyShare(31, 'satFatG', 0)).toBe(0);
-    expect(energyShare(31, 'satFatG', -100)).toBe(0);
   });
 
   test('mergeClassification takes the worst case', () => {

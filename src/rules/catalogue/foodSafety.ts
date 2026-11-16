@@ -163,7 +163,7 @@ function ruleFor(h: Hazard): Rule {
 
 export const foodSafetyRules: Rule[] = HAZARDS.map(ruleFor);
 
-/** The questions the gate would ask for this entry, through the engine's own safety-prompt flow. */
+/** TEST-ONLY helper (no production call site): the questions the gate would ask, through the engine's own safety-prompt flow. */
 export function foodSafetyQuestionsFor(ctx: Context): SafetyQuestion[] {
   return evaluate(foodSafetyRules, ctx).questions;
 }

@@ -137,3 +137,11 @@ describe('CoverageNote', () => {
     expect(container.textContent).not.toMatch(/NaN|Infinity/);
   });
 });
+
+describe('CoverageNote floor under half a unit', () => {
+  test('never reads "at least 0 g"', () => {
+    const { container } = render(<CoverageNote nutrient="addedSugarsG" coverage="partial" missingItems={1} value={0.3} />);
+    expect(container.textContent).not.toMatch(/at least 0/i);
+    expect(container.textContent).toMatch(/under 1 g counted so far/i);
+  });
+});
