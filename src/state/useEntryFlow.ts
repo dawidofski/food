@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { addEntry, decrementBatchPortion, entriesBetween, getProfile } from '@/data/db';
-import { portionsFor, refreshBatches, withBatches } from '@/domain/batches';
+import { batchHasCustomIngredient, batchWeightKnown, portionsFor, refreshBatches, withBatches } from '@/domain/batches';
 import { datasetLookup } from '@/data/datasetLookup';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
 import { datasetState, loadFoods } from '@/data/foodRepository';
@@ -29,6 +29,10 @@ export type ResolvedLine = {
   /** Grams of one unit of the portion label (e.g. one frankfurter), when it can be worked out. */
   perPortionGrams?: number;
   grams: number;
+  /** True for a batch portion nobody weighed: the nominal grams are internal only and must never be shown. */
+  weightUnknown?: boolean;
+  /** A batch with a custom-food ingredient inherits the self-reported marking. */
+  selfReported?: boolean;
   unusual?: UnusualServing;
 };
 
@@ -120,12 +124,16 @@ function describeLines(items: ParsedItem[], res: Resolution, lookup: FoodLookup)
     const item = resolved[idx];
     const food = lookup.get(ref.source, ref.foodId);
     const count = item?.quantity.count;
-    const unusual = item ? unusualServing(item, ref.grams, food) : null;
+    const unweighed = ref.source === 'batch' && !batchWeightKnown(ref.foodId);
+    // An unweighed batch portion has a nominal gram figure that means nothing, so it is never judged or displayed.
+    const unusual = item && !unweighed ? unusualServing(item, ref.grams, food) : null;
     const perPortionGrams = unitGrams(ref.portionLabel, ref.grams, count);
     return {
       name: food?.name ?? ref.foodId,
       source: ref.source,
       grams: ref.grams,
+      ...(unweighed ? { weightUnknown: true } : {}),
+      ...(ref.source === 'batch' && batchHasCustomIngredient(ref.foodId) ? { selfReported: true } : {}),
       ...(count !== undefined && item?.quantity.grams === undefined ? { count } : {}),
       ...(ref.portionLabel !== undefined ? { portionLabel: ref.portionLabel } : {}),
       ...(perPortionGrams !== undefined ? { perPortionGrams } : {}),
@@ -197,7 +205,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       at: d.now().toISOString(),
       rawText: s.text,
       resolution: s.resolution.refs.some((r) => r.source === 'batch') ? 'batch' : 'local',
-      items: s.resolution.refs,
+      items: s.resolution.refs.map((r) => (r.source === 'batch' && batchHasCustomIngredient(r.foodId) ? { ...r, selfReported: true } : r)),
       nutrients: s.resolution.nutrients,
       coverage: s.resolution.coverage,
       classification: s.resolution.classification,

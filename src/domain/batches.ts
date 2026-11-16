@@ -10,7 +10,7 @@
  * knew is marked 'partial'. An ingredient that could not be resolved is reported, never dropped, and while any is
  * missing every known nutrient reads 'partial' so the total is never mistaken for a clean one.
  */
-import { allBatches, onEraseEverything, putBatch } from '@/data/db';
+import { allBatches, deleteBatch as removeBatch, onEraseEverything, putBatch } from '@/data/db';
 import { buildSearchIndex, normalizeTokens, search, type SearchIndex } from '@/data/foodSearch';
 import { combineLookups, type FoodLookup } from '@/domain/foodLookup';
 import { isKnownValue, mergeClassification, sumNutrients } from '@/domain/nutrients';
@@ -37,8 +37,16 @@ export type CookedWeightNote = { ingredient: string; foodName: string; grams: nu
 
 export type BuildResult = { batch: Batch; needsHelp: ParsedItem[]; cookedWeightNotes: CookedWeightNote[] };
 
-const GRAIN_NAME = /\b(pasta|spaghetti|macaroni|noodles?|rice|couscous|quinoa|bulgur|barley|penne|fusilli|rigatoni|oats?|oatmeal)\b/i;
-const NOT_COOKED = /\b(dry|dried|uncooked|raw)\b/i;
+// Measured against all 5,431 real names (tests/domain/batches.real.test.ts). A loose word match (the first version)
+// caught 630 names: cookies, oat milk, infant formula, "Beef, rice", every pasta dish. The row must BE the plain grain:
+// its first comma-segment is the grain itself, and it is not a dish (with, fried, sauce...) or a raw/dry row.
+const GRAIN_HEAD = /^(pasta|noodles|rice|rice noodles|couscous|quinoa|bulgur|barley|millet)$/i;
+const NOT_PLAIN = /\b(with|fried|sauce|creamed|sweet|restaurant|ready-to-heat|home recipe|chow mein|dry|dried|uncooked|raw)\b/i;
+
+/** True for a dataset row that is a plain cooked grain, pasta or rice, whose gram weight people often take from the dry packet. */
+export function isCookedGrain(name: string): boolean {
+  return GRAIN_HEAD.test((name.split(',')[0] ?? '').trim()) && !NOT_PLAIN.test(name);
+}
 
 function validate(input: BatchInput): void {
   if (input.name.trim() === '') throw new RangeError('A batch needs a name');
@@ -60,6 +68,8 @@ function itemsOf(lines: string[]): ParsedItem[] {
 
 type Computed = Pick<Batch, 'ingredients' | 'nutrientsPerPortion' | 'coverage' | 'classification'> & {
   allergens: string[];
+  fped?: Batch['fped'];
+  selfReported: boolean;
   needsHelp: ParsedItem[];
   cookedWeightNotes: CookedWeightNote[];
 };
@@ -86,7 +96,7 @@ function compute(input: BatchInput, lookup: FoodLookup): Computed {
     refs.push(ref);
     const food = lookup.get(ref.source, ref.foodId);
     for (const a of food?.allergens ?? []) allergens.add(a);
-    if (food && item.quantity.grams !== undefined && GRAIN_NAME.test(food.name) && !NOT_COOKED.test(food.name)) {
+    if (food && item.quantity.grams !== undefined && isCookedGrain(food.name)) {
       cookedWeightNotes.push({ ingredient: item.rawFragment, foodName: food.name, grams: ref.grams });
     }
   }
@@ -103,10 +113,25 @@ function compute(input: BatchInput, lookup: FoodLookup): Computed {
     const c = coverage[key];
     covered[key] = needsHelp.length > 0 && c === 'known' ? 'partial' : c;
   }
+  // Same rule as an entry: FPED exists only when every ingredient has it. A missing ingredient or one without data
+  // would otherwise make a partial total read as known (and a vegetable soup count as no vegetables).
+  let fped: Batch['fped'];
+  if (needsHelp.length === 0 && refs.length > 0 && refs.every((r) => r.fped)) {
+    const t = { vegCupEq: 0, fruitCupEq: 0, wholeGrainOzEq: 0 };
+    for (const r of refs) {
+      t.vegCupEq += r.fped!.vegCupEq;
+      t.fruitCupEq += r.fped!.fruitCupEq;
+      t.wholeGrainOzEq += r.fped!.wholeGrainOzEq;
+    }
+    const n = input.portionCount;
+    const per = { vegCupEq: t.vegCupEq / n, fruitCupEq: t.fruitCupEq / n, wholeGrainOzEq: t.wholeGrainOzEq / n };
+    if (Object.values(per).every(Number.isFinite)) fped = per;
+  }
   return {
     ingredients, nutrientsPerPortion: perPortion, coverage: covered,
     classification: mergeClassification(refs.map((r) => r.classification)),
-    allergens: [...allergens].sort(), needsHelp, cookedWeightNotes,
+    allergens: [...allergens].sort(), needsHelp, cookedWeightNotes, ...(fped ? { fped } : {}),
+    selfReported: refs.some((r) => r.source === 'custom'),
   };
 }
 
@@ -121,6 +146,8 @@ export function buildBatch(input: BatchInput, lookup: FoodLookup): BuildResult {
     coverage: c.coverage,
     classification: c.classification,
     ...(c.allergens.length > 0 ? { allergens: c.allergens } : {}),
+    ...(c.fped ? { fped: c.fped } : {}),
+    ...(c.selfReported ? { selfReported: true } : {}),
     portionsRemaining: input.portionCount,
     cookedAt: new Date().toISOString(),
   };
@@ -150,7 +177,7 @@ export function rebuildBatch(b: Batch, changes: BatchChanges, lookup: FoodLookup
   };
   const c = compute(input, lookup);
   const remaining = Math.min(input.portionCount, Math.max(0, b.portionsRemaining + (input.portionCount - b.portionCount)));
-  const { totalCookedGrams: _cooked, allergens: _allergens, ...rest } = b;
+  const { totalCookedGrams: _cooked, allergens: _allergens, fped: _fped, selfReported: _self, ...rest } = b;
   const batch: Batch = {
     ...rest,
     name: input.name.trim(),
@@ -160,6 +187,8 @@ export function rebuildBatch(b: Batch, changes: BatchChanges, lookup: FoodLookup
     coverage: c.coverage,
     classification: c.classification,
     ...(c.allergens.length > 0 ? { allergens: c.allergens } : {}),
+    ...(c.fped ? { fped: c.fped } : {}),
+    ...(c.selfReported ? { selfReported: true } : {}),
     portionsRemaining: remaining,
   };
   if (input.totalCookedGrams !== undefined) batch.totalCookedGrams = input.totalCookedGrams;
@@ -181,6 +210,10 @@ export function batchToDatasetShape(b: Batch): DatasetFood {
     const v = b.nutrientsPerPortion[key];
     if (isKnownValue(v)) per100g[key] = (v * 100) / grams;
   }
+  const k = 100 / grams;
+  const fped = b.fped
+    ? { vegCupEq: b.fped.vegCupEq * k, fruitCupEq: b.fped.fruitCupEq * k, wholeGrainOzEq: b.fped.wholeGrainOzEq * k }
+    : undefined;
   return {
     id: b.id,
     name: b.name,
@@ -192,14 +225,31 @@ export function batchToDatasetShape(b: Batch): DatasetFood {
     portions: [{ label: '1 portion', grams }],
     classification: { ...b.classification },
     allergens: [...(b.allergens ?? [])],
+    ...(fped ? { fped } : {}),
   };
 }
 
-let cache: { foods: Map<string, DatasetFood>; index: SearchIndex } = { foods: new Map(), index: buildSearchIndex([]) };
+let cache: { foods: Map<string, DatasetFood>; index: SearchIndex; weighed: Set<string>; custom: Set<string> } = {
+  foods: new Map(), index: buildSearchIndex([]), weighed: new Set(), custom: new Set(),
+};
 
 function install(list: Batch[]): void {
   const adapted = list.map(batchToDatasetShape);
-  cache = { foods: new Map(adapted.map((f) => [f.id, f])), index: buildSearchIndex(adapted) };
+  cache = {
+    foods: new Map(adapted.map((f) => [f.id, f])),
+    index: buildSearchIndex(adapted),
+    weighed: new Set(list.filter((b) => b.totalCookedGrams !== undefined).map((b) => b.id)),
+    custom: new Set(list.filter((b) => b.selfReported).map((b) => b.id)),
+  };
+}
+
+/** False when nobody gave the cooked weight: the portion then has no honest gram figure and none is shown. */
+export const batchWeightKnown = (id: string): boolean => cache.weighed.has(id);
+export const batchHasCustomIngredient = (id: string): boolean => cache.custom.has(id);
+
+export async function deleteBatch(id: string): Promise<void> {
+  await removeBatch(id);
+  await refreshBatches();
 }
 
 export async function refreshBatches(): Promise<void> {

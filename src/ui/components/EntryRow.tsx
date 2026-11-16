@@ -17,7 +17,8 @@ export default function EntryRow({ entry, onRelog }: { entry: DiaryEntry; onRelo
         <p className="text-xs text-slate-600">
           {time(entry.at)}
           {isKnownValue(kcal) && ` · ${Math.round(kcal).toLocaleString('en-US')} kcal`}
-          {entry.items.some((i) => i.source === 'custom') && <SelfReportedBadge />}
+          {entry.items.some((i) => i.source === 'batch') && ' · from a batch'}
+          {entry.items.some((i) => i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
         </p>
         {entry.coverage.energyKcal === 'partial' && isKnownValue(kcal) && (
           <CoverageNote nutrient="energyKcal" coverage="partial" value={kcal} />

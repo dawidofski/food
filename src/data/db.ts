@@ -229,6 +229,11 @@ export async function getBatch(id: string): Promise<Batch | undefined> {
   return (await db()).get('batches', id);
 }
 
+/** Hard delete, like custom foods: logged portions are DiaryEntry snapshots and keep their numbers. */
+export async function deleteBatch(id: string): Promise<void> {
+  await (await db()).delete('batches', id);
+}
+
 export async function allBatches(): Promise<Batch[]> {
   return (await db()).getAll('batches');
 }

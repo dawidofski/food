@@ -3,13 +3,14 @@ import { allBatches } from '@/data/db';
 import { datasetLookup } from '@/data/datasetLookup';
 import { loadFoods } from '@/data/foodRepository';
 import {
-  buildBatch, rebuildBatch, recook, refreshBatches, saveBatch, type BatchInput, type BuildResult,
+  buildBatch, deleteBatch, rebuildBatch, recook, refreshBatches, saveBatch, type BatchInput, type BuildResult,
 } from '@/domain/batches';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
 import type { FoodLookup } from '@/domain/foodLookup';
 import { isKnownValue } from '@/domain/nutrients';
 import type { Batch } from '@/types/diary';
 import CoverageNote from '@/ui/components/CoverageNote';
+import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 
 const input = 'min-h-12 w-full rounded-lg border-2 border-slate-400 px-3 text-base';
 const btn = 'min-h-12 rounded-lg border border-slate-400 px-4 text-base';
@@ -85,6 +86,7 @@ export default function BatchBuilder({ deps = defaultBatchDeps, onLogPortion }: 
               <p className="text-sm text-slate-700">
                 <span data-testid="portions-left">{b.portionsRemaining} of {b.portionCount} portions left</span>
                 {' · '}{kcal(b)} per portion
+                {b.selfReported && <SelfReportedBadge />}
                 {b.totalCookedGrams !== undefined && ` · about ${Math.round(b.totalCookedGrams / b.portionCount)} g each`}
               </p>
               {b.coverage.energyKcal === 'partial' && isKnownValue(b.nutrientsPerPortion.energyKcal) && (
@@ -128,6 +130,7 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
   const [result, setResult] = useState<BuildResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Any edit makes the worked-out figures stale, so they are cleared rather than left to be saved by mistake.
   const touch = <T,>(set: (v: T) => void) => (v: T) => { set(v); setResult(null); };
@@ -257,6 +260,31 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
         </section>
       )}
       <button type="button" onClick={onCancel} className={`${btn} w-full`}>Cancel</button>
+      {batch && !confirmingDelete && (
+        <button type="button" onClick={() => setConfirmingDelete(true)} className={`${btn} w-full text-red-800`}>Delete this batch</button>
+      )}
+      {batch && confirmingDelete && (
+        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-red-700 p-3">
+          <p className="text-base">
+            Delete &ldquo;{batch.name}&rdquo;? It will no longer be found when you log. Portions you already logged keep
+            their numbers; nothing in your diary changes.
+          </p>
+          <button
+            type="button" className={`${btn} w-full bg-red-800 text-white`}
+            onClick={() => {
+              void deleteBatch(batch.id)
+                .then(onSaved)
+                .catch((err: unknown) => {
+                  setConfirmingDelete(false);
+                  setError(`Could not delete: ${err instanceof Error ? err.message : String(err)}`);
+                });
+            }}
+          >
+            Yes, delete it
+          </button>
+          <button type="button" onClick={() => setConfirmingDelete(false)} className={`${btn} w-full`}>Keep it</button>
+        </div>
+      )}
     </form>
   );
 }

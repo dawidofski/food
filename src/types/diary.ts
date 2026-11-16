@@ -13,6 +13,8 @@ export type FoodRef = {
   classification: ClassificationFlags;
   /** Snapshotted at commit: this item's own FPED cup-equivalents, already scaled by its grams. Absent = unknown. */
   fped?: { vegCupEq: number; fruitCupEq: number; wholeGrainOzEq: number };
+  /** Snapshotted at commit for batch portions whose ingredients included a custom food. */
+  selfReported?: boolean;
 };
 
 export type Resolution = {
@@ -84,6 +86,10 @@ export type Batch = {
   classification: ClassificationFlags;
   /** Union of the ingredients' allergen tags, so a logged portion meets the allergen rule. Absent = none recorded. */
   allergens?: string[];
+  /** Per portion. Present only when EVERY ingredient had FPED data; absent = unknown, never a partial total. */
+  fped?: { vegCupEq: number; fruitCupEq: number; wholeGrainOzEq: number };
+  /** True when any ingredient was one of the person's own foods, so part of the figure is their reading of a packet. */
+  selfReported?: boolean;
   portionsRemaining: number;
   /** ISO datetime. */
   cookedAt: string;

@@ -16,12 +16,20 @@ export function ResolvedLines({ lines }: { lines: ResolvedLine[] }) {
       {lines.map((l, i) => (
         <li key={`${l.name}-${i}`} data-testid="resolved-line" className="text-sm">
           <p className="text-base font-semibold">
-            {l.count !== undefined && `${fmtCount(l.count)} × `}
-            {l.name}
-            {l.portionLabel !== undefined &&
-              ` (${l.portionLabel}${l.perPortionGrams !== undefined ? `, ${fmtGrams(l.perPortionGrams)} each` : ''})`}
-            {` — ${fmtGrams(l.grams)}`}
-            {l.source === 'custom' && <SelfReportedBadge />}
+            {l.weightUnknown ? (
+              // The nutrition is exact per portion whatever it weighs, so no gram figure is invented.
+              `${l.count !== undefined ? `${fmtCount(l.count)} ${l.count === 1 ? 'portion' : 'portions'} of ` : '1 portion of '}${l.name}`
+            ) : (
+              <>
+                {l.count !== undefined && `${fmtCount(l.count)} × `}
+                {l.name}
+                {l.portionLabel !== undefined &&
+                  ` (${l.portionLabel}${l.perPortionGrams !== undefined ? `, ${fmtGrams(l.perPortionGrams)} each` : ''})`}
+                {` — ${fmtGrams(l.grams)}`}
+              </>
+            )}
+            {l.source === 'batch' && <span className="ml-1 text-sm font-normal text-slate-700">(from a batch)</span>}
+            {(l.source === 'custom' || l.selfReported) && <SelfReportedBadge />}
           </p>
           {l.unusual && (
             <p data-testid="unusual-serving" className="mt-1 rounded-lg border border-amber-400 bg-amber-50 p-2 text-amber-950">
