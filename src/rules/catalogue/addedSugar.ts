@@ -16,7 +16,9 @@ const citation: Citation = {
   conclusion:
     'Reduce daily intake of free sugars to less than 10% of total energy intake (strong recommendation). A further ' +
     'reduction to below 5% or roughly 25 grams (6 teaspoons) per day would provide additional health benefits ' +
-    '(conditional recommendation).',
+    '(conditional recommendation). WHO also reports that increasing the amount of sugars in the diet is associated ' +
+    'with a weight increase, and that higher rates of dental caries occur when free sugars intake is above 10% of ' +
+    'total energy intake.',
 };
 
 const evidence: Evidence = {

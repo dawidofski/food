@@ -3,7 +3,7 @@ import { pending, projectedDay, usable, whole } from './shared';
 
 /**
  * Verified against the WHO 2023 saturated and trans-fatty acid guideline: reduce saturated fat to 10% of energy
- * (strong recommendation, moderate-certainty evidence, from trials of cardiovascular outcomes). Going BELOW 10% is a
+ * (strong recommendation, moderate-certainty evidence). Going BELOW 10% is a
  * separate conditional recommendation on very-low-certainty evidence, so it carries no tier here.
  */
 const citation: Citation = {
@@ -20,7 +20,7 @@ const evidence: Evidence = {
   strength: 'moderate',
   body: 'WHO',
   summary:
-    'In trials, lower saturated-fat intake lowered the risk of cardiovascular disease, with moderate certainty. The ' +
+    'WHO makes this a strong recommendation and rates the certainty of the evidence behind it as moderate. The ' +
     'recommendation concerns usual intake as a share of energy.',
   citation,
   isAssociational: false,

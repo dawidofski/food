@@ -932,3 +932,9 @@ guard's own scope used to carry the owner's name, exact date of birth, height, w
 current tree and `scripts/check-no-secrets.sh` now scans `docs/` and also matches the date of birth and the owner's first
 name. **The git history still contains those values** (66 commits predate this fix). Rewriting history was not done: it
 is the owner's decision. Anyone who publishes the repository should rewrite or squash first.
+
+**Outcome sentences behind a cited conclusion (I1).** Re-read 2026-11-16.
+- *Added sugar.* WHO's news item on the sugars guideline (4 Mar 2015) states: increasing the amount of sugars in the diet "is associated with a weight increase", and "higher rates of dental caries" occur when free sugars intake is above 10% of total energy. Both sentences are now in the stored conclusion, so the weight-gain and caries wording is backed. The 10% strong and below-5% conditional ratings were confirmed again.
+- *Saturated fat.* The cardiovascular-risk sentence could not be re-read: the WHO fats news item and the publication page give only the 10% limit and a general "cardiovascular diseases" focus, and the guideline PDF was not retrievable. **Dropped.** The card now says only that WHO makes the 10% figure a strong recommendation and rates its certainty as moderate (certainty as read from the PDF in the Task 11 pass).
+- *Trans fat.* The coronary heart disease, death and dose-response wording was never read at source (the Task 11 pass read the 1% recommendation and the definition only) and could not be confirmed now. **Dropped**, and `isAssociational` is now false because the card states no association. This was the weakest-sourced sentence in the catalogue.
+

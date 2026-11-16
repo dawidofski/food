@@ -144,3 +144,19 @@ describe('catalogue', () => {
     for (const r of catalogue) expect(r.level(c)).toBeNull();
   });
 });
+
+describe('every outcome a nutrient card names is in its cited conclusion', () => {
+  test('sugar prose names weight and caries only because its conclusion does', () => {
+    for (const r of [addedSugarEntryRule, addedSugarDailyRule]) {
+      const claimed = /weight gain|dental caries/i.test(`${r.concern} ${r.evidence.summary}`);
+      if (claimed) expect(r.evidence.citation.conclusion).toMatch(/weight increase[\s\S]*dental caries/i);
+    }
+  });
+  test('saturated and trans fat state no health outcome that their conclusion lacks', () => {
+    const OUTCOME = /cardiovascular|coronary|heart|mortality|death|dose/i;
+    for (const r of [saturatedFatDailyRule, transFatRule]) {
+      const prose = `${r.concern} ${r.cause} ${r.evidence.summary}`.replace(/The app states no health outcome[^.]*\./, '');
+      if (OUTCOME.test(prose)) expect(r.evidence.citation.conclusion).toMatch(OUTCOME);
+    }
+  });
+});

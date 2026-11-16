@@ -25,11 +25,11 @@ const evidence: Evidence = {
   strength: 'moderate',
   body: 'WHO',
   summary:
-    'In observational studies, higher usual trans-fat intake is associated with higher risk of coronary heart ' +
-    'disease and death, in a dose-dependent way, with moderate certainty. WHO counts industrial and ruminant trans ' +
-    'fat together.',
+    'WHO makes this a strong recommendation and rates the certainty of the evidence behind it as moderate. WHO ' +
+    'counts industrial and ruminant trans fat together. The app states no health outcome for trans fat, because the ' +
+    'outcome and dose-response wording could not be confirmed at source.',
   citation,
-  isAssociational: true,
+  isAssociational: false, // the app now states no outcome, so there is no association to phrase
 };
 
 export const transFatRule: Rule = {
