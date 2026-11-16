@@ -762,9 +762,9 @@ Other findings:
 - **HIGH is pinned to one rule.** The "no probe reaches HIGH" test now exempts only `processed-meat`, listed by id.
 - **Flag-only rules declare no required nutrients.** Six rules read classification flags or week counts, so the coverage gate
   cannot protect them; each says so in its header comment, and a test fixes the list.
-- **Citation caveats.** The WCRF citation year (2018) and title are descriptive, the page being undated and its real title
-  containing a word the tone tests prohibit. The Evidence type holds one citation, so red meat cites WCRF (the figure that
-  fires the card) and names IARC's classification in its summary. The alcohol conclusion joins two WHO/Europe sentences.
+- **Citation caveats.** *(Superseded by the round-2 and round-3 sections below: WCRF's real title is now used, its `year`
+  is an access year, and `Evidence.supportingCitations` lets red meat cite both WCRF for the amount and IARC for the
+  classification.)* The alcohol conclusion joins sentences from the WHO/Europe page.
 - **Weekly rules** use scope 'daily', the aggregate scope, so the usual-intake tone test applies to them.
 
 Classification rules, after review (same task):
@@ -778,7 +778,8 @@ Classification rules, after review (same task):
   - The **IARC alcohol monograph was not read**. The Group 1 classification for alcohol is cited to IARC's press release
     N. 371 (8 October 2025), read from the PDF; the WHO/Europe statement (a web page) carries "no safe amount" and "cannot
     indicate the existence of a threshold".
-  - WCRF's page (red and processed meat) is undated; the citation year 2018 is the year of WCRF's report, not read from the page.
+  - WCRF's page (red and processed meat) is undated. Both WCRF citations now carry 2026 as an **access** year, not a
+    publication year — see the round-3 section below.
 - **Ultra-processed is a daily rule on the share of the day's entries.** The first version fired on every NOVA 4 item;
   about a third of the dataset (1,724 of 5,431 foods) is NOVA 4, so it would fire on about a third of everything logged.
   It now fires INFO only when more than half of today's entries, this one included, are NOVA 4, with at least three entries
@@ -823,3 +824,29 @@ all about keeping a claim and its source together:
 Still recorded as unread at source: IARC Volume 114 and the IARC alcohol monograph (press releases N.240 and N.371 were
 read instead, and the 50 g / 18% figure comes from the former); the WHO sugars guideline, read from a PDF copy after
 WHO's own server returned 403.
+
+### Classification rules, round 3 (2026-11-16)
+
+Applied by the controller after review, while a usage limit held the implementing agent. Four claims were reaching a
+card without a cited conclusion behind them:
+
+- **Alcohol.** The card's two headline sentences — that there is no safe level, and that the evidence cannot indicate a
+  threshold — were the stated basis for grading alcohol flat MODERATE, yet neither appeared in any quoted conclusion, so
+  a reader offline could not see them. Both are now quoted verbatim from the WHO/Europe page (confirmed at source during
+  review).
+- **Red meat.** The card said "limited evidence from observational studies, mainly for colorectal cancer", words the
+  quoted IARC sentence did not carry. The IARC conclusion now quotes the press release's own sentence on the colorectal,
+  pancreatic and prostate associations, and the card's wording follows it.
+- **Nutrient density.** Its citation (WHO on carbohydrate quality) does not concern protein, energy share, or any single
+  entry, while the card compares exactly those. The summary now says plainly that the comparison is the app's own, that
+  no guideline sets it, and that the citation is background rather than a source for it.
+- **WCRF year.** The processed-meat alternative still carried 2018 while red meat had moved to an access year. Both are
+  now 2026 as an access year, and the stale caveats earlier in this log are marked superseded.
+
+**Known limits of the tone tests, recorded rather than patched.** Review identified three ways a dishonest rule could
+still pass: an associational card whose quoted conclusion says "causes"; a conclusion paraphrased stronger than its
+source; and a prose mention of WHO satisfied by an IARC citation (IARC being part of WHO). The first and third are
+*correct* behaviour — IARC's own limited-evidence wording does say "causes", and an IARC citation does come from WHO —
+and the second cannot be caught without reading the source. Adding lexical tests for them would force misquoting
+sources, which is the error round 2 corrected. Verifying a conclusion against its source is this log's job, not a unit
+test's.

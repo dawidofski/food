@@ -41,7 +41,9 @@ const iarcCitation: Citation = {
   conclusion:
     'A Working Group of 22 experts from 10 countries classified the consumption of red meat as probably carcinogenic ' +
     'to humans (Group 2A), based on limited evidence that the consumption of red meat causes cancer in humans and ' +
-    'strong mechanistic evidence supporting a carcinogenic effect.',
+    'strong mechanistic evidence supporting a carcinogenic effect. ' +
+    'The association was observed mainly for colorectal cancer, but associations were also seen with pancreatic ' +
+    'cancer and prostate cancer.',
 };
 
 const evidence: Evidence = {
@@ -71,8 +73,8 @@ export const redMeatWeeklyRule: Rule = {
     'the top of that range. ' +
     "WCRF's figure is for cooked weight, and the diary records the weight as logged, which may be raw, so the comparison " +
     'is approximate. ' +
-    'IARC classifies red meat as probably carcinogenic to humans (Group 2A), based on limited evidence from ' +
-    'observational studies, mainly for colorectal cancer. ' +
+    'IARC classifies red meat as probably carcinogenic to humans (Group 2A), based on limited evidence in humans ' +
+    'and strong mechanistic evidence, with the association seen mainly for colorectal cancer. ' +
     'The studies concern usual intake over time, not a single serving, and IARC gives no figure for one serving.',
   cause: 'Red meat means all mammalian muscle meat, such as beef, pork, lamb and veal.',
   level: (ctx) => {

@@ -43,7 +43,8 @@ const citation: Citation = {
 const wcrfAlternative: Citation = {
   title: 'Limit red meat and avoid processed meat',
   publisher: 'World Cancer Research Fund (WCRF)',
-  year: 2018,
+  /** Access year: the page carries no publication date, so an inferred publication year would be a guess stated as fact. */
+  year: 2026,
   url: 'https://www.wcrf.org/preventing-cancer/our-cancer-prevention-recommendations/limit-red-meat-and-avoid-processed-meat/',
   conclusion:
     'Use alternatives to ham in your sandwiches. Try chicken, hard-boiled eggs, tinned tuna (in spring water), ' +

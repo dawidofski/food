@@ -24,7 +24,10 @@ const citation: Citation = {
   url: 'https://www.who.int/europe/news/item/04-01-2023-no-level-of-alcohol-consumption-is-safe-for-our-health',
   conclusion:
     'The risk of developing cancer increases substantially as alcohol consumption increases. ' +
-    'Alcohol causes at least seven types of cancer, including the most common cancer types.',
+    'Alcohol causes at least seven types of cancer, including the most common cancer types. ' +
+    'To date, we cannot talk about a so-called safe level of alcohol use that does not affect health. ' +
+    'The available evidence cannot indicate the existence of a threshold at which the carcinogenic effects ' +
+    'of alcohol switch on and start to manifest themselves in the human body.',
 };
 
 /** The Group 1 classification is IARC's claim, so IARC is cited for it. Read from IARC's own press release. */

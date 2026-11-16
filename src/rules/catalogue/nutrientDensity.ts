@@ -30,8 +30,9 @@ const evidence: Evidence = {
   strength: 'limited',
   body: 'WHO',
   summary:
-    'WHO advises that carbohydrate in the diet come mainly from whole grains, vegetables, fruits and pulses. This card is ' +
-    "the app's own comparison of one entry's energy, fibre and protein with your daily targets, not a graded finding.",
+    'This card is entirely the app’s own comparison of one entry’s energy against your fibre and protein ' +
+    'targets. No guideline sets it, and the citation below is background on diet quality rather than a source for ' +
+    'this comparison: nothing cited here concerns protein, energy share, or any single entry.',
   citation,
   isAssociational: false,
 };
