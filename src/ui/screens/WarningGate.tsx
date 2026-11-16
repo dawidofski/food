@@ -1,5 +1,6 @@
 import type { EntryFlow, ResolvedLine } from '@/state/useEntryFlow';
 import type { RuleFailure } from '@/rules/types';
+import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 import WarningCard from '@/ui/components/WarningCard';
 import { fmtGrams } from '@/ui/format';
 import Alternatives from './Alternatives';
@@ -20,6 +21,7 @@ export function ResolvedLines({ lines }: { lines: ResolvedLine[] }) {
             {l.portionLabel !== undefined &&
               ` (${l.portionLabel}${l.perPortionGrams !== undefined ? `, ${fmtGrams(l.perPortionGrams)} each` : ''})`}
             {` — ${fmtGrams(l.grams)}`}
+            {l.source === 'custom' && <SelfReportedBadge />}
           </p>
           {l.unusual && (
             <p data-testid="unusual-serving" className="mt-1 rounded-lg border border-amber-400 bg-amber-50 p-2 text-amber-950">

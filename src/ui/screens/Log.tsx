@@ -3,6 +3,7 @@ import { defaultDeps, useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
 import EntryRow from '@/ui/components/EntryRow';
 import WarningGate, { CheckNotes, ResolvedLines } from './WarningGate';
+import { FoodEditor } from './MyFoods';
 
 const RECENT_LIMIT = 8;
 
@@ -10,7 +11,8 @@ export default function Log({ deps = defaultDeps }: { deps?: FlowDeps }) {
   const flow = useEntryFlow(deps);
   const [draft, setDraft] = useState('');
   const [recent, setRecent] = useState<DiaryEntry[]>([]);
-  const [ownFoodNote, setOwnFoodNote] = useState(false);
+  /** The name to start the editor with, or null when the editor is closed. */
+  const [editorName, setEditorName] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -36,7 +38,7 @@ export default function Log({ deps = defaultDeps }: { deps?: FlowDeps }) {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setOwnFoodNote(false);
+    setEditorName(null);
     void flow.submit(draft);
   };
 
@@ -63,7 +65,21 @@ export default function Log({ deps = defaultDeps }: { deps?: FlowDeps }) {
       {flow.stage === 'resolving' && <p className="text-sm text-slate-600">Checking&hellip;</p>}
       {flow.error && !gateOpen && <p role="alert" className="text-sm text-red-800">{flow.error}</p>}
 
-      {flow.stage === 'needsHelp' && (
+      {flow.stage === 'needsHelp' && editorName !== null && (
+        <section className="rounded-xl border-2 border-slate-400 p-3">
+          <FoodEditor
+            initialName={editorName.charAt(0).toUpperCase() + editorName.slice(1)}
+            onCancel={() => setEditorName(null)}
+            onSaved={() => {
+              setEditorName(null);
+              // The food now exists, so the same text can resolve.
+              void flow.submit(flow.lastText);
+            }}
+          />
+        </section>
+      )}
+
+      {flow.stage === 'needsHelp' && editorName === null && (
         <section className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
           {flow.dataMissing ? (
             <p>The food database could not be loaded, so nothing could be matched. Nothing has been saved.</p>
@@ -80,13 +96,13 @@ export default function Log({ deps = defaultDeps }: { deps?: FlowDeps }) {
               <button
                 key={u.rawFragment}
                 type="button"
-                onClick={() => setOwnFoodNote(true)}
+                onClick={() => setEditorName(u.foodQuery)}
                 className="min-h-12 rounded-lg border border-slate-400 px-4 text-left"
               >
                 Add &ldquo;{u.foodQuery}&rdquo; as my own food
               </button>
             ))}
-            <button type="button" onClick={() => setOwnFoodNote(true)} className="min-h-12 rounded-lg border border-slate-400 px-4 text-left">
+            <button type="button" onClick={() => setEditorName('')} className="min-h-12 rounded-lg border border-slate-400 px-4 text-left">
               Enter the nutrition manually
             </button>
             {flow.lines.length > 0 && (
@@ -96,12 +112,6 @@ export default function Log({ deps = defaultDeps }: { deps?: FlowDeps }) {
             )}
             <button type="button" onClick={flow.edit} className="min-h-11 text-left text-sm underline">Change what I typed</button>
           </div>
-          {ownFoodNote && (
-            <p role="status" className="text-sm">
-              {/* Placeholder: the custom-food editor arrives in a later task. */}
-              The custom-food editor is not built yet, so this cannot be saved as a food. You can change what you typed instead.
-            </p>
-          )}
         </section>
       )}
 
@@ -130,7 +140,7 @@ export default function Log({ deps = defaultDeps }: { deps?: FlowDeps }) {
                 entry={e}
                 onRelog={(t) => {
                   setDraft(t);
-                  setOwnFoodNote(false);
+                  setEditorName(null);
                   void flow.submit(t);
                 }}
               />

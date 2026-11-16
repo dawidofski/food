@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { addEntry, entriesBetween, getProfile } from '@/data/db';
 import { datasetLookup } from '@/data/datasetLookup';
+import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
 import { datasetState, loadFoods } from '@/data/foodRepository';
 import { last7DayKeys, localDayRange } from '@/domain/dayBoundary';
 import type { FoodLookup } from '@/domain/foodLookup';
@@ -12,7 +13,7 @@ import { unusualServing, type UnusualServing } from '@/domain/unusualServing';
 import { catalogue } from '@/rules/catalogue';
 import { evaluate } from '@/rules/engine';
 import type { Context, FoodIdentity, Rule, RuleFailure, SafetyQuestion, WarningCard } from '@/rules/types';
-import type { DiaryEntry, FoodRef, Resolution } from '@/types/diary';
+import type { DiaryEntry, FoodRef, FoodSource, Resolution } from '@/types/diary';
 import type { Profile } from '@/types/profile';
 
 export type FlowStage = 'idle' | 'resolving' | 'needsHelp' | 'questions' | 'gate' | 'committed';
@@ -20,6 +21,8 @@ export type FlowStage = 'idle' | 'resolving' | 'needsHelp' | 'questions' | 'gate
 /** What one parsed item resolved to: the user's only check against a near-miss match. */
 export type ResolvedLine = {
   name: string;
+  /** Where the numbers came from; 'custom' is shown as self-reported. */
+  source: FoodSource;
   count?: number;
   portionLabel?: string;
   /** Grams of one unit of the portion label (e.g. one frankfurter), when it can be worked out. */
@@ -42,10 +45,14 @@ export type FlowDeps = {
 };
 
 export const defaultDeps: FlowDeps = {
-  lookup: datasetLookup,
+  lookup: withCustomFoods(datasetLookup),
   rules: catalogue,
   now: () => new Date(),
-  loadData: () => loadFoods(),
+  loadData: async () => {
+    await loadFoods();
+    // The person's own foods are optional: if they cannot be read, the dataset still works.
+    await refreshCustomFoods().catch(() => undefined);
+  },
   isDataReady: () => datasetState() === 'ready',
   store: { addEntry, entriesBetween, getProfile },
 };
@@ -115,6 +122,7 @@ function describeLines(items: ParsedItem[], res: Resolution, lookup: FoodLookup)
     const perPortionGrams = unitGrams(ref.portionLabel, ref.grams, count);
     return {
       name: food?.name ?? ref.foodId,
+      source: ref.source,
       grams: ref.grams,
       ...(count !== undefined && item?.quantity.grams === undefined ? { count } : {}),
       ...(ref.portionLabel !== undefined ? { portionLabel: ref.portionLabel } : {}),

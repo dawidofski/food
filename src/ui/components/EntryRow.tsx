@@ -1,5 +1,7 @@
 import { isKnownValue } from '@/domain/nutrients';
 import type { DiaryEntry } from '@/types/diary';
+import CoverageNote from '@/ui/components/CoverageNote';
+import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 
 const time = (at: string): string => {
   const d = new Date(at);
@@ -15,7 +17,11 @@ export default function EntryRow({ entry, onRelog }: { entry: DiaryEntry; onRelo
         <p className="text-xs text-slate-600">
           {time(entry.at)}
           {isKnownValue(kcal) && ` · ${Math.round(kcal).toLocaleString('en-US')} kcal`}
+          {entry.items.some((i) => i.source === 'custom') && <SelfReportedBadge />}
         </p>
+        {entry.coverage.energyKcal === 'partial' && isKnownValue(kcal) && (
+          <CoverageNote nutrient="energyKcal" coverage="partial" value={kcal} />
+        )}
       </div>
       <button
         type="button"
