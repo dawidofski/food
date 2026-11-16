@@ -4,7 +4,16 @@ import type { ParsedItem } from '@/domain/parseEntry';
 /** Which provider a food came from. Custom foods and batches arrive in later tasks. */
 export type FoodSource = 'dataset' | 'custom' | 'batch';
 
-export type FoodRef = { source: FoodSource; foodId: string; grams: number; portionLabel?: string };
+export type FoodRef = {
+  source: FoodSource;
+  foodId: string;
+  grams: number;
+  portionLabel?: string;
+  /** Snapshotted at commit: this item's own flags, so a mixed dish is not judged by its worst item. */
+  classification: ClassificationFlags;
+  /** Snapshotted at commit: this item's own FPED cup-equivalents, already scaled by its grams. Absent = unknown. */
+  fped?: { vegCupEq: number; fruitCupEq: number; wholeGrainOzEq: number };
+};
 
 export type Resolution = {
   refs: FoodRef[];

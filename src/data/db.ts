@@ -85,8 +85,11 @@ function assertFiniteNumber(label: string, v: number): void {
   if (!Number.isFinite(v)) throw new RangeError(`${label} is not finite`);
 }
 
-function assertRefsFinite(refs: { foodId: string; grams: number }[]): void {
-  for (const r of refs) assertFiniteNumber(`ref ${r.foodId} grams`, r.grams);
+function assertRefsFinite(refs: { foodId: string; grams: number; fped?: object }[]): void {
+  for (const r of refs) {
+    assertFiniteNumber(`ref ${r.foodId} grams`, r.grams);
+    if (r.fped) assertFiniteValues(`ref ${r.foodId} fped`, r.fped as Record<string, number | undefined>);
+  }
 }
 
 /** Aborts without letting an InvalidStateError (already auto-aborted) mask the real cause. */

@@ -186,7 +186,20 @@ export function resolveItems(items: ParsedItem[], lookup: FoodLookup): Resolutio
       needsHelp.push(item);
       continue;
     }
-    const ref: FoodRef = { source: hit.source, foodId: hit.food.id, grams: chosen.grams };
+    const ref: FoodRef = {
+      source: hit.source,
+      foodId: hit.food.id,
+      grams: chosen.grams,
+      classification: hit.food.classification,
+    };
+    if (hit.food.fped) {
+      const k = chosen.grams / 100;
+      ref.fped = {
+        vegCupEq: hit.food.fped.vegCupEq * k,
+        fruitCupEq: hit.food.fped.fruitCupEq * k,
+        wholeGrainOzEq: hit.food.fped.wholeGrainOzEq * k,
+      };
+    }
     if (chosen.label !== undefined) ref.portionLabel = chosen.label;
     refs.push(ref);
     sets.push(scalePer100g(hit.food.per100g, chosen.grams));

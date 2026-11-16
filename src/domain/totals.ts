@@ -14,7 +14,10 @@ export type DayTotals = {
    * should stay silent when this is low rather than report an understated number.
    */
   energyCoveredShare: Record<NutrientKey, number>;
-  /** Vegetable cup-equivalents summed over entries that carry FPED data. Read vegCoverage before trusting a 0. */
+  /**
+   * Vegetable cup-equivalents summed over entries that carry FPED data. This is a LOWER BOUND when
+   * vegCoverage is not 'known': a 0 with 'unknown' or 'partial' means "we do not know", not "none".
+   */
   vegCupEq: number;
   /** 'known' for an empty day or when every entry had FPED; 'unknown' when none did; else 'partial'. */
   vegCoverage: 'known' | 'partial' | 'unknown';
@@ -27,7 +30,7 @@ export type WeekContext = {
   days: DayTotals[];
   /** Entries (meals) with processed meat, not grams: the evidence is about frequency. */
   processedMeatOccasions: number;
-  /** Grams over the week from entries classified as red meat (the whole entry's item grams). */
+  /** Grams over the week of items whose own classification is red meat. */
   redMeatGrams: number;
   /**
    * Entries whose merged classification has alcohol. This counts drinks logged, NOT grams of
@@ -39,7 +42,10 @@ export type WeekContext = {
   vegCupEqByDay: number[];
   /** Days with no vegetable and a fully known record (empty days included). */
   daysWithoutVegetable: number;
-  /** Days that have entries but no vegetable evidence and incomplete FPED, so "no vegetable" is not provable. */
+  /**
+   * Days with entries, no vegetable flag and incomplete FPED, so "no vegetable" cannot be proven.
+   * Show these as "unknown": never add them to daysWithoutVegetable, and never treat them as a vegetable day.
+   */
   daysVegetableUnknown: number;
 };
 
@@ -107,9 +113,10 @@ export function weekContext(entries: DiaryEntry[], on: Date): WeekContext {
   const days = keys.map((k) => buildDay(week, k));
 
   let redMeatGrams = 0;
+  // Per item: a chicken-and-beef dish counts only the beef, not the whole entry.
   for (const e of week) {
-    if (e.classification.redMeat) {
-      for (const it of e.items) if (isKnownValue(it.grams)) redMeatGrams += it.grams;
+    for (const it of e.items) {
+      if (it.classification.redMeat && isKnownValue(it.grams)) redMeatGrams += it.grams;
     }
   }
 

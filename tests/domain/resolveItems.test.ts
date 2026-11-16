@@ -125,6 +125,11 @@ describe('resolveItems', () => {
     expect(r.refs[0]).toMatchObject({ source: 'dataset', foodId: 'oil', grams: 27, portionLabel: '1 tbsp' });
   });
 
+  test('each ref snapshots its own classification', () => {
+    const r = resolveItems(parseEntry('200 g hot dog').items, fixtureLookup);
+    expect(r.refs[0]!.classification.processedMeat).toBe(true);
+  });
+
   test('nothing resolved gives confidence 0; resolved entries sit near 1', () => {
     expect(resolveItems(parseEntry('one frikandel').items, fixtureLookup).confidence).toBe(0);
     expect(resolveItems(parseEntry('two hot dogs').items, fixtureLookup).confidence).toBeGreaterThan(0.5);

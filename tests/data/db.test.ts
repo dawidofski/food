@@ -44,7 +44,7 @@ function entryFields(over: Partial<Omit<DiaryEntry, 'id'>> = {}): Omit<DiaryEntr
     at: '2026-11-15T12:00:00.000Z',
     rawText: 'two hot dogs',
     resolution: 'local',
-    items: [{ source: 'dataset', foodId: 'x', grams: 100 }],
+    items: [{ source: 'dataset', foodId: 'x', grams: 100, classification: flags }],
     nutrients: { energyKcal: 250 },
     coverage: { energyKcal: 'known' },
     classification: flags,
@@ -314,7 +314,7 @@ describe('review fixes: no NaN or Infinity in storage', () => {
 
   test('addEntry rejects a non-finite gram amount', async () => {
     await expect(
-      addEntry(entry({ id: 'g', items: [{ source: 'dataset', foodId: 'x', grams: NaN }] })),
+      addEntry(entry({ id: 'g', items: [{ source: 'dataset', foodId: 'x', grams: NaN, classification: flags }] })),
     ).rejects.toThrow(RangeError);
   });
 
@@ -324,6 +324,13 @@ describe('review fixes: no NaN or Infinity in storage', () => {
     await addEntry(entry({ id: 'g' }));
     await expect(reviseEntry('g', entryFields({ fped }))).rejects.toThrow(RangeError);
     expect((await getEntry('g'))!.state).toBe('active');
+  });
+
+  test('addEntry rejects a non-finite per-item fped figure', async () => {
+    const items = [
+      { source: 'dataset' as const, foodId: 'x', grams: 100, classification: flags, fped: { vegCupEq: Infinity, fruitCupEq: 0, wholeGrainOzEq: 0 } },
+    ];
+    await expect(addEntry(entry({ id: 'h', items }))).rejects.toThrow(RangeError);
   });
 
   test('reviseEntry rejects NaN and leaves the original active', async () => {
@@ -397,13 +404,13 @@ describe('round 3: custom foods, batch fields, delete result, erase, abort', () 
   });
 
   test.each([NaN, Infinity])('putBatch rejects %s in ingredient ref grams', async bad => {
-    const ingredients = [{ text: 'rice', refs: [{ source: 'dataset' as const, foodId: 'r', grams: bad }] }];
+    const ingredients = [{ text: 'rice', refs: [{ source: 'dataset' as const, foodId: 'r', grams: bad, classification: flags }] }];
     await expect(putBatch(batch({ id: 'b', ingredients }))).rejects.toThrow(RangeError);
     expect(await getBatch('b')).toBeUndefined();
   });
 
   test('putBatch accepts an absent totalCookedGrams and finite ref grams', async () => {
-    const ingredients = [{ text: 'rice', refs: [{ source: 'dataset' as const, foodId: 'r', grams: 80 }] }];
+    const ingredients = [{ text: 'rice', refs: [{ source: 'dataset' as const, foodId: 'r', grams: 80, classification: flags }] }];
     await putBatch(batch({ id: 'ok', ingredients }));
     expect((await getBatch('ok'))!.ingredients).toStrictEqual(ingredients);
   });
@@ -438,7 +445,7 @@ describe('round 3: custom foods, batch fields, delete result, erase, abort', () 
   test('a failing put surfaces the original error even when abort itself throws', async () => {
     await addEntry(entry({ id: 'a' }));
     const unclonable = (() => 1) as unknown as string;
-    const next = entryFields({ items: [{ source: 'dataset', foodId: 'x', grams: 1, portionLabel: unclonable }] });
+    const next = entryFields({ items: [{ source: 'dataset', foodId: 'x', grams: 1, classification: flags, portionLabel: unclonable }] });
     const abort = vi.spyOn(IDBTransaction.prototype, 'abort').mockImplementation(() => {
       throw new DOMException('already finished', 'InvalidStateError');
     });
@@ -458,7 +465,7 @@ describe('round 3: custom foods, batch fields, delete result, erase, abort', () 
   test('a failing put leaves the original active and writes nothing', async () => {
     await addEntry(entry({ id: 'a' }));
     const unclonable = (() => 1) as unknown as string;
-    const next = entryFields({ items: [{ source: 'dataset', foodId: 'x', grams: 1, portionLabel: unclonable }] });
+    const next = entryFields({ items: [{ source: 'dataset', foodId: 'x', grams: 1, classification: flags, portionLabel: unclonable }] });
     await expect(reviseEntry('a', next)).rejects.toThrow();
     expect((await getEntry('a'))!.state).toBe('active');
     expect(await allEntriesIncludingTombstones()).toHaveLength(1);

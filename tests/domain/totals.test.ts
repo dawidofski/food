@@ -17,7 +17,7 @@ function make(day: string, over: Partial<DiaryEntry> = {}, hour = 12): DiaryEntr
     at: new Date(y, m - 1, d, hour).toISOString(),
     rawText: 'x',
     resolution: 'local',
-    items: [{ source: 'dataset', foodId: 'x', grams: 100 }],
+    items: [{ source: 'dataset', foodId: 'x', grams: 100, classification: none }],
     nutrients: { energyKcal: 100 },
     coverage: { energyKcal: 'known' },
     classification: none,
@@ -101,8 +101,8 @@ describe('weekContext', () => {
   test('two processed-meat items in one entry are one occasion', () => {
     const e = make('2026-11-15', {
       items: [
-        { source: 'dataset', foodId: 'a', grams: 50 },
-        { source: 'dataset', foodId: 'b', grams: 50 },
+        { source: 'dataset', foodId: 'a', grams: 50, classification: { ...none, processedMeat: true } },
+        { source: 'dataset', foodId: 'b', grams: 50, classification: { ...none, processedMeat: true } },
       ],
       classification: { ...none, processedMeat: true },
     });
@@ -129,7 +129,10 @@ describe('weekContext', () => {
 
   test('redMeatGrams sums grams over the week; alcohol counts drinks logged', () => {
     const red = (day: string, grams: number) =>
-      make(day, { items: [{ source: 'dataset', foodId: 'r', grams }], classification: { ...none, redMeat: true } });
+      make(day, {
+        items: [{ source: 'dataset', foodId: 'r', grams, classification: { ...none, redMeat: true } }],
+        classification: { ...none, redMeat: true },
+      });
     const c = weekContext(
       [
         red('2026-11-09', 120),
@@ -141,6 +144,18 @@ describe('weekContext', () => {
     );
     expect(c.redMeatGrams).toBe(200);
     expect(c.alcoholOccasions).toBe(1);
+  });
+
+  test('a mixed entry contributes only its red-meat item grams', () => {
+    const redItem = { source: 'dataset' as const, foodId: 'beef', grams: 100, classification: { ...none, redMeat: true } };
+    const otherItem = { source: 'dataset' as const, foodId: 'chicken', grams: 300, classification: none };
+    const stirFry = (day: string) =>
+      make(day, { items: [redItem, otherItem], classification: { ...none, redMeat: true } });
+    const days = ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'];
+    const c = weekContext(days.map(stirFry), on);
+    // Entry-level flag would have counted 5 x 400 = 2000 g and crossed ~500 g; the truth is 500.
+    expect(c.redMeatGrams).toBe(500);
+    expect(weekContext([stirFry('2026-11-15')], on).redMeatGrams).toBe(100);
   });
 
   test('an empty diary gives zeroed counts and seven day keys', () => {
