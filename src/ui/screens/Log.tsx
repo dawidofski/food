@@ -61,16 +61,16 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
           onChange={(e) => setDraft(e.target.value)}
           placeholder="e.g. two hot dogs and a cola"
           autoComplete="off"
-          className="min-h-14 flex-1 rounded-xl border-2 border-slate-400 px-3 text-lg"
+          className="min-h-14 flex-1 rounded-xl border-2 border-slate-400 dark:border-slate-500 px-3 text-lg"
         />
-        <button type="submit" className="min-h-14 rounded-xl bg-slate-900 px-6 text-lg text-white">Log</button>
+        <button type="submit" className="min-h-14 rounded-xl bg-slate-900 dark:bg-slate-100 px-6 text-lg text-white dark:text-slate-900">Log</button>
       </form>
 
-      {flow.stage === 'resolving' && <p className="text-sm text-slate-600">Checking&hellip;</p>}
-      {flow.error && !gateOpen && <p role="alert" className="text-sm text-red-800">{flow.error}</p>}
+      {flow.stage === 'resolving' && <p className="text-sm text-slate-600 dark:text-slate-400">Checking&hellip;</p>}
+      {flow.error && !gateOpen && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{flow.error}</p>}
 
       {flow.stage === 'needsHelp' && editorName !== null && (
-        <section className="rounded-xl border-2 border-slate-400 p-3">
+        <section className="rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
           <FoodEditor
             initialName={editorName.charAt(0).toUpperCase() + editorName.slice(1)}
             onCancel={() => setEditorName(null)}
@@ -84,7 +84,7 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
       )}
 
       {flow.stage === 'needsHelp' && editorName === null && (
-        <section className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
+        <section className="space-y-3 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
           {flow.dataMissing ? (
             <p>The food database could not be loaded, so nothing could be matched. Nothing has been saved.</p>
           ) : flow.unresolved.length > 0 ? (
@@ -101,16 +101,16 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
                 key={u.rawFragment}
                 type="button"
                 onClick={() => setEditorName(u.foodQuery)}
-                className="min-h-12 rounded-lg border border-slate-400 px-4 text-left"
+                className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-left"
               >
                 Add &ldquo;{u.foodQuery}&rdquo; as my own food
               </button>
             ))}
-            <button type="button" onClick={() => setEditorName('')} className="min-h-12 rounded-lg border border-slate-400 px-4 text-left">
+            <button type="button" onClick={() => setEditorName('')} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-left">
               Enter the nutrition manually
             </button>
             {flow.lines.length > 0 && (
-              <button type="button" onClick={() => void flow.continueWithout()} className="min-h-12 rounded-lg border border-slate-400 px-4 text-left">
+              <button type="button" onClick={() => void flow.continueWithout()} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-left">
                 Log the rest without it
               </button>
             )}
@@ -120,7 +120,7 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
       )}
 
       {flow.stage === 'aiReview' && (
-        <section data-testid="ai-review" className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
+        <section data-testid="ai-review" className="space-y-3 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
           <p className="font-medium">
             I didn&rsquo;t recognise part of that, so DeepSeek (an AI) was asked to read it. Please check its reading before anything is checked or saved.
           </p>
@@ -131,15 +131,15 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
               </li>
             ))}
           </ul>
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-slate-700 dark:text-slate-300">
             The AI only described your words; the food was then found in the database. The amounts below come from the database, not from the AI.
           </p>
           {flow.lines.length > 0 && <ResolvedLines lines={flow.lines} />}
           <div className="flex flex-col gap-2">
-            <button type="button" onClick={() => void flow.acceptAi()} className="min-h-12 rounded-lg bg-slate-900 px-4 text-left text-white">
+            <button type="button" onClick={() => void flow.acceptAi()} className="min-h-12 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 text-left text-white dark:text-slate-900">
               Use this reading
             </button>
-            <button type="button" onClick={flow.rejectAi} className="min-h-12 rounded-lg border border-slate-400 px-4 text-left">
+            <button type="button" onClick={flow.rejectAi} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-left">
               Don&rsquo;t use it
             </button>
             <button type="button" onClick={flow.edit} className="min-h-11 text-left text-sm underline">Change what I typed</button>
@@ -148,7 +148,7 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
       )}
 
       {flow.outcome && (
-        <section role="status" data-testid="outcome" className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
+        <section role="status" data-testid="outcome" className="space-y-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
           {flow.outcome.action === 'added' ? (
             <>
               <p className="font-medium">Added.</p>
@@ -164,7 +164,7 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
 
       {recent.length > 0 && (
         <section aria-label="Recent entries">
-          <h2 className="text-sm font-semibold uppercase text-slate-600">Recent</h2>
+          <h2 className="text-sm font-semibold uppercase text-slate-600 dark:text-slate-400">Recent</h2>
           <ul>
             {recent.map((e) => (
               <EntryRow

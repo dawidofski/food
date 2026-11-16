@@ -22,8 +22,8 @@ const OVERRIDES: { key: OverrideKey; label: string; unit: string }[] = [
   { key: 'addedSugarsG', label: 'Added sugars', unit: 'g' },
 ];
 
-const btn = 'min-h-11 rounded-lg border border-slate-400 px-4';
-const section = 'space-y-3 rounded-xl border-2 border-slate-400 p-3';
+const btn = 'min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-4';
+const section = 'space-y-3 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3';
 
 export default function ProfileSettings() {
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
@@ -89,7 +89,7 @@ export default function ProfileSettings() {
         help="Kept on this device with your profile."
       />
       <Overrides profile={base} save={save} />
-      {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
     </>
   );
 }
@@ -136,7 +136,7 @@ function WeightLog({ profile, save }: { profile: Profile; save: SaveFn }) {
         {log.map((w) => (
           <li key={w.date} className="flex flex-wrap items-end gap-2">
             <div className="flex-1">
-              <label htmlFor={`w-${w.date}`} className="block text-xs text-slate-700">{`Weight on ${w.date} (kg)`}</label>
+              <label htmlFor={`w-${w.date}`} className="block text-xs text-slate-700 dark:text-slate-300">{`Weight on ${w.date} (kg)`}</label>
               <input
                 id={`w-${w.date}`}
                 type="number"
@@ -159,19 +159,19 @@ function WeightLog({ profile, save }: { profile: Profile; save: SaveFn }) {
           </li>
         ))}
       </ul>
-      {profile.weightLog.length <= 1 && <p className="text-xs text-slate-700">The only measurement cannot be removed, because targets need a weight.</p>}
+      {profile.weightLog.length <= 1 && <p className="text-xs text-slate-700 dark:text-slate-300">The only measurement cannot be removed, because targets need a weight.</p>}
       <form onSubmit={(e) => void add(e)} className="flex flex-wrap items-end gap-2">
         <div className="flex-1">
-          <label htmlFor="new-w-date" className="block text-xs text-slate-700">New weight date</label>
+          <label htmlFor="new-w-date" className="block text-xs text-slate-700 dark:text-slate-300">New weight date</label>
           <input id="new-w-date" type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className={fieldClass} />
         </div>
         <div className="flex-1">
-          <label htmlFor="new-w-kg" className="block text-xs text-slate-700">New weight (kg)</label>
+          <label htmlFor="new-w-kg" className="block text-xs text-slate-700 dark:text-slate-300">New weight (kg)</label>
           <input id="new-w-kg" type="number" inputMode="decimal" value={newKg} onChange={(e) => setNewKg(e.target.value)} className={fieldClass} />
         </div>
         <button type="submit" className={btn}>Add weight</button>
       </form>
-      {note && <p role="alert" className="text-sm text-red-800">{note}</p>}
+      {note && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{note}</p>}
     </section>
   );
 }
@@ -216,7 +216,7 @@ function FlagList({
                 </button>
               </div>
               {unknown.has(it.toLowerCase()) && (
-                <p className="text-sm text-amber-900">
+                <p className="text-sm text-amber-900 dark:text-amber-300">
                   {`The app has no tags for “${it}”, so foods are not checked against it. Each entry you log will say it could not check this, so read labels yourself.`}
                 </p>
               )}
@@ -281,8 +281,8 @@ function Overrides({ profile, save }: { profile: Profile; save: SaveFn }) {
             />
           </div>
         ))}
-        {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
-        <button type="submit" className="min-h-12 rounded-lg bg-slate-900 px-4 text-white">Save overrides</button>
+        {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
+        <button type="submit" className="min-h-12 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 text-white dark:text-slate-900">Save overrides</button>
       </form>
     </section>
   );

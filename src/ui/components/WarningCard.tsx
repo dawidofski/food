@@ -3,10 +3,18 @@ import type { Citation, Evidence, Level, WarningCard as Card } from '@/rules/typ
 
 /** §9.2. INFO is neutral grey and collapsed; MODERATE amber with one line; HIGH orange expanded; CRITICAL red, cannot collapse. */
 const TREATMENT: Record<Level, { box: string; badge: string; label: string }> = {
-  INFO: { box: 'border-slate-300 bg-slate-50 text-slate-800', badge: 'bg-slate-200 text-slate-800', label: 'Info' },
-  MODERATE: { box: 'border-amber-300 bg-amber-50 text-amber-950', badge: 'bg-amber-200 text-amber-950', label: 'Moderate' },
-  HIGH: { box: 'border-orange-400 bg-orange-50 text-orange-950', badge: 'bg-orange-200 text-orange-950', label: 'High' },
-  CRITICAL: { box: 'border-red-600 bg-red-50 text-red-950', badge: 'bg-red-600 text-white', label: 'Critical' },
+  INFO: {
+    box: 'border-slate-300 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+    badge: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100', label: 'Info' },
+  MODERATE: {
+    box: 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100',
+    badge: 'bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-100', label: 'Moderate' },
+  HIGH: {
+    box: 'border-orange-400 bg-orange-50 text-orange-950 dark:border-orange-700 dark:bg-orange-950/60 dark:text-orange-100',
+    badge: 'bg-orange-200 text-orange-950 dark:bg-orange-800 dark:text-orange-50', label: 'High' },
+  CRITICAL: {
+    box: 'border-red-600 bg-red-50 text-red-950 dark:border-red-500 dark:bg-red-950/80 dark:text-red-100',
+    badge: 'bg-red-600 text-white', label: 'Critical' },
 };
 
 const startsOpen = (l: Level): boolean => l === 'HIGH' || l === 'CRITICAL';

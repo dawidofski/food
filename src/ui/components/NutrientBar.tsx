@@ -40,7 +40,7 @@ export default function NutrientBar({
     <div data-testid={`bar-${nutrient}`} className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-base capitalize">{name}</span>
-        {okTarget && <span className="text-xs text-slate-600">{`target ${fmtAmount(target)} ${unit}`}</span>}
+        {okTarget && <span className="text-xs text-slate-600 dark:text-slate-400">{`target ${fmtAmount(target)} ${unit}`}</span>}
       </div>
       {shown !== undefined && (
         <div
@@ -49,10 +49,10 @@ export default function NutrientBar({
           aria-valuemin={0}
           aria-valuemax={okTarget ? Math.round(target) : 0}
           aria-valuenow={Math.round(shown)}
-          className="relative h-3 rounded-full bg-slate-200"
+          className="relative h-3 rounded-full bg-slate-200 dark:bg-slate-800"
         >
-          <div className="absolute inset-y-0 left-0 rounded-full bg-sky-700" style={{ width: `${fillPct}%` }} />
-          {okTarget && <div aria-hidden className="absolute -inset-y-1 w-0.5 bg-slate-900" style={{ left: `${tickPct}%` }} />}
+          <div className="absolute inset-y-0 left-0 rounded-full bg-sky-700 dark:bg-sky-500" style={{ width: `${fillPct}%` }} />
+          {okTarget && <div aria-hidden className="absolute -inset-y-1 w-0.5 bg-slate-900 dark:bg-slate-100" style={{ left: `${tickPct}%` }} />}
         </div>
       )}
       {complete ? (

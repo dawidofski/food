@@ -28,8 +28,8 @@ const FLAG_OPTIONS: { key: FlagKey; label: string; hint: string }[] = [
   { key: 'oilyFish', label: 'Oily fish', hint: 'salmon, mackerel, herring' },
 ];
 
-const input = 'min-h-12 w-full rounded-lg border-2 border-slate-400 px-3 text-base';
-const btn = 'min-h-12 rounded-lg border border-slate-400 px-4 text-base';
+const input = 'min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 px-3 text-base';
+const btn = 'min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-base';
 
 /** Label wording for a field: "Energy (kcal)". The accessible name starts with the nutrient so tests and screen readers find it. */
 const fieldLabel = (k: NutrientKey): string => {
@@ -148,9 +148,9 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
         </label>
       </div>
 
-      <fieldset className="space-y-3 rounded-xl border border-slate-300 p-3">
+      <fieldset className="space-y-3 rounded-xl border border-slate-300 dark:border-slate-700 p-3">
         <legend className="px-1 text-sm font-semibold">Nutrition per 100 g, from the package</legend>
-        <p className="text-sm text-slate-700">
+        <p className="text-sm text-slate-700 dark:text-slate-300">
           Fill in only what you can read. A field you leave empty is saved as <strong>unknown</strong>, not as zero, and the
           app will not warn about a number nobody measured.
         </p>
@@ -170,9 +170,9 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
         </details>
       </fieldset>
 
-      <fieldset className="space-y-1 rounded-xl border border-slate-300 p-3">
+      <fieldset className="space-y-1 rounded-xl border border-slate-300 dark:border-slate-700 p-3">
         <legend className="px-1 text-sm font-semibold">What kind of food is it?</legend>
-        <p className="text-sm text-slate-700">
+        <p className="text-sm text-slate-700 dark:text-slate-300">
           Worth ticking even with no numbers: a sausage marked as processed meat still shows the processed-meat warning,
           because that warning looks at the kind of food, not at the nutrition figures.
         </p>
@@ -184,7 +184,7 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
             />
             <span>
               {o.label}
-              {o.hint && <span className="block text-sm text-slate-600">{o.hint}</span>}
+              {o.hint && <span className="block text-sm text-slate-600 dark:text-slate-400">{o.hint}</span>}
             </span>
           </label>
         ))}
@@ -192,14 +192,14 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
           <input type="checkbox" checked={ultra} onChange={(e) => setUltra(e.target.checked)} className="mt-1 h-6 w-6 shrink-0" />
           <span>
             Ultra-processed (NOVA 4)
-            <span className="block text-sm text-slate-600">industrial snacks, ready meals, most fried snack foods</span>
+            <span className="block text-sm text-slate-600 dark:text-slate-400">industrial snacks, ready meals, most fried snack foods</span>
           </span>
         </label>
       </fieldset>
 
-      <fieldset className="space-y-1 rounded-xl border border-slate-300 p-3">
+      <fieldset className="space-y-1 rounded-xl border border-slate-300 dark:border-slate-700 p-3">
         <legend className="px-1 text-sm font-semibold">Allergens it contains</legend>
-        <p className="text-sm text-slate-700">
+        <p className="text-sm text-slate-700 dark:text-slate-300">
           Tick what the label says. An unticked box tells the app nothing; it does not mean the food is free of it.
         </p>
         {ALLERGEN_TAGS.map((a) => (
@@ -213,22 +213,22 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
         ))}
       </fieldset>
 
-      {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
       <div className="flex flex-col gap-2">
-        <button type="submit" disabled={saving} className={`${btn} bg-slate-900 text-white`}>Save food</button>
+        <button type="submit" disabled={saving} className={`${btn} bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>Save food</button>
         <button type="button" onClick={onCancel} className={btn}>Cancel</button>
         {food && !confirmingDelete && (
-          <button type="button" onClick={() => setConfirmingDelete(true)} className={`${btn} text-red-800`}>Delete this food</button>
+          <button type="button" onClick={() => setConfirmingDelete(true)} className={`${btn} text-red-800 dark:text-red-300`}>Delete this food</button>
         )}
       </div>
       {food && confirmingDelete && (
-        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-red-700 p-3">
+        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-red-700 dark:border-red-400 p-3">
           <p className="text-base">
             Delete &ldquo;{food.name}&rdquo;? It will no longer be found when you log. Entries you already logged keep
             their numbers; nothing in your diary changes.
           </p>
           <button
-            type="button" className={`${btn} w-full bg-red-800 text-white`}
+            type="button" className={`${btn} w-full bg-red-800 dark:bg-red-900 text-white`}
             onClick={() => {
               void deleteCustomFood(food.id)
                 .then(() => onDeleted?.())
@@ -279,20 +279,20 @@ export default function MyFoods() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
       <h1 className="text-xl font-semibold">My foods</h1>
-      <button type="button" onClick={() => setEditing('new')} className={`${btn} w-full bg-slate-900 text-white`}>Add a food</button>
-      {loadError && <p role="alert" className="text-sm text-red-800">Your foods could not be read.</p>}
-      {foods?.length === 0 && <p className="text-sm text-slate-700">Nothing here yet. Foods you add can be logged by name.</p>}
+      <button type="button" onClick={() => setEditing('new')} className={`${btn} w-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>Add a food</button>
+      {loadError && <p role="alert" className="text-sm text-red-800 dark:text-red-300">Your foods could not be read.</p>}
+      {foods?.length === 0 && <p className="text-sm text-slate-700 dark:text-slate-300">Nothing here yet. Foods you add can be logged by name.</p>}
       <ul>
         {foods?.map((f) => (
-          <li key={f.id} className="flex items-center gap-3 border-b border-slate-200 py-2">
+          <li key={f.id} className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 py-2">
             <div className="min-w-0 flex-1">
               <p className="truncate text-base">{f.name}</p>
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
                 {f.referencePortion.label}, {f.referencePortion.grams} g
                 <SelfReportedBadge />
               </p>
             </div>
-            <button type="button" onClick={() => setEditing(f)} aria-label={`Edit ${f.name}`} className="min-h-11 shrink-0 rounded-lg border border-slate-400 px-3 text-sm">
+            <button type="button" onClick={() => setEditing(f)} aria-label={`Edit ${f.name}`} className="min-h-11 shrink-0 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm">
               Edit
             </button>
           </li>

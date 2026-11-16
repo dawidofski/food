@@ -4,14 +4,25 @@
 
 @layer base {
   /*
-   * The app is designed light-only. Without this, a device set to dark mode gets the browser's dark UA background
-   * behind text coloured for a light one, which renders the whole app grey-on-black and unreadable — caught by
-   * looking at it on a phone-width viewport, not by any test.
+   * Light and dark are both real themes. This was light-only for a reason: with no explicit colours, a phone set to
+   * dark mode got the browser's dark UA background behind text coloured for a light theme, so the whole app rendered
+   * grey-on-near-black and was unreadable (found by looking at it on a phone, not by any test).
+   *
+   * Now every colour is paired with a `dark:` variant, and the `dark` class on <html> selects them. The class is set
+   * before first paint by the inline script in index.html and kept current by src/state/theme.ts (System, Light or
+   * Dark). That code also sets the inline `color-scheme` to the resolved theme so form controls, scrollbars and the
+   * date picker match; `light dark` below is only the fallback until it runs, and the body always has its own colours.
    */
   :root {
-    color-scheme: light;
+    color-scheme: light dark;
   }
   body {
-    @apply bg-white text-slate-900;
+    @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  }
+  /* Text fields follow the slate palette instead of the browser's grey dark default. */
+  .dark input:not([type='checkbox']):not([type='radio']),
+  .dark select,
+  .dark textarea {
+    @apply bg-slate-900 text-slate-100;
   }
 }

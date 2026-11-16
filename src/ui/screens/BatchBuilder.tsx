@@ -13,8 +13,8 @@ import type { Batch } from '@/types/diary';
 import CoverageNote from '@/ui/components/CoverageNote';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 
-const input = 'min-h-12 w-full rounded-lg border-2 border-slate-400 px-3 text-base';
-const btn = 'min-h-12 rounded-lg border border-slate-400 px-4 text-base';
+const input = 'min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 px-3 text-base';
+const btn = 'min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-base';
 
 export type BatchDeps = { lookup: FoodLookup; loadData: () => Promise<void> };
 
@@ -75,16 +75,16 @@ export default function BatchBuilder({ deps = defaultBatchDeps, onLogPortion }: 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
       <h1 className="text-xl font-semibold">Batches</h1>
-      <p className="text-sm text-slate-700">Cook once, eat for days: enter what went in and how many portions it made.</p>
-      <button type="button" onClick={() => setEditing('new')} className={`${btn} w-full bg-slate-900 text-white`}>Cook a batch</button>
-      {loadError && <p role="alert" className="text-sm text-red-800">Your batches could not be read.</p>}
-      {batches?.length === 0 && <p className="text-sm text-slate-700">Nothing in the fridge yet.</p>}
+      <p className="text-sm text-slate-700 dark:text-slate-300">Cook once, eat for days: enter what went in and how many portions it made.</p>
+      <button type="button" onClick={() => setEditing('new')} className={`${btn} w-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>Cook a batch</button>
+      {loadError && <p role="alert" className="text-sm text-red-800 dark:text-red-300">Your batches could not be read.</p>}
+      {batches?.length === 0 && <p className="text-sm text-slate-700 dark:text-slate-300">Nothing in the fridge yet.</p>}
       <ul aria-label="In the fridge">
         {batches?.map((b) => (
-          <li key={b.id} className="space-y-2 border-b border-slate-200 py-3">
+          <li key={b.id} className="space-y-2 border-b border-slate-200 dark:border-slate-800 py-3">
             <div>
               <p className="text-base font-medium">{b.name}</p>
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
                 <span data-testid="portions-left">{b.portionsRemaining} of {b.portionCount} portions left</span>
                 {' · '}{kcal(b)} per portion
                 {b.selfReported && <SelfReportedBadge />}
@@ -98,20 +98,20 @@ export default function BatchBuilder({ deps = defaultBatchDeps, onLogPortion }: 
               {onLogPortion && (
                 <button
                   type="button" onClick={() => onLogPortion(`a portion of ${b.name}`)} aria-label={`Log a portion of ${b.name}`}
-                  className="min-h-11 rounded-lg border border-slate-400 px-3 text-sm"
+                  className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm"
                 >
                   Log a portion
                 </button>
               )}
               <button
                 type="button" onClick={() => void onRecook(b)} aria-label={`Cooked ${b.name} again`}
-                className="min-h-11 rounded-lg border border-slate-400 px-3 text-sm"
+                className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm"
               >
                 Cooked again
               </button>
               <button
                 type="button" onClick={() => setEditing(b)} aria-label={`Edit ${b.name}`}
-                className="min-h-11 rounded-lg border border-slate-400 px-3 text-sm"
+                className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm"
               >
                 Edit
               </button>
@@ -207,16 +207,16 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
           <input type="text" inputMode="decimal" value={cooked} onChange={(e) => touch(setCooked)(e.target.value)} className={input} />
         </label>
       </div>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-slate-700 dark:text-slate-300">
         The nutrition is the ingredients added up and divided by the number of portions. The cooked weight only says how
         much one portion weighs; it never changes the nutrition.
       </p>
 
-      {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
-      <button type="submit" disabled={busy} className={`${btn} w-full bg-slate-900 text-white`}>Work out the portions</button>
+      {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
+      <button type="submit" disabled={busy} className={`${btn} w-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>Work out the portions</button>
 
       {b && result && (
-        <section aria-label="Result" className="space-y-3 rounded-xl border border-slate-300 p-3">
+        <section aria-label="Result" className="space-y-3 rounded-xl border border-slate-300 dark:border-slate-700 p-3">
           <p className="text-base" data-testid="per-portion">
             Each portion: {kcal(b)}
             {b.coverage.energyKcal === 'partial' && isKnownValue(b.nutrientsPerPortion.energyKcal) ? ' (at least)' : ''}
@@ -230,7 +230,7 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
           ))}
 
           {result.cookedWeightNotes.map((n) => (
-            <p key={n.ingredient} data-testid="cooked-weight-note" role="note" className="rounded-lg border-2 border-amber-600 bg-amber-50 p-2 text-sm text-amber-950">
+            <p key={n.ingredient} data-testid="cooked-weight-note" role="note" className="rounded-lg border-2 border-amber-600 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-2 text-sm text-amber-950 dark:text-amber-200">
               <strong>{n.ingredient}</strong> was read as {Math.round(n.grams)} g of <em>cooked</em> food ({n.foodName}). The
               database has no dry pasta or rice. If you weighed it dry, the energy is about twice what is shown here, and that
               error is spread across every portion. To correct it, enter the cooked weight instead.
@@ -238,7 +238,7 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
           ))}
 
           {missing.length > 0 && (
-            <div role="alert" data-testid="unresolved" className="space-y-1 rounded-lg border-2 border-red-700 p-2 text-sm">
+            <div role="alert" data-testid="unresolved" className="space-y-1 rounded-lg border-2 border-red-700 dark:border-red-400 p-2 text-sm">
               <p className="font-semibold">
                 {missing.length === 1 ? 'This ingredient' : 'These ingredients'} could not be found, so {missing.length === 1 ? 'it is' : 'they are'} not in the total:
               </p>
@@ -253,9 +253,9 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
           )}
 
           {resolvedCount === 0 ? (
-            <p className="text-sm text-red-800">Nothing could be found, so there is nothing to save yet.</p>
+            <p className="text-sm text-red-800 dark:text-red-300">Nothing could be found, so there is nothing to save yet.</p>
           ) : (
-            <button type="button" disabled={busy} onClick={() => void onSave()} className={`${btn} w-full ${missing.length > 0 ? 'text-red-800' : 'bg-slate-900 text-white'}`}>
+            <button type="button" disabled={busy} onClick={() => void onSave()} className={`${btn} w-full ${missing.length > 0 ? 'text-red-800 dark:text-red-300' : 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'}`}>
               {missing.length > 0 ? 'Save anyway, without those ingredients' : 'Save batch'}
             </button>
           )}
@@ -263,16 +263,16 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
       )}
       <button type="button" onClick={onCancel} className={`${btn} w-full`}>Cancel</button>
       {batch && !confirmingDelete && (
-        <button type="button" onClick={() => setConfirmingDelete(true)} className={`${btn} w-full text-red-800`}>Delete this batch</button>
+        <button type="button" onClick={() => setConfirmingDelete(true)} className={`${btn} w-full text-red-800 dark:text-red-300`}>Delete this batch</button>
       )}
       {batch && confirmingDelete && (
-        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-red-700 p-3">
+        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-red-700 dark:border-red-400 p-3">
           <p className="text-base">
             Delete &ldquo;{batch.name}&rdquo;? It will no longer be found when you log. Portions you already logged keep
             their numbers; nothing in your diary changes.
           </p>
           <button
-            type="button" className={`${btn} w-full bg-red-800 text-white`}
+            type="button" className={`${btn} w-full bg-red-800 dark:bg-red-900 text-white`}
             onClick={() => {
               void deleteBatch(batch.id)
                 .then(onSaved)

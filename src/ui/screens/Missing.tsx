@@ -119,7 +119,7 @@ function WeightPanel({
       .join(' ');
     trend = (
       <svg role="img" aria-label="Weight trend over the logged measurements" viewBox="0 0 300 60" className="h-16 w-full">
-        <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="2" className="text-sky-700" />
+        <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="2" className="text-sky-700 dark:text-sky-400" />
       </svg>
     );
   }
@@ -137,7 +137,7 @@ function WeightPanel({
           ) : (
             <ul className="text-sm">
               {log.slice(0, 12).map((w) => (
-                <li key={w.date} className="flex justify-between border-b border-slate-200 py-1">
+                <li key={w.date} className="flex justify-between border-b border-slate-200 dark:border-slate-800 py-1">
                   <span>{w.date}</span>
                   <span>{`${w.kg.toFixed(1)} kg`}</span>
                 </li>
@@ -152,10 +152,10 @@ function WeightPanel({
                 inputMode="decimal"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="min-h-12 w-full rounded-lg border-2 border-slate-400 px-3 text-base"
+                className="min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 px-3 text-base"
               />
             </div>
-            <button type="submit" className="min-h-12 rounded-lg border border-slate-400 px-4 text-base">Save weight</button>
+            <button type="submit" className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-base">Save weight</button>
           </form>
           {note && <p role="status" className="text-sm">{note}</p>}
         </>
@@ -234,7 +234,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-6 p-4">
       <h1 className="text-xl font-semibold">What&rsquo;s missing</h1>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-slate-700 dark:text-slate-300">
         What your diary shows is left out or thin, as facts about what was logged. These are things to add, not things you got wrong.
       </p>
 
@@ -254,8 +254,8 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
             />
           ))
         )}
-        {targets.isGeneric && <p className="text-xs text-slate-600">Targets use general adult guidelines until your profile is set up.</p>}
-        <p data-testid="own-targets-note" className="text-xs text-slate-600">
+        {targets.isGeneric && <p className="text-xs text-slate-600 dark:text-slate-400">Targets use general adult guidelines until your profile is set up.</p>}
+        <p data-testid="own-targets-note" className="text-xs text-slate-600 dark:text-slate-400">
           The energy, protein and fibre targets are this app&rsquo;s own working figures, not a published recommendation (protein is 1.2 g
           per kg of body weight; fibre is 14 g per 1,000 kcal, at least 30 g). For comparison, WHO advises at least 25 g of fibre a day and
           the usual RDA for protein is 0.8 g per kg. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any
@@ -274,14 +274,14 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
           </p>
         ) : (
           <>
-            <p className="text-sm text-slate-700">{`Based on ${logged.length} of the last 7 days that have entries.`}</p>
+            <p className="text-sm text-slate-700 dark:text-slate-300">{`Based on ${logged.length} of the last 7 days that have entries.`}</p>
             <ul className="space-y-1 text-base">
               {noveg > 0 && <li>{`${plural(noveg, 'day', 'days')} without a vegetable serving`}</li>}
               {noveg === 0 && vegUnknown < logged.length && <li>A vegetable serving on every day where the data is complete.</li>}
               {vegUnknown > 0 && (
                 <li>
                   {`${plural(vegUnknown, 'day', 'days')} where vegetable data is missing`}
-                  <span className="block text-sm text-slate-700">
+                  <span className="block text-sm text-slate-700 dark:text-slate-300">
                     Some foods carry no vegetable data, so those days are not counted either way.
                   </span>
                 </li>
@@ -292,7 +292,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
 
             <ul aria-label="Day by day" className="space-y-2">
               {week.days.map((d, i) => (
-                <li key={d.dayKey} className="rounded-lg border border-slate-300 p-2 text-sm">
+                <li key={d.dayKey} className="rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm">
                   <p className="font-semibold">{dayLabel(d.dayKey)}</p>
                   <p>{`Vegetables ${cupCell(d.entryCount, d.vegCupEq, d.vegCoverage)} · Fruit ${cupCell(d.entryCount, fruit[i]?.cups ?? 0, fruit[i]?.coverage ?? 'unknown')}`}</p>
                   <p>{`Fibre ${cell(d, 'fibreG', 'g')} · Protein ${cell(d, 'proteinG', 'g')}`}</p>
@@ -321,11 +321,11 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
             </ul>
           )}
           {tooFew > 0 && (
-            <p className="text-sm text-slate-700">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
               {`For ${plural(tooFew, 'nutrient', 'nutrients')}, too few days had complete data to say anything.`}
             </p>
           )}
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
             These are EFSA&rsquo;s values for adults, for populations and not a requirement for you personally. A population reference intake covers nearly everyone&rsquo;s needs. An adequate intake (magnesium, potassium, vitamin D and vitamin B12) is a best estimate, set where the evidence could not support a reference intake.
           </p>
         </section>

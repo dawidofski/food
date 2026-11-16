@@ -74,20 +74,20 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
             type="button"
             aria-current={k === dayKey ? 'date' : undefined}
             onClick={() => setDayKey(k)}
-            className={`min-h-14 rounded-lg border px-1 text-xs ${k === dayKey ? 'border-slate-900 bg-slate-100 font-semibold' : 'border-slate-300'}`}
+            className={`min-h-14 rounded-lg border px-1 text-xs ${k === dayKey ? 'border-slate-900 dark:border-slate-100 bg-slate-100 dark:bg-slate-800 font-semibold' : 'border-slate-300 dark:border-slate-700'}`}
           >
             <span className="block">{dayLabel(k)}</span>
-            <span className="block text-slate-600">{dayTotals(entries, k).entryCount || '·'}</span>
+            <span className="block text-slate-600 dark:text-slate-400">{dayTotals(entries, k).entryCount || '·'}</span>
           </button>
         ))}
       </nav>
 
-      {loadError && <p role="alert" className="text-sm text-slate-900">The diary could not be read, so nothing is shown. Nothing has been lost.</p>}
+      {loadError && <p role="alert" className="text-sm text-slate-900 dark:text-slate-100">The diary could not be read, so nothing is shown. Nothing has been lost.</p>}
       {loaded && !loadError && totals.entryCount === 0 && <p className="text-base">Nothing logged on this day.</p>}
 
       {totals.entryCount > 0 && (
-        <section aria-label="Day total" className="rounded-xl border border-slate-300 bg-slate-50 p-3">
-          <p className="text-sm text-slate-700">{`${totals.entryCount} ${totals.entryCount === 1 ? 'entry' : 'entries'}`}</p>
+        <section aria-label="Day total" className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+          <p className="text-sm text-slate-700 dark:text-slate-300">{`${totals.entryCount} ${totals.entryCount === 1 ? 'entry' : 'entries'}`}</p>
           {isKnownValue(kcal) && totals.coverage.energyKcal === 'known' && <p className="text-lg font-semibold">{`${fmtAmount(kcal)} kcal`}</p>}
           {isKnownValue(kcal) && totals.coverage.energyKcal !== 'known' && <CoverageNote nutrient="energyKcal" coverage="partial" value={kcal} />}
           {!isKnownValue(kcal) && <CoverageNote nutrient="energyKcal" coverage="unknown" />}
@@ -96,10 +96,10 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
 
       <ul>
         {dayEntries.map((e) => (
-          <li key={e.id} className="border-b border-slate-200">
+          <li key={e.id} className="border-b border-slate-200 dark:border-slate-800">
             <button type="button" onClick={() => setOpenId(e.id)} className="min-h-14 w-full py-2 text-left">
               <span className="block text-base">{e.rawText}</span>
-              <span className="block text-xs text-slate-600">
+              <span className="block text-xs text-slate-600 dark:text-slate-400">
                 {timeOf(e.at)}
                 {isKnownValue(e.nutrients.energyKcal) && ` · ${fmtAmount(e.nutrients.energyKcal)} kcal`}
                 {e.items.some((i) => i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}

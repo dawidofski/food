@@ -43,7 +43,7 @@ export default function CoverageNote({
   const { name, unit } = NUTRIENT_LABEL[nutrient];
   if (coverage === 'unknown') {
     return (
-      <p data-testid="coverage-note" className="text-sm text-amber-950">
+      <p data-testid="coverage-note" className="text-sm text-amber-950 dark:text-amber-200">
         No {name} data for this, so no total can be given.
       </p>
     );
@@ -56,7 +56,7 @@ export default function CoverageNote({
       ? value > 0 && whole(value).startsWith('0') ? `under 1 ${unit} counted so far` : `at least ${whole(value)} ${unit}`
       : 'at least what is shown';
   return (
-    <p data-testid="coverage-note" className="text-sm text-amber-950">
+    <p data-testid="coverage-note" className="text-sm text-amber-950 dark:text-amber-200">
       <span className="font-semibold">{floor}</span>
       <span>{` — ${who} no ${name} data`}</span>
     </p>

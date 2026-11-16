@@ -29,7 +29,7 @@ export function weightProblem(kg: number): string | null {
   return Number.isFinite(kg) && kg >= 20 && kg <= 400 ? null : 'Enter a weight in kilograms between 20 and 400.';
 }
 
-export const fieldClass = 'min-h-12 w-full rounded-lg border-2 border-slate-400 bg-white px-3 text-base';
+export const fieldClass = 'min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-950 px-3 text-base';
 
 export function BodyDataForm({
   initial, base, onSaved, submitLabel,
@@ -114,8 +114,8 @@ export function BodyDataForm({
           <input id="bd-weight" type="number" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} className={fieldClass} />
         </div>
       )}
-      {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
-      <button type="submit" disabled={saving} className="min-h-12 w-full rounded-lg bg-slate-900 px-4 text-white disabled:opacity-50">{submitLabel}</button>
+      {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
+      <button type="submit" disabled={saving} className="min-h-12 w-full rounded-lg bg-slate-900 dark:bg-slate-100 px-4 text-white dark:text-slate-900 disabled:opacity-50">{submitLabel}</button>
     </form>
   );
 }
@@ -124,16 +124,16 @@ export default function FirstRun({ onDone, onSkip }: { onDone?: (p: Profile) => 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
       <h1 className="text-xl font-semibold">Set up your targets</h1>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-slate-700 dark:text-slate-300">
         Your height, date of birth, sex, activity level and weight are used to work out daily targets for you. They are stored on this
         device only and are never sent anywhere.
       </p>
       <BodyDataForm initial={null} submitLabel="Save and continue" onSaved={(p) => onDone?.(p)} />
-      <div className="space-y-1 border-t border-slate-300 pt-3">
-        <p className="text-sm text-slate-700">
+      <div className="space-y-1 border-t border-slate-300 dark:border-slate-700 pt-3">
+        <p className="text-sm text-slate-700 dark:text-slate-300">
           You can use the app without this. Until your profile is set up, targets use general adult guidelines, and the app says so wherever they matter.
         </p>
-        <button type="button" onClick={() => onSkip?.()} className="min-h-12 w-full rounded-lg border border-slate-400 px-4">
+        <button type="button" onClick={() => onSkip?.()} className="min-h-12 w-full rounded-lg border border-slate-400 dark:border-slate-500 px-4">
           Skip for now
         </button>
       </div>

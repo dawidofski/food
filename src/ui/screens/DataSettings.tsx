@@ -5,8 +5,8 @@ import { localDayKey } from '@/domain/dayBoundary';
 
 /** Backup (export and import) and erase everything. The export is the person's only backup. */
 
-const btn = 'min-h-11 rounded-lg border border-slate-400 px-4';
-const section = 'space-y-3 rounded-xl border-2 border-slate-400 p-3';
+const btn = 'min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-4';
+const section = 'space-y-3 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3';
 
 export function BackupSettings({ onImported }: { onImported: () => void }) {
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
@@ -62,7 +62,7 @@ export function BackupSettings({ onImported }: { onImported: () => void }) {
       </p>
       <button type="button" onClick={() => void doExport()} className={btn}>Export everything</button>
 
-      <div className="space-y-2 border-t border-slate-300 pt-3">
+      <div className="space-y-2 border-t border-slate-300 dark:border-slate-700 pt-3">
         <label htmlFor="import-file" className="block text-sm font-medium">Import file</label>
         <input
           id="import-file"
@@ -99,7 +99,7 @@ export function BackupSettings({ onImported }: { onImported: () => void }) {
         </button>
       </div>
       {message && (message.kind === 'error'
-        ? <p role="alert" className="text-sm text-red-800">{message.text}</p>
+        ? <p role="alert" className="text-sm text-red-800 dark:text-red-300">{message.text}</p>
         : <p role="status" className="text-sm">{message.text}</p>)}
     </section>
   );
@@ -132,7 +132,7 @@ export function EraseSettings({ onErased }: { onErased?: () => void }) {
   };
 
   return (
-    <section aria-labelledby="erase-h" className={`${section} border-red-300`}>
+    <section aria-labelledby="erase-h" className={`${section} border-red-300 dark:border-red-800`}>
       <h2 id="erase-h" className="text-lg font-semibold">Erase everything</h2>
       {!confirming ? (
         <>
@@ -146,17 +146,17 @@ export function EraseSettings({ onErased }: { onErased?: () => void }) {
             device. It cannot be undone. Export a backup first if you want to keep anything.
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy} onClick={() => void erase()} className="min-h-12 rounded-lg bg-red-700 px-4 text-white disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => void erase()} className="min-h-12 rounded-lg bg-red-700 dark:bg-red-800 px-4 text-white disabled:opacity-50">
               Yes, erase everything
             </button>
-            <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="min-h-12 rounded-lg border border-slate-400 px-4">
+            <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4">
               Cancel
             </button>
           </div>
         </div>
       )}
       {done && <p role="status" className="text-sm">Everything has been erased from this device.</p>}
-      {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
     </section>
   );
 }

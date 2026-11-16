@@ -15,7 +15,7 @@ export default function Alternatives({
         <p className="text-sm">There are no sourced alternatives for this entry. Nothing is suggested without a source.</p>
       )}
       {groups.map((c) => (
-        <section key={c.ruleId} data-testid="alternatives-group" className="rounded-xl border border-slate-300 p-3">
+        <section key={c.ruleId} data-testid="alternatives-group" className="rounded-xl border border-slate-300 dark:border-slate-700 p-3">
           <h3 className="font-medium">{c.title}</h3>
           <ul className="mt-2 space-y-3">
             {c.alternatives.map((a) => (
@@ -34,9 +34,9 @@ export default function Alternatives({
         </section>
       ))}
       <div className="flex flex-col gap-2 sm:flex-row">
-        <button type="button" onClick={onBack} className="min-h-12 rounded-lg border border-slate-400 px-4">Back to warnings</button>
-        <button type="button" onClick={onAddAnyway} className="min-h-12 rounded-lg bg-slate-900 px-4 text-white">Add anyway</button>
-        <button type="button" onClick={onCancel} className="min-h-12 rounded-lg border border-slate-400 px-4">Cancel</button>
+        <button type="button" onClick={onBack} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4">Back to warnings</button>
+        <button type="button" onClick={onAddAnyway} className="min-h-12 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 text-white dark:text-slate-900">Add anyway</button>
+        <button type="button" onClick={onCancel} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4">Cancel</button>
       </div>
     </div>
   );

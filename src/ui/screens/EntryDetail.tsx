@@ -12,7 +12,7 @@ import WarningGate from './WarningGate';
 
 const LEVEL_WORD: Record<Level, string> = { INFO: 'info', MODERATE: 'moderate', HIGH: 'high', CRITICAL: 'critical' };
 const SHOWN: NutrientKey[] = ['energyKcal', 'proteinG', 'fibreG', 'sodiumMg', 'satFatG', 'addedSugarsG'];
-const btn = 'min-h-12 rounded-lg border border-slate-400 px-4 text-base';
+const btn = 'min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-base';
 
 const whenText = (at: string): string => {
   const d = new Date(at);
@@ -84,7 +84,7 @@ export default function EntryDetail({
       <button type="button" onClick={onClose} className="min-h-11 text-sm underline">Back to the diary</button>
       <div>
         <h2 className="text-xl font-semibold">{entry.rawText}</h2>
-        <p className="text-sm text-slate-600">{whenText(entry.at)}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">{whenText(entry.at)}</p>
       </div>
 
       <ul className="space-y-1">
@@ -92,7 +92,7 @@ export default function EntryDetail({
           <li key={`${i.foodId}-${n}`} className="text-base">
             {deps.lookup.get(i.source, i.foodId)?.name ?? i.foodId}
             {i.source !== 'batch' && Number.isFinite(i.grams) && ` — ${fmtAmount(i.grams)} g`}
-            {i.source === 'batch' && <span className="ml-1 text-sm text-slate-700">(portion from a batch)</span>}
+            {i.source === 'batch' && <span className="ml-1 text-sm text-slate-700 dark:text-slate-300">(portion from a batch)</span>}
             {(i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
           </li>
         ))}
@@ -112,7 +112,7 @@ export default function EntryDetail({
         })}
       </dl>
 
-      <section aria-label="Warnings shown" className="space-y-1 rounded-xl border border-slate-300 bg-slate-50 p-3">
+      <section aria-label="Warnings shown" className="space-y-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
         <h3 className="text-sm font-semibold">Shown when you logged this</h3>
         {entry.warningsShown.length === 0 ? (
           <p className="text-sm">No warnings were shown for this entry.</p>
@@ -126,7 +126,7 @@ export default function EntryDetail({
         {entry.userAction === 'addedAfterAlternatives' && <p className="text-sm">You looked at the alternatives before adding it.</p>}
       </section>
 
-      {failed && <p role="alert" className="text-sm text-slate-900">{failed}</p>}
+      {failed && <p role="alert" className="text-sm text-slate-900 dark:text-slate-100">{failed}</p>}
 
       {mode === 'view' && (
         <div className="flex gap-2">
@@ -144,13 +144,13 @@ export default function EntryDetail({
             value={text}
             onChange={(e) => setText(e.target.value)}
             autoComplete="off"
-            className="min-h-14 w-full rounded-xl border-2 border-slate-400 px-3 text-lg"
+            className="min-h-14 w-full rounded-xl border-2 border-slate-400 dark:border-slate-500 px-3 text-lg"
           />
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-slate-700 dark:text-slate-300">
             The corrected entry is checked again before it replaces this one. The original is kept in your history.
           </p>
-          {flow.stage === 'resolving' && <p className="text-sm text-slate-600">Checking&hellip;</p>}
-          {flow.error && !gateOpen && <p role="alert" className="text-sm text-slate-900">{flow.error}</p>}
+          {flow.stage === 'resolving' && <p className="text-sm text-slate-600 dark:text-slate-400">Checking&hellip;</p>}
+          {flow.error && !gateOpen && <p role="alert" className="text-sm text-slate-900 dark:text-slate-100">{flow.error}</p>}
           {flow.stage === 'needsHelp' && (
             <p className="text-sm">
               {flow.unresolved.length > 0
@@ -159,7 +159,7 @@ export default function EntryDetail({
             </p>
           )}
           <div className="flex gap-2">
-            <button type="submit" className={`${btn} flex-1 bg-slate-900 text-white`}>Save correction</button>
+            <button type="submit" className={`${btn} flex-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>Save correction</button>
             <button
               type="button"
               className={`${btn} flex-1`}
@@ -172,13 +172,13 @@ export default function EntryDetail({
       )}
 
       {mode === 'confirmDelete' && (
-        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-slate-400 p-3">
+        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
           <p className="text-base">{removalText(entry, isToday)}</p>
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-slate-700 dark:text-slate-300">
             It stays in your history marked as deleted, but no longer counts toward any total or weekly count.
           </p>
           <div className="flex gap-2">
-            <button type="button" className={`${btn} flex-1 bg-slate-900 text-white`} onClick={() => void confirmDelete()}>Yes, delete it</button>
+            <button type="button" className={`${btn} flex-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`} onClick={() => void confirmDelete()}>Yes, delete it</button>
             <button type="button" className={`${btn} flex-1`} onClick={() => setMode('view')}>Keep it</button>
           </div>
         </div>

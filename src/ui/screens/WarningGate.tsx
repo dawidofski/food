@@ -28,11 +28,11 @@ export function ResolvedLines({ lines }: { lines: ResolvedLine[] }) {
                 {` — ${fmtGrams(l.grams)}`}
               </>
             )}
-            {l.source === 'batch' && <span className="ml-1 text-sm font-normal text-slate-700">(from a batch)</span>}
+            {l.source === 'batch' && <span className="ml-1 text-sm font-normal text-slate-700 dark:text-slate-300">(from a batch)</span>}
             {(l.source === 'custom' || l.selfReported) && <SelfReportedBadge />}
           </p>
           {l.unusual && (
-            <p data-testid="unusual-serving" className="mt-1 rounded-lg border border-amber-400 bg-amber-50 p-2 text-amber-950">
+            <p data-testid="unusual-serving" className="mt-1 rounded-lg border border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-2 text-amber-950 dark:text-amber-200">
               {l.count !== undefined && l.portionLabel !== undefined ? `${fmtCount(l.count)} × ${l.portionLabel} ` : ''}
               {l.name}, {fmtGrams(l.grams)} — is that right?{' '}
               {l.unusual.kind === 'huge' && 'That is over 1 kg for one item.'}
@@ -53,7 +53,7 @@ export function ResolvedLines({ lines }: { lines: ResolvedLine[] }) {
 export function CheckNotes({ failures }: { failures: RuleFailure[] }) {
   if (failures.length === 0) return null;
   return (
-    <div data-testid="check-note" role="note" className="rounded-lg border border-slate-400 bg-slate-50 p-2 text-sm text-slate-900">
+    <div data-testid="check-note" role="note" className="rounded-lg border border-slate-400 dark:border-slate-500 bg-slate-50 dark:bg-slate-900 p-2 text-sm text-slate-900 dark:text-slate-100">
       {failures.map((f) => (
         <p key={f.ruleId + f.message}>
           {f.category === 'safety'
@@ -70,16 +70,16 @@ export function CheckNotes({ failures }: { failures: RuleFailure[] }) {
 /** Rules whose figures come from the person's targets, so on generic targets their cards must say so. */
 const TARGET_RULES = new Set(['added-sugar-entry', 'added-sugar-daily', 'nutrient-density', 'saturated-fat-daily', 'sodium-entry', 'sodium-daily', 'trans-fat']);
 
-const btn = 'min-h-12 rounded-lg border border-slate-400 px-4 text-base';
+const btn = 'min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-base';
 
 export default function WarningGate({ flow }: { flow: EntryFlow }) {
   const asking = flow.stage === 'questions';
   return (
-    <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/40" data-testid="warning-gate">
+    <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/40 dark:bg-black/60" data-testid="warning-gate">
       <div
         role="dialog"
         aria-label="Before this is saved"
-        className="max-h-[92vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl"
+        className="max-h-[92vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-2xl bg-white dark:bg-slate-950 p-4 shadow-xl dark:border-t dark:border-slate-700"
       >
         {flow.viewingAlternatives ? (
           <Alternatives cards={flow.cards} onBack={flow.backToGate} onAddAnyway={() => void flow.addAnyway()} onCancel={() => void flow.cancel()} />
@@ -90,7 +90,7 @@ export default function WarningGate({ flow }: { flow: EntryFlow }) {
 
             {asking &&
               flow.questions.map((q) => (
-                <div key={q.answerKey} role="group" aria-label={q.question} className="rounded-xl border-2 border-slate-400 p-3">
+                <div key={q.answerKey} role="group" aria-label={q.question} className="rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
                   <p className="text-base font-medium">{q.question}</p>
                   <div className="mt-2 flex gap-2">
                     <button type="button" className={`${btn} flex-1`} onClick={() => flow.answer(q.answerKey, true)}>Yes</button>
@@ -104,16 +104,16 @@ export default function WarningGate({ flow }: { flow: EntryFlow }) {
             ))}
 
             {flow.genericTargets && flow.cards.some((c) => [c.ruleId, ...c.mergedFrom].some((id) => TARGET_RULES.has(id))) && (
-              <p data-testid="generic-targets-note" className="text-xs text-slate-700">
+              <p data-testid="generic-targets-note" className="text-xs text-slate-700 dark:text-slate-300">
                 The figures on these cards use general adult guidelines, not targets worked out for you. Set up your profile in Settings to personalise them.
               </p>
             )}
 
-            {flow.error && <p role="alert" className="text-sm text-red-800">{flow.error}</p>}
+            {flow.error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{flow.error}</p>}
 
             <div className="flex flex-col gap-2">
               {!asking && (
-                <button type="button" onClick={() => void flow.addAnyway()} className={`${btn} bg-slate-900 text-white`}>
+                <button type="button" onClick={() => void flow.addAnyway()} className={`${btn} bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>
                   Add anyway
                 </button>
               )}
