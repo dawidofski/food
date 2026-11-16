@@ -46,6 +46,14 @@ Conditions no happy path exercises, each with its test added to the owning task.
   `export type AiFailure = 'no-key' | 'offline' | 'rejected' | 'timeout' | 'bad-response'` is reported out of band
   (an `onFailure` callback or a result wrapper — the implementer's choice, one of the two, used by every later task).
 
+**The model choice is settled: `deepseek-flash` (DeepSeek-V4.1-Flash-1017) for every operation in this plan.**
+The owner confirmed both documented models work on his key, and left the pick here. Flash wins on both counts
+that matter: it is the **only one of the two with vision**, so `deepseek-v4-pro` (DeepSeek-V4-Pro-0813) cannot do
+Task 6 at all, and it is roughly four times cheaper per input token. One model across every operation also means
+one failure mode to reason about. Do not re-open this. If Flash turns out to be measurably worse at Task 4's dish
+decomposition — the only operation needing real reasoning — record the evidence in `docs/build-log.md` and raise
+it rather than switching silently; a second model would mean two sets of behaviour to validate.
+
 **Before writing code:** verify against a live key, by hand, that `deepseek-flash` answers and that the current
 `deepseek-chat` either does or does not. DeepSeek's Models & Pricing page lists only `deepseek-flash` and
 `deepseek-v4-pro`. Record what you find in `docs/build-log.md`. Do not put a key in any file.
