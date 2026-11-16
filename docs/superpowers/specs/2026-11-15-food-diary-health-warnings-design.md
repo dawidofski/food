@@ -912,8 +912,8 @@ Limits of this check, stated plainly:
 
 - **PRI versus AI.** The PDF marks PRIs in bold and AIs in ordinary type. The text extraction used here loses typeface
   and page images could not be rendered, so the PRI/AI column above follows EFSA's published opinions for each nutrient
-  and was NOT confirmed from the bold type in this session. The numbers themselves were read from the table. Confirm the kind
-  against pages 6, 8, 11 and 13 of the PDF. The screen says "reference" and does not call any value a requirement.
+  and was NOT confirmed from the bold type in this session. A second, independent reader (the task coordinator) agreed from knowledge of EFSA's opinions: adequate intakes for magnesium, potassium, vitamin D and vitamin B12, population reference intakes for the other five. That is agreement, not a typeface read. The numbers themselves were read from the table. Confirm the kind
+  against pages 6, 8, 11 and 13 of the PDF. The screen marks each gap with its kind ("adequate intake (a best estimate)" or "population reference intake") and its footnote names the four adequate intakes; it does not call any value a requirement.
 - The extracted tables are laid out in columns, so the row for adults was identified by its position in each age
   sequence (for vitamin C the sequence 20, 20, 30, 45, 70, 100, 110 for ages 7-11 months up to 18 and over).
 - **Age bands are not modelled.** Values are the adult bands: calcium 25 and over (a person aged 18-24 would need 1,000);

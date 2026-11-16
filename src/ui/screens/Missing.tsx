@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { entriesBetween, getProfile, putProfile } from '@/data/db';
 import { last7DayKeys, localDayKey, localDayRange } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
-import { computeTargets } from '@/domain/targets';
+import { computeTargets, MICRO_KIND } from '@/domain/targets';
 import { weekContext, type DayTotals } from '@/domain/totals';
 import type { DiaryEntry } from '@/types/diary';
 import type { NutrientKey } from '@/types/nutrients';
@@ -308,7 +308,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
                 const { name, unit } = NUTRIENT_LABEL[g.key];
                 return (
                   <li key={g.key} data-testid={`gap-${g.key}`} className="text-base">
-                    {`${name.charAt(0).toUpperCase()}${name.slice(1)} was under the ${fmtAmount(g.ref)} ${unit} reference on ${g.under} of ${g.complete} days with complete ${name} data.`}
+                    {`${name.charAt(0).toUpperCase()}${name.slice(1)} was under the ${fmtAmount(g.ref)} ${unit} ${MICRO_KIND[g.key] === 'AI' ? 'adequate intake (a best estimate)' : 'population reference intake'} on ${g.under} of ${g.complete} days with complete ${name} data.`}
                   </li>
                 );
               })}
@@ -320,7 +320,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
             </p>
           )}
           <p className="text-xs text-slate-600">
-            Reference values are EFSA&rsquo;s population figures for adults (some are adequate intakes, which are estimates), not a requirement for you personally.
+            These are EFSA&rsquo;s values for adults, for populations and not a requirement for you personally. A population reference intake covers nearly everyone&rsquo;s needs. An adequate intake (magnesium, potassium, vitamin D and vitamin B12) is a best estimate, set where the evidence could not support a reference intake.
           </p>
         </section>
       )}

@@ -138,6 +138,16 @@ describe('missing view', () => {
     expect(gap.textContent).toMatch(/950 mg/);
   });
 
+  test('each gap says which kind of reference it is measured against', async () => {
+    await putProfile(ownerProfile);
+    for (let i = 0; i < 5; i++) {
+      await seedEntry({ at: daysAgo(i), nutrients: { energyKcal: 500, calciumMg: 300, magnesiumMg: 100 }, coverage: { energyKcal: 'known', calciumMg: 'known', magnesiumMg: 'known' } });
+    }
+    render(<Missing />);
+    expect((await screen.findByTestId('gap-magnesiumMg')).textContent).toMatch(/adequate intake/i);
+    expect(screen.getByTestId('gap-calciumMg').textContent).toMatch(/population reference intake/i);
+  });
+
   test('weight is shown with history and no evaluative text', async () => {
     await putProfile({ ...ownerProfile, weightLog: [{ date: '2026-09-01', kg: 101.5 }, { date: '2026-10-01', kg: 100.2 }] });
     const { container } = render(<Missing />);

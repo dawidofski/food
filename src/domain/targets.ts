@@ -48,6 +48,15 @@ const MICRO_FEMALE: MicroRef = {
   vitaminB12Ug: 4, folateUg: 330, potassiumMg: 3500,
 };
 
+/**
+ * Which kind of EFSA value each reference is. A PRI covers nearly everyone's needs; an AI is set when the evidence cannot
+ * support a PRI, so it is a best estimate. Kind assignment follows EFSA's opinions (see the verification log).
+ */
+export const MICRO_KIND: Partial<Record<NutrientKey, 'PRI' | 'AI'>> = {
+  calciumMg: 'PRI', ironMg: 'PRI', zincMg: 'PRI', vitaminCMg: 'PRI', folateUg: 'PRI',
+  magnesiumMg: 'AI', potassiumMg: 'AI', vitaminDUg: 'AI', vitaminB12Ug: 'AI',
+};
+
 function microsFor(sex: Sex): MicroRef {
   if (sex === 'male') return { ...MICRO_MALE };
   if (sex === 'female') return { ...MICRO_FEMALE };
