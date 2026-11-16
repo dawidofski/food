@@ -83,6 +83,8 @@ export default function WarningCard({ card }: { card: Card }) {
           {card.cause && <p className="mt-2">{card.cause}</p>}
           <p className="mt-2">{card.evidence.summary}</p>
           {card.portionNote && <p className="mt-2 font-medium">{card.portionNote}</p>}
+          {/* How often, as a count of what was logged. A different thing from dataNote, which is what the app does not know. */}
+          {card.patternNote && <p data-testid="pattern-note" className="mt-2">{card.patternNote}</p>}
           {card.dataNote && <p className="mt-2 text-xs italic">{card.dataNote}</p>}
           <EvidenceLine e={card.evidence} />
           <CitationBlock c={card.evidence.citation} />

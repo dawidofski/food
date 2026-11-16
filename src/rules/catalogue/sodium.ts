@@ -1,5 +1,5 @@
 import type { Citation, Evidence, Level, Rule } from '../types';
-import { pending, projectedDay, usable, whole } from './shared';
+import { daysBeforeToday, daysBeforeTodayNote, pending, projectedDay, usable, whole } from './shared';
 
 /**
  * Verified against the WHO sodium guideline (see the spec's Verification log). WHO states a recommendation for
@@ -26,6 +26,18 @@ const evidence: Evidence = {
     'WHO states its figure for average daily intake. It states none for a single serving.',
   citation,
   isAssociational: false,
+};
+
+/**
+ * The same count for both sodium cards, so whichever survives a merge carries it. It counts days, states WHO's own
+ * whole-day figure, and names no frequency of its own: WHO publishes none.
+ */
+const sodiumPatternNote = (ctx: Parameters<Rule['level']>[0]): string | null => {
+  const figure = ctx.targets.sodiumMg;
+  if (!usable(figure)) return null;
+  const d = daysBeforeToday(ctx, 'sodiumMg', figure);
+  if (d === null) return null;
+  return `${daysBeforeTodayNote(d, 'sodium', `${whole(figure)} mg`)} WHO's figure is about average intake over time.`;
 };
 
 export const sodiumEntryRule: Rule = {
@@ -55,6 +67,7 @@ export const sodiumEntryRule: Rule = {
     if (sodium === null || !usable(figure)) return 'The sodium in this entry is not known.';
     return `This entry has about ${whole(sodium)} mg of sodium. WHO's figure for a whole day is ${whole(figure)} mg.`;
   },
+  patternNote: sodiumPatternNote,
 };
 
 export const sodiumDailyRule: Rule = {
@@ -85,4 +98,5 @@ export const sodiumDailyRule: Rule = {
     if (total === null || own === null || !usable(figure)) return "Today's sodium total is not known.";
     return `Today comes to about ${whole(total)} mg of sodium with this entry (${whole(own)} mg of it in this entry), against WHO's ${whole(figure)} mg a day.`;
   },
+  patternNote: sodiumPatternNote,
 };

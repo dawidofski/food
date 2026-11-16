@@ -92,6 +92,15 @@ export type Rule = {
   evidence: Evidence;
   horizon: Horizon;
   portionNote: (ctx: Context) => string;
+  /**
+   * OPTIONAL. How often this has happened, as the app's own count of what the diary holds (spec G3: a warning says
+   * whether the concern is about occasional or habitual consumption). The engine evaluates it ONLY for a rule that is
+   * already firing: it adds no threshold and can neither raise, lower nor create a level.
+   * null when no honest count can be given — too few days logged, or too few with a complete figure — and the card
+   * then carries no pattern line at all. It states no frequency at which anything changes, because for these rules no
+   * source in this project gives one.
+   */
+  patternNote?: (ctx: Context) => string | null;
   /** Omitted entirely when none is honest. */
   alternatives?: Alternative[];
 
@@ -155,6 +164,12 @@ export type WarningCard = {
   nutrientKey?: NutrientKey;
   /** Set when an input was only partly known, so the number may be understated. */
   dataNote?: string;
+  /**
+   * Set when the rule can honestly say how often this has happened: a count of what was logged, never a threshold.
+   * A DIFFERENT thing from `dataNote`, which is about what the app does not know. Absent when no honest count exists.
+   * On a merged card this is the surviving rule's own note; an absorbed claim's note is dropped with it (see `merge`).
+   */
+  patternNote?: string;
 };
 
 export type SafetyQuestion = { ruleId: string; question: string; answerKey: string };

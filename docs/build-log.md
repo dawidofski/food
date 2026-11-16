@@ -1628,3 +1628,100 @@ Deferred-minor triage: 21 of 24 stand; fix = the guard's scope (bundled into C1)
 ordering in the search tiebreak, and deleting the dead `energyShare`.
 
 One fix wave dispatched (single agent, complete list) per the skill. Scoped re-review to follow.
+
+
+---
+
+under a heading of its own.
+
+## The gap
+
+Spec G3 requires every warning to say "whether the concern is about occasional or habitual consumption". Three rules
+already read `ctx.week` (processed meat, red meat, alcohol). Sodium, added sugar, saturated fat, sweetened drinks and
+ultra-processed food spoke only about this entry or today, so a card could say "today is above the figure" and never
+how often that has happened. `Rule.patternNote` closes it.
+
+## Rulings
+
+- **The note counts; it never judges and never gates.** `patternNote` is OPTIONAL on `Rule`, evaluated by the engine
+  ONLY for a rule that is already firing, and it takes no part in `level`. No source in this project gives a number of
+  days or occasions a week at which anything changes for these five concerns, so no note states one. Every note is the
+  app's own count of what the diary holds, against a figure that already appears on the card. Pinned by tests: the
+  level of every one of these rules is unchanged across a week that is wholly above the figure, wholly below it, and
+  empty; and no note may contain "limit", "risk", "too much/many/often", "should", "safe" or "per week is".
+
+- **Ruling: the window is the six days BEFORE today, and the wording says so.** Today is excluded because the card
+  already states today in its portion note, and today is still being logged — a card shown at lunch would otherwise
+  count a part-day as a day under the figure. The note says "the 6 days before today", never "this week". The
+  occasion-counting notes are the exception: they say "the last 7 days", because they count entries, this one
+  included, and the pending entry is today's.
+
+- **Ruling: a day we cannot vouch for is left OUT of the window, not counted as a day under the figure.** A day's
+  total is used only when every counted entry knew the key, no entry's own figure was itself a floor, and the known
+  values cover the day's energy (`completeDayValue`, the same test the trends view applies before plotting a week).
+  The note therefore says "5 had complete sodium data and 4 of those were above 2,000 mg" — the denominator is days we
+  can stand behind, and a partial day appears nowhere. This is the unknown-is-never-zero invariant applied to a count.
+
+- **Ruling: the honesty gate is `MIN_LOGGED_DAYS`, imported from `trends.ts`, not a second number.** Fewer than four
+  complete days in the window, or fewer than four logged days for an occasion count, and the card simply has no
+  pattern line. "Three drinks in seven days" is misleading when only three days were logged at all. A 4 that drifted
+  apart from the week view's 4 would be a quiet second standard.
+
+- **Ruling: the threshold comparison stays in the rules, not in `totals.ts`.** The design asked `WeekContext` to carry
+  "how many were above the corresponding figure in `Targets`", but `weekContext(entries, on)` has no access to
+  `Targets` and its two callers include `src/state/useEntryFlow.ts`, which another agent holds. `WeekContext` carries
+  `completeDayTotalsBeforeToday` — the day totals we can vouch for, per nutrient — and the rule, where `ctx.targets`
+  already lives, counts how many exceed the figure. Same information, no signature change, and the sourced figure
+  stays in the one place that owns it. **Deviation from the written design; flagged for review.**
+
+- **Ruling: both rules of a nutrient carry the same note, and a merged card keeps the survivor's.** `MergedClaim` was
+  NOT extended: an absorbed claim's pattern note is DROPPED with it, because a claim may never appear under another
+  rule's note and a note bolted to a claim block would read as the claim's own evidence. Nothing is lost, because the
+  entry card and the daily card of one nutrient count the same days against the same figure and produce identical
+  text — pinned by a test, so a future divergence fails rather than silently disappears.
+
+- **Ruling: a note that throws does not suppress the card.** `portionNote` throwing drops the card (existing
+  behaviour; the card's central sentence is missing). A pattern note is an addition, so a throw is reported as a rule
+  failure and the note omitted, and the warning that fired still shows. Suppressing a warning because a decorative
+  count misbehaved is the wrong direction for this app.
+
+- **Ruling: `patternNote` is NOT `dataNote` and neither is renamed.** `dataNote` says what the app does not know
+  ("may be understated"); `patternNote` says what it does know, as a count. They render as separate lines, and a test
+  shows both on one card.
+
+- **Ruling: the frequency notes are subject to the tone tests.** `ownProse` in `tone.test.ts` now includes
+  `patternNote`, and the catalogue meta-test fails if a rule declares a note that no probe actually produces — prose
+  that slipped past the phrasing checks would be the one piece of the app's voice nobody is reading.
+
+- **Zero reads as "none".** "…and none of those were above 2,000 mg" rather than "0 of those". A zero count is still
+  shown: a note that appeared only when the count was high would itself be a verdict.
+
+## The notes, verbatim
+
+- Sodium (both cards): `Of the 6 days before today, 5 had complete sodium data and 4 of those were above 2,000 mg.
+  WHO's figure is about average intake over time.`
+- Added sugar (both cards): `Of the 6 days before today, 5 had complete added-sugar data and 4 of those were above
+  about 63 g, which is 10% of the energy target. WHO's figure is about usual intake over time.`
+- Saturated fat: `Of the 6 days before today, 5 had complete saturated-fat data and 4 of those were above about 28 g,
+  which is 10% of the energy target. WHO's recommendation is about usual intake as a share of energy.`
+- Sweetened drinks: `Counting this entry, sugar-sweetened drinks appear in 3 entries in the last 7 days, over 5 days
+  with entries. The diary counts entries, not drinks: an entry with two glasses counts once.`
+- Ultra-processed: `Counting this entry, NOVA group 4 food appears in 9 entries in the last 7 days, over 6 days with
+  entries. The diary counts entries, not energy or amount.`
+
+The closing clause on the three nutrient notes is the only evaluative-sounding part, and it states what the guideline
+is about (already on the card as `horizon: 'habitual'`), not a verdict on the person.
+
+## Process notes
+
+- Test-first held for the window (`tests/domain/totals.test.ts`, 7 tests seen RED) and for the rules
+  (`tests/rules/patternNote.test.ts`, 15 tests seen RED before `patternNote` existed on any rule). The engine and UI
+  tests were written after their implementation, so they were **re-run against a reverted implementation** to see them
+  fail: 3 of the 6 engine tests and 2 of the 3 UI tests went red, and the "a note that throws is reported" test went
+  red against an unguarded call. The remaining three are guards that pass trivially on an absent feature, which is
+  what they are for. Recorded rather than claimed as RED-first.
+- The occasion counts count ENTRIES, carrying the same caveat as `processedMeatOccasions`: an entry with two colas is
+  one occasion. Both the field comments and the card text say so.
+- `completeDayValue` is exported from `totals.ts` and duplicates the private `completeValue` in `trends.ts`. It was
+  not folded into one function because `trends` already imports `totals` and the task scoped `trends.ts` to read-only;
+  worth unifying later (the one direction that works is `trends` importing from `totals`).

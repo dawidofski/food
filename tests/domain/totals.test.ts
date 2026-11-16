@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { dayTotals, weekContext } from '@/domain/totals';
 import type { DiaryEntry } from '@/types/diary';
-import type { ClassificationFlags } from '@/types/nutrients';
+import type { ClassificationFlags, Coverage, NutrientSet } from '@/types/nutrients';
 
 const none: ClassificationFlags = {
   processedMeat: false, redMeat: false, sweetDrink: false, alcohol: false, novaGroup: 1,
@@ -219,5 +219,85 @@ describe('weekContext', () => {
       });
     const c = weekContext([bad({ userAction: 'cancelled' }), bad({ state: 'deleted' }), bad({ state: 'superseded' })], on);
     expect(c).toMatchObject({ processedMeatOccasions: 0, redMeatGrams: 0, alcoholOccasions: 0, daysWithoutVegetable: 7 });
+  });
+});
+
+/**
+ * The window a frequency note on a warning card reads: the SIX days before today. Today is excluded because the card
+ * already states today, and today is still being logged.
+ */
+describe('weekContext: the six days before today', () => {
+  /** One entry that knows exactly these nutrients, so the day reads 'known' for each of them and covers its own energy. */
+  const full = (day: string, n: NutrientSet) =>
+    make(day, {
+      nutrients: { energyKcal: 500, ...n },
+      coverage: { energyKcal: 'known', ...(Object.fromEntries(Object.keys(n).map((k) => [k, 'known'])) as Coverage) },
+    });
+  /** A second entry on the same day that knows no sodium: the day's sodium becomes a floor, not a figure. */
+  const sodiumBlind = (day: string) => make(day, { nutrients: { energyKcal: 500 }, coverage: { energyKcal: 'known' } });
+  const SIX = ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14'];
+
+  test('lists the complete day totals of the six days before today, oldest first, and leaves today out', () => {
+    const c = weekContext([...SIX.map((d, i) => full(d, { sodiumMg: 1000 + i * 100 })), full('2026-11-15', { sodiumMg: 9000 })], on);
+    expect(c.completeDayTotalsBeforeToday.sodiumMg).toEqual([1000, 1100, 1200, 1300, 1400, 1500]);
+    expect(c.days).toHaveLength(7);
+  });
+
+  test('a day whose coverage for the key is partial is absent from the list, never counted as a day under a figure', () => {
+    const entries = [full(SIX[0]!, { sodiumMg: 1000 }), full(SIX[1]!, { sodiumMg: 1100 })];
+    for (const d of SIX.slice(2)) entries.push(full(d, { sodiumMg: 300 }), sodiumBlind(d));
+    const c = weekContext(entries, on);
+    // The four partial days are left out entirely: their 300 mg is a floor, and listing it would read as a day under 2,000.
+    expect(c.completeDayTotalsBeforeToday.sodiumMg).toEqual([1000, 1100]);
+  });
+
+  test('each key is judged on its own coverage', () => {
+    const c = weekContext(SIX.map((d) => full(d, { satFatG: 20 })), on);
+    expect(c.completeDayTotalsBeforeToday.satFatG).toHaveLength(6);
+    expect(c.completeDayTotalsBeforeToday.addedSugarsG).toEqual([]);
+    expect(c.completeDayTotalsBeforeToday.sodiumMg).toEqual([]);
+  });
+
+  test('sweet-drink and ultra-processed occasions count entries in the seven-day window, not items or amounts', () => {
+    const cola = (day: string) =>
+      make(day, {
+        items: [
+          { source: 'dataset', foodId: 'a', grams: 330, classification: { ...none, sweetDrink: true, novaGroup: 4 } },
+          { source: 'dataset', foodId: 'b', grams: 330, classification: { ...none, sweetDrink: true, novaGroup: 4 } },
+        ],
+        classification: { ...none, sweetDrink: true, novaGroup: 4 },
+      });
+    const c = weekContext([cola('2026-11-10'), cola('2026-11-15'), cola('2026-11-08')], on);
+    // Two colas in one entry are one occasion, and 11-08 is outside the window.
+    expect(c.sweetDrinkOccasions).toBe(2);
+    expect(c.ultraProcessedOccasions).toBe(2);
+  });
+
+  test('cancelled, deleted and superseded entries are counted nowhere in the window', () => {
+    const bad = (over: Partial<DiaryEntry>) =>
+      make('2026-11-14', {
+        nutrients: { energyKcal: 500, sodiumMg: 4000 },
+        coverage: { energyKcal: 'known', sodiumMg: 'known' },
+        classification: { ...none, sweetDrink: true, novaGroup: 4 },
+        ...over,
+      });
+    const c = weekContext([bad({ userAction: 'cancelled' }), bad({ state: 'deleted' }), bad({ state: 'superseded' })], on);
+    expect(c.completeDayTotalsBeforeToday.sodiumMg).toEqual([]);
+    expect(c.sweetDrinkOccasions).toBe(0);
+    expect(c.ultraProcessedOccasions).toBe(0);
+    expect(c.loggedDays).toBe(0);
+  });
+
+  test('loggedDays counts days in the window with at least one counted entry, today included', () => {
+    const c = weekContext([make('2026-11-10'), make('2026-11-10'), make('2026-11-14'), make('2026-11-15')], on);
+    expect(c.loggedDays).toBe(3);
+  });
+
+  test('an empty diary gives empty lists and zero counts, with no NaN', () => {
+    const c = weekContext([], on);
+    expect(c.completeDayTotalsBeforeToday.sodiumMg).toEqual([]);
+    expect(c.completeDayTotalsBeforeToday.addedSugarsG).toEqual([]);
+    expect(c.completeDayTotalsBeforeToday.satFatG).toEqual([]);
+    expect(c).toMatchObject({ sweetDrinkOccasions: 0, ultraProcessedOccasions: 0, loggedDays: 0 });
   });
 });

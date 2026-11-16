@@ -13,7 +13,8 @@ function ownProse(rule: Rule): string {
   return [
     rule.title, rule.concern, rule.cause, rule.evidence.summary,
     ...(rule.alternatives ?? []).flatMap((a) => [a.label, a.reason]),
-    ...(probes[rule.id] ?? []).map((p) => rule.portionNote(p.ctx)),
+    // The frequency note is the app's own voice too, so every phrasing rule below governs it.
+    ...(probes[rule.id] ?? []).flatMap((p) => [rule.portionNote(p.ctx), rule.patternNote?.(p.ctx) ?? '']),
   ].join('\n');
 }
 
@@ -54,6 +55,13 @@ test('the tone tests really run over the catalogue', () => {
   for (const r of catalogue) {
     expect(probes[r.id]?.length, `${r.id} has no probe for its portion note`).toBeGreaterThan(0);
     expect(EXPECTED_STRENGTH[r.id], `${r.id} has no pinned strength`).toBeDefined();
+    // A rule that can write a frequency note must have a probe that actually produces one, or its prose would slip
+    // past every phrasing check below.
+    if (!r.patternNote) continue;
+    expect(
+      (probes[r.id] ?? []).some((p) => (r.patternNote?.(p.ctx) ?? '').length > 0),
+      `${r.id} has a pattern note that no probe exercises`,
+    ).toBe(true);
   }
 });
 

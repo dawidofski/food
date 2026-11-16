@@ -1,5 +1,5 @@
 import type { Context } from '@/rules/types';
-import type { DayTotals } from '@/domain/totals';
+import type { DayTotals, PatternNutrient } from '@/domain/totals';
 import { NUTRIENT_KEYS, type ClassificationFlags, type Coverage, type NutrientKey, type NutrientSet } from '@/types/nutrients';
 import { ownerProfile } from '../fixtures/profile';
 
@@ -33,6 +33,15 @@ export type Opts = {
   weekProcessedMeatOccasions?: number;
   weekRedMeatGrams?: number;
   weekAlcoholOccasions?: number;
+  weekSweetDrinkOccasions?: number;
+  weekUltraProcessedOccasions?: number;
+  /** Days in the seven-day window with entries. Default 6, enough for a frequency note. */
+  weekLoggedDays?: number;
+  /**
+   * Complete day totals for the six days BEFORE today, per nutrient. The default is five complete days per nutrient,
+   * three of them above the figure in `targets`, so every probe exercises the pattern note.
+   */
+  weekCompleteDaysBeforeToday?: Partial<Record<PatternNutrient, number[]>>;
   /** Entries already committed today, and how many of them are NOVA 4. Default 2 entries, none NOVA 4. */
   todayEntryCount?: number;
   todayNova4Entries?: number;
@@ -102,6 +111,16 @@ export function ctx(o: Opts = {}): Context {
       days: [today], processedMeatOccasions: o.weekProcessedMeatOccasions ?? 0, redMeatGrams: o.weekRedMeatGrams ?? 0,
       alcoholOccasions: o.weekAlcoholOccasions ?? 0,
       vegCupEqByDay: [0], daysWithoutVegetable: 0, daysVegetableUnknown: 0,
+      loggedDays: o.weekLoggedDays ?? 6,
+      sweetDrinkOccasions: o.weekSweetDrinkOccasions ?? 2,
+      ultraProcessedOccasions: o.weekUltraProcessedOccasions ?? 3,
+      // Against the targets below: sodium 2,000 mg, added sugar 63 g, saturated fat 28 g — three days above each.
+      completeDayTotalsBeforeToday: {
+        sodiumMg: [1500, 2100, 2300, 1800, 2400],
+        addedSugarsG: [40, 70, 80, 55, 90],
+        satFatG: [20, 30, 35, 22, 40],
+        ...o.weekCompleteDaysBeforeToday,
+      },
     },
     // Consistent with a 2,500 kcal day: 2,000 mg sodium, 10% / 5% of energy as sugar, 10% as saturated fat, 1% as trans fat.
     targets: {

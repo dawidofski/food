@@ -1,5 +1,5 @@
 import type { Citation, Evidence, Rule } from '../types';
-import { pending, projectedDay, usable, whole } from './shared';
+import { daysBeforeToday, daysBeforeTodayNote, pending, projectedDay, usable, whole } from './shared';
 
 /**
  * Verified against the WHO 2023 saturated and trans-fatty acid guideline: reduce saturated fat to 10% of energy
@@ -63,5 +63,14 @@ export const saturatedFatDailyRule: Rule = {
     const limit = ctx.targets.satFatG;
     if (total === null || own === null || !usable(limit)) return "Today's saturated fat total is not known.";
     return `Today comes to about ${whole(total)} g of saturated fat with this entry (${whole(own)} g of it in this entry), against about ${whole(limit)} g, which is 10% of your energy target.`;
+  },
+  // Counts days against the same 10%-of-energy figure the card fires on. WHO gives no number of days a week.
+  patternNote: (ctx) => {
+    const figure = ctx.targets.satFatG;
+    if (!usable(figure)) return null;
+    const d = daysBeforeToday(ctx, 'satFatG', figure);
+    if (d === null) return null;
+    const share = `about ${whole(figure)} g, which is 10% of the energy target`;
+    return `${daysBeforeTodayNote(d, 'saturated-fat', share)} WHO's recommendation is about usual intake as a share of energy.`;
   },
 };

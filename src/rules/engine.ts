@@ -96,7 +96,12 @@ function claimOf(c: WarningCard): MergedClaim {
   return { ruleId: c.ruleId, level: c.level, concern: c.concern, portionNote: c.portionNote, evidence: c.evidence, citation: c.evidence.citation };
 }
 
-/** The higher-level card keeps ALL its own prose and evidence; the other is attached whole, never concatenated. */
+/**
+ * The higher-level card keeps ALL its own prose and evidence; the other is attached whole, never concatenated.
+ * The surviving card keeps its OWN `patternNote` (it travels in `rest`); the absorbed claim's is dropped, because a
+ * `MergedClaim` carries its own concern, note and citation and no claim may appear under another rule's note. Nothing
+ * is lost: two rules on the same nutrient count the same days against the same figure, so both notes read alike.
+ */
 function merge(a: WarningCard, b: WarningCard): WarningCard {
   const [hi, lo] = RANK[b.level] > RANK[a.level] ? [b, a] : [a, b];
   const note = unique([hi.dataNote, lo.dataNote]).join(' ');
@@ -184,6 +189,14 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
       failures.push(describe(rule, e));
       return;
     }
+    // Evaluated ONLY here, for a rule that is already firing: the note is prose about what was logged and takes no
+    // part in `level`. A note that throws is reported and omitted, never a reason to suppress a warning that fired.
+    let patternNote: string | null = null;
+    try {
+      patternNote = rule.patternNote?.(ctx) ?? null;
+    } catch (e) {
+      failures.push(describe(rule, e));
+    }
     built.push({
       order,
       card: {
@@ -206,6 +219,7 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
         alternatives: (rule.alternatives ?? []).map((x) => ({ ...x, citation: { ...x.citation } })),
         ...(rule.nutrientKey ? { nutrientKey: rule.nutrientKey } : {}),
         ...(res.notes.length ? { dataNote: res.notes.join(' ') } : {}),
+        ...(patternNote !== null ? { patternNote } : {}),
       },
     });
   });

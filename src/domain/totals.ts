@@ -33,6 +33,28 @@ export type DayTotals = {
   nova4EntryCount: number;
 };
 
+/**
+ * The nutrients whose daily rules can carry a frequency note. One per daily nutrient rule: sodium, added sugar and
+ * saturated fat. Nothing here is a threshold; the figure each is compared with lives in `Targets`, where it is sourced.
+ */
+export const PATTERN_NUTRIENTS = ['sodiumMg', 'addedSugarsG', 'satFatG'] as const satisfies readonly NutrientKey[];
+export type PatternNutrient = (typeof PATTERN_NUTRIENTS)[number];
+
+/** Days before today in the frequency window. Today is the seventh day of the window and is never one of these. */
+export const PATTERN_WINDOW_DAYS = 6;
+
+/**
+ * A day's total for `key` when it can be trusted: every counted entry knew it, no entry's own figure was itself a
+ * floor, and the known values cover the day's energy. Undefined otherwise. A day we cannot vouch for is LEFT OUT of a
+ * count — it is never counted as a day under a figure, because a floor below a figure proves nothing.
+ * (The same test the trends view applies before plotting a week; kept here so `totals` does not depend on `trends`.)
+ */
+export function completeDayValue(d: DayTotals, key: NutrientKey): number | undefined {
+  const v = d.nutrients[key];
+  if (!isKnownValue(v) || d.coverage[key] !== 'known' || d.energyCoveredShare[key] < 0.999) return undefined;
+  return v;
+}
+
 export type WeekContext = {
   /** Seven days, oldest first, ending on the local day of `on`. */
   days: DayTotals[];
@@ -60,6 +82,26 @@ export type WeekContext = {
    * Show these as "unknown": never add them to daysWithoutVegetable, and never treat them as a vegetable day.
    */
   daysVegetableUnknown: number;
+  /** Days in the window with at least one counted entry, today included. The honesty gate for anything counted over the window. */
+  loggedDays: number;
+  /**
+   * Per nutrient: that day's total for each of the SIX days BEFORE today whose figure for the key is complete
+   * (`completeDayValue`), oldest first. TODAY IS EXCLUDED: a card already states today, and today is still being logged.
+   * A day whose coverage for the key is 'partial' or 'unknown' is ABSENT from the list rather than present as a low
+   * number, so the length is the number of days we can vouch for and is at most six. Counting how many of them are
+   * above a figure is the consumer's job, because the figure belongs to `Targets`, not here.
+   */
+  completeDayTotalsBeforeToday: Record<PatternNutrient, number[]>;
+  /**
+   * Entries (meals) containing a sugar-sweetened drink, not drinks: an entry with two colas is 1. Counted per entry
+   * exactly as `processedMeatOccasions` is.
+   */
+  sweetDrinkOccasions: number;
+  /**
+   * Entries whose merged classification is NOVA group 4, not amounts or energy: an entry with two packaged snacks is 1.
+   * Counted per entry exactly as `processedMeatOccasions` is.
+   */
+  ultraProcessedOccasions: number;
 };
 
 /** The wrong list can reach these pure functions, so they re-assert what the store promises. */
@@ -153,6 +195,15 @@ export function weekContext(entries: DiaryEntry[], on: Date): WeekContext {
     else daysVegetableUnknown++;
   }
 
+  // The six days before today: `days` is oldest first and ends on today, so today is the last element and is dropped.
+  const before = days.slice(0, PATTERN_WINDOW_DAYS);
+  const completeDayTotalsBeforeToday = {} as Record<PatternNutrient, number[]>;
+  for (const key of PATTERN_NUTRIENTS) {
+    completeDayTotalsBeforeToday[key] = before
+      .map((d) => completeDayValue(d, key))
+      .filter((v): v is number => v !== undefined);
+  }
+
   return {
     days,
     processedMeatOccasions: week.filter((e) => flagsOf(e).processedMeat).length,
@@ -161,5 +212,9 @@ export function weekContext(entries: DiaryEntry[], on: Date): WeekContext {
     vegCupEqByDay: days.map((d) => d.vegCupEq),
     daysWithoutVegetable,
     daysVegetableUnknown,
+    loggedDays: days.filter((d) => d.entryCount > 0).length,
+    completeDayTotalsBeforeToday,
+    sweetDrinkOccasions: week.filter((e) => flagsOf(e).sweetDrink).length,
+    ultraProcessedOccasions: week.filter((e) => flagsOf(e).novaGroup === 4).length,
   };
 }

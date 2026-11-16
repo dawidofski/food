@@ -1,5 +1,5 @@
 import type { Citation, Evidence, Rule } from '../types';
-import { weekCount } from './shared';
+import { occasionsNote, occasionsWithThisEntry, weekCount } from './shared';
 
 /**
  * THE DESIGN'S NAMED TEST OF ANTI-GOAL A3 (spec 9.3). Decision: a DAILY, qualitative INFO, declared 'limited' and
@@ -92,5 +92,11 @@ export const ultraProcessedRule: Rule = {
     const c = dayCounts(ctx);
     if (c === null) return 'How many of today\'s entries are ultra-processed is not known.';
     return `With this entry, ${c.nova4} of ${c.total} entries today are NOVA 4. The diary counts entries, not how much energy each supplied.`;
+  },
+  // The day the card fires on, widened to the week as a count of entries. SACN names no number of entries a week.
+  patternNote: (ctx) => {
+    const o = occasionsWithThisEntry(ctx, ctx.week.ultraProcessedOccasions);
+    if (o === null) return null;
+    return `${occasionsNote(o, 'NOVA group 4 food appears')} The diary counts entries, not energy or amount.`;
   },
 };

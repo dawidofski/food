@@ -1,5 +1,5 @@
 import type { Citation, Evidence, Rule } from '../types';
-import { pendingGramsOf, whole } from './shared';
+import { occasionsNote, occasionsWithThisEntry, pendingGramsOf, whole } from './shared';
 
 /**
  * Verified against the WHO 2015 sugars guideline (executive summary and evidence table, read from a PDF copy; the WHO
@@ -59,5 +59,14 @@ export const sweetDrinkRule: Rule = {
     const g = pendingGramsOf(ctx, 'sweetDrink');
     if (g <= 0) return 'The amount of sweetened drink in this entry is not known.';
     return `This entry has about ${whole(g)} g of sugar-sweetened drink. Its added sugar is counted on the added-sugar cards.`;
+  },
+  // How often, as the diary's own count. WHO's figure is a share of energy; it gives no number of drinks a week.
+  patternNote: (ctx) => {
+    const o = occasionsWithThisEntry(ctx, ctx.week.sweetDrinkOccasions);
+    if (o === null) return null;
+    return (
+      `${occasionsNote(o, 'sugar-sweetened drinks appear')} ` +
+      'The diary counts entries, not drinks: an entry with two glasses counts once.'
+    );
   },
 };

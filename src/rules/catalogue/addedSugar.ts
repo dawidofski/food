@@ -1,5 +1,5 @@
 import type { Citation, Evidence, Level, Rule } from '../types';
-import { pending, projectedDay, usable, whole } from './shared';
+import { daysBeforeToday, daysBeforeTodayNote, pending, projectedDay, usable, whole } from './shared';
 
 /**
  * Verified against the WHO sugars guideline (see the spec's Verification log). WHO: free sugars below 10% of energy
@@ -41,6 +41,19 @@ function tier(amount: number, strong: number, conditional: number): Level | null
   return null;
 }
 
+/**
+ * The same count for both added-sugar cards, so whichever survives a merge carries it. It counts days against WHO's
+ * strong 10% figure, the one the cards fire on, and names no frequency of its own: WHO publishes none.
+ */
+const addedSugarPatternNote = (ctx: Parameters<Rule['level']>[0]): string | null => {
+  const strong = ctx.targets.addedSugarsG;
+  if (!usable(strong)) return null;
+  const d = daysBeforeToday(ctx, 'addedSugarsG', strong);
+  if (d === null) return null;
+  const figure = `about ${whole(strong)} g, which is 10% of the energy target`;
+  return `${daysBeforeTodayNote(d, 'added-sugar', figure)} WHO's figure is about usual intake over time.`;
+};
+
 export const addedSugarEntryRule: Rule = {
   id: 'added-sugar-entry',
   title: 'Added sugar in this entry',
@@ -70,6 +83,7 @@ export const addedSugarEntryRule: Rule = {
     if (sugar === null || !usable(strong) || !usable(conditional)) return 'The added sugar in this entry is not known.';
     return `This entry has about ${whole(sugar)} g of added sugar. For a whole day, 10% of your energy target is about ${whole(strong)} g and 5% is about ${whole(conditional)} g.`;
   },
+  patternNote: addedSugarPatternNote,
 };
 
 export const addedSugarDailyRule: Rule = {
@@ -101,4 +115,5 @@ export const addedSugarDailyRule: Rule = {
     if (total === null || own === null || !usable(strong) || !usable(conditional)) return "Today's added sugar total is not known.";
     return `Today comes to about ${whole(total)} g of added sugar with this entry (${whole(own)} g of it in this entry). 10% of your energy target is about ${whole(strong)} g and 5% is about ${whole(conditional)} g.`;
   },
+  patternNote: addedSugarPatternNote,
 };

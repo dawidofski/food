@@ -60,6 +60,8 @@ function ctx(o: Opts = {}): Context {
     week: {
       days: [today], processedMeatOccasions: 0, redMeatGrams: 0, alcoholOccasions: 0,
       vegCupEqByDay: [0], daysWithoutVegetable: 0, daysVegetableUnknown: 0,
+      loggedDays: 6, sweetDrinkOccasions: 0, ultraProcessedOccasions: 0,
+      completeDayTotalsBeforeToday: { sodiumMg: [], addedSugarsG: [], satFatG: [] },
     },
     targets: {
       energyKcal: 2500, rmrKcal: 1900, proteinG: 100, proteinFloorG: 80, fibreG: 30, sodiumMg: 2000, satFatG: 28,
@@ -457,5 +459,56 @@ describe('merging keeps the absorbed alternatives', () => {
     const { cards } = evaluate([a, b], ctx());
     expect(cards).toHaveLength(1);
     expect(cards[0]!.alternatives.map((x) => x.label)).toEqual(['one', 'shared', 'two']);
+  });
+});
+
+describe('the pattern note is carried, never evaluated into a level', () => {
+  test('a firing rule carries its note; a rule whose note is null carries no field at all', () => {
+    const withNote = stub('with', () => 'MODERATE', { patternNote: () => 'Counted 4 of 6 days.' });
+    const withoutNote = stub('without', () => 'MODERATE', { patternNote: () => null, nutrientKey: 'fibreG' });
+    const { cards } = evaluate([withNote, withoutNote], ctx());
+    expect(cards[0]!.patternNote).toBe('Counted 4 of 6 days.');
+    expect('patternNote' in cards[1]!).toBe(false);
+  });
+
+  test('a silent rule\'s note is never evaluated: it cannot create a card', () => {
+    let called = 0;
+    const silent = stub('quiet', () => null, { patternNote: () => { called++; return 'Counted something.'; } });
+    const { cards } = evaluate([silent], ctx());
+    expect(cards).toHaveLength(0);
+    expect(called).toBe(0);
+  });
+
+  test('the note does not move a level, whatever it says', () => {
+    const plain = stub('p', () => 'INFO');
+    const noisy = stub('p', () => 'INFO', { patternNote: () => 'Counted 6 of 6 days above the figure.' });
+    expect(evaluate([noisy], ctx()).cards[0]!.level).toBe(evaluate([plain], ctx()).cards[0]!.level);
+  });
+
+  test('a note that throws is reported and omitted; the card that fired still shows', () => {
+    const bad = stub('bad', () => 'HIGH', { patternNote: () => { throw new Error('bad count'); } });
+    const { cards, failures } = evaluate([bad], ctx());
+    expect(cards).toHaveLength(1);
+    expect('patternNote' in cards[0]!).toBe(false);
+    expect(failures.map((f) => f.message).join(' ')).toMatch(/bad count/);
+  });
+
+  test('a merged card keeps the surviving rule\'s own note, and no claim appears under another rule\'s note', () => {
+    const hi = stub('hi', () => 'HIGH', { nutrientKey: 'sodiumMg', patternNote: () => 'The high card counted the days.' });
+    const lo = stub('lo', () => 'MODERATE', { nutrientKey: 'sodiumMg', patternNote: () => 'The low card counted the days.' });
+    const { cards } = evaluate([lo, hi], ctx());
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.ruleId).toBe('hi');
+    expect(cards[0]!.patternNote).toBe('The high card counted the days.');
+    expect(JSON.stringify(cards[0]!.merged)).not.toContain('counted the days');
+  });
+
+  test('the note is a different field from the "may be understated" data note', () => {
+    const r = stub('both', () => 'MODERATE', {
+      requiresNutrients: ['addedSugarsG'], scope: 'daily', patternNote: () => 'Counted 5 of 6 days.',
+    });
+    const { cards } = evaluate([r], ctx({ addedSugarCoveredShare: 0.9 }));
+    expect(cards[0]!.patternNote).toBe('Counted 5 of 6 days.');
+    expect(cards[0]!.dataNote).toMatch(/understated/);
   });
 });
