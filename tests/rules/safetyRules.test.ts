@@ -95,7 +95,7 @@ describe('food-handling hazards', () => {
   test('every listed hazard matches its own food, one question each, and an unrelated food matches none', () => {
     const names: Record<string, string> = {
       reheatedRice: 'Rice, brown, cooked, no added fat', rawKidneyBeans: 'Kidney beans, from dried, no added fat',
-      rawSprouts: 'Alfalfa sprouts, raw', rawEggs: 'Egg, whole, cooked, fried', rawMilk: 'Milk, whole',
+      rawSprouts: 'Alfalfa sprouts, raw', rawMilk: 'Milk, whole',
     };
     expect(HAZARDS.map((h) => h.questionId).sort()).toEqual(Object.keys(names).sort());
     for (const h of HAZARDS) {
@@ -103,6 +103,12 @@ describe('food-handling hazards', () => {
       expect(foodSafetyQuestionsFor(ctx({ foodName: names[h.questionId]! })).map((q) => q.answerKey)).toEqual([h.questionId]);
       expect(h.foodMatch.test('Apple, raw')).toBe(false);
     }
+  });
+  test('raw eggs are deliberately not a hazard here: no question, no card, even on a yes', () => {
+    expect(HAZARDS.map((h) => h.questionId)).not.toContain('rawEggs');
+    const c = ctx({ foodName: 'Egg, whole, cooked, fried', answers: { rawEggs: true } });
+    expect(evaluate(catalogue, c).questions).toEqual([]);
+    expect(evaluate(catalogue, c).cards.filter((x) => x.level === 'CRITICAL')).toEqual([]);
   });
   test('identity matching does not catch look-alikes', () => {
     for (const n of ['Kidney', 'Brussels sprouts, raw', 'Rice milk', 'Rice cake', 'Eggnog', 'Egg omelet or scrambled egg, no added fat', 'Almond milk, NFS', 'Kidney beans, from canned, no added fat']) {
@@ -124,6 +130,43 @@ describe('food-handling hazards', () => {
       expect(r.requiresNutrients).toEqual([]);
       expect(r.safetyPrompt).toBeDefined();
     }
+  });
+});
+
+describe('empty food identity must not silently disable safety rules', () => {
+  const withRefsNoFoods = (o: Parameters<typeof ctx>[0]) => ({ ...ctx(o), foods: [] });
+  test('a hazard rule reports a safety failure when the entry has items but no identity', () => {
+    const r = evaluate(foodSafetyRules, withRefsNoFoods({}));
+    expect(r.cards).toEqual([]);
+    expect(r.failures.length).toBe(foodSafetyRules.length);
+    for (const f of r.failures) {
+      expect(f.category).toBe('safety');
+      expect(f.message).toMatch(/could not (be )?check/i);
+    }
+  });
+  test('the allergen rule reports a failure only when an allergen is flagged', () => {
+    const flagged = evaluate([allergenRule], withRefsNoFoods({ flagged: ['peanuts'] }));
+    expect(flagged.failures).toHaveLength(1);
+    expect(flagged.failures[0]!.category).toBe('safety');
+    expect(flagged.failures[0]!.ruleId).toBe('allergen-flagged');
+    // Shipped default: nothing flagged, so there is no check to fail and no noise.
+    expect(evaluate([allergenRule], withRefsNoFoods({})).failures).toEqual([]);
+  });
+  test('no failure when identity is supplied, or when the entry has no resolved items', () => {
+    expect(evaluate(foodSafetyRules, ctx({ foodName: 'Apple, raw' })).failures).toEqual([]);
+    const empty = ctx({ flagged: ['peanuts'] });
+    expect(evaluate([allergenRule, ...foodSafetyRules], { ...empty, foods: [], pending: { ...empty.pending, refs: [] } }).failures).toEqual([]);
+  });
+  test('a nutrition rule never gets this check', () => {
+    const r = evaluate(catalogue.filter((x) => x.category === 'nutrition'), withRefsNoFoods({}));
+    expect(r.failures).toEqual([]);
+  });
+});
+
+describe('level contract is not widened', () => {
+  test('a nutrition rule declaring CRITICAL still throws, and the safety flag does not rescue it', () => {
+    const sneaky = { ...allergenRule, id: 'sneaky', category: 'nutrition' as const, level: () => 'CRITICAL' as const };
+    expect(() => evaluate([sneaky], ctx({ flagged: ['peanuts'], foodAllergens: ['peanuts'] }))).toThrow(/reserved for safety/);
   });
 });
 

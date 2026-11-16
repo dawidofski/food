@@ -89,9 +89,9 @@ export function ctx(o: Opts = {}): Context {
   const refs = (o.refs ?? [{ grams: o.pendingGrams ?? 100, flags: o.classification }]).map((r, i) => ({
     source: 'dataset' as const, foodId: `probe-${i}`, grams: r.grams, classification: { ...flags, ...r.flags },
   }));
-  const hasFood = o.foodName !== undefined || o.foodAllergens !== undefined;
   return {
-    foods: hasFood ? [{ name: o.foodName ?? 'probe food', allergens: o.foodAllergens ?? [], source: o.foodSource ?? 'dataset' }] : [],
+    // Identity is always supplied, as a real caller must: an entry with items but no foods is a reported failure (see engine).
+    foods: [{ name: o.foodName ?? 'probe food', allergens: o.foodAllergens ?? [], source: o.foodSource ?? 'dataset' }],
     ...(o.rawText !== undefined ? { rawText: o.rawText } : {}),
     pending: {
       refs,
@@ -157,6 +157,5 @@ export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' |
     { ctx: ctx({ foodName: 'Kidney beans, from dried, no added fat', answers: { rawKidneyBeans: true } }), level: 'CRITICAL' },
   ],
   'food-safety-sprouts': [{ ctx: ctx({ foodName: 'Alfalfa sprouts, raw', answers: { rawSprouts: true } }), level: 'CRITICAL' }],
-  'food-safety-eggs': [{ ctx: ctx({ foodName: 'Egg, whole, cooked, fried', answers: { rawEggs: true } }), level: 'CRITICAL' }],
   'food-safety-raw-milk': [{ ctx: ctx({ foodName: 'Milk, whole', answers: { rawMilk: true } }), level: 'CRITICAL' }],
 };

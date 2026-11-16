@@ -102,6 +102,12 @@ export type Rule = {
    * still say why it is CRITICAL. 'user-flag': the person told the app they react to it (definitional, not evidential).
    * 'food-safety-body': a food-safety authority's published advice, which `evidence.citation` carries.
    */
+  /**
+   * SAFETY RULES ONLY. True when, for this context, the rule cannot do its job without `ctx.foods`. If the entry has
+   * resolved items but `foods` is empty, the engine reports a failure instead of letting the rule go silent: a caller
+   * that forgets to supply identity must not quietly disable every allergen and hazard check.
+   */
+  identityRequired?: (ctx: Context) => boolean;
   safetyAuthority?: 'user-flag' | 'food-safety-body';
   /**
    * Which total the rule reads, REQUIRED so no default can mislead. 'entry' reads only the pending entry.

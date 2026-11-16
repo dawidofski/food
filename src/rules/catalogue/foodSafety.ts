@@ -10,6 +10,14 @@ import { evaluate } from '../engine';
  * one direct question through the engine's safety-prompt mechanism; (3) raises CRITICAL only on an explicit yes. No
  * question, no card; unanswered, no card; answered no, no card and no repeated question.
  *
+ * RAW EGGS ARE DELIBERATELY NOT A HAZARD HERE. The FDA advises against raw or undercooked eggs, but the UK FSA (2017)
+ * treats Lion-marked runny eggs as low risk, and this app's user is in the Netherlands, where EU salmonella controls are
+ * comparable to the UK's. A CRITICAL card, which cannot be collapsed, on a soft-boiled egg or homemade mayonnaise would
+ * teach the user to dismiss the tier the allergen card depends on. The hazard is real for some people (pregnancy,
+ * immunosuppression). The hook to re-add it is `Profile.conditions`: when such a condition is flagged, add a hazard
+ * with the FDA egg-safety citation (see the verification log) and gate it on that condition. Rice, kidney beans, sprouts
+ * and raw milk are hazards regardless of jurisdiction and stay.
+ *
  * Matching is deliberately narrow and anchored at the start of the name, so look-alikes ("Kidney", "Brussels sprouts",
  * "Rice milk", "Eggnog") do not ask. The cost is a false negative for foods the patterns do not name, such as a mixed dish
  * that contains rice: the card is silent there, which is the safe direction for a tier that must stay trustworthy, and
@@ -110,28 +118,6 @@ export const HAZARDS: Hazard[] = [
     },
   },
   {
-    id: 'food-safety-eggs',
-    title: 'Raw or undercooked eggs',
-    // The egg as such ("Egg, whole, ..."; "Duck egg, cooked"). Dishes such as omelets and egg burritos are not matched.
-    foodMatch: /^(?:(?:chicken|duck|goose|quail) )?eggs?(?:,|\s*$)/i,
-    questionId: 'rawEggs',
-    question: 'Were these eggs raw or undercooked, for example runny, or in a recipe that is not cooked?',
-    hazard:
-      'The FDA says fresh eggs, even those with clean, uncracked shells, may contain Salmonella bacteria that can cause foodborne illness.',
-    action:
-      'The FDA advises cooking eggs until both the yolk and the white are firm, and using pasteurized eggs or egg products in recipes that are raw or undercooked when served.',
-    citation: {
-      title: 'What You Need to Know About Egg Safety',
-      publisher: fda,
-      year: 2024,
-      url: 'https://www.fda.gov/food/buy-store-serve-safe-food/what-you-need-know-about-egg-safety',
-      conclusion:
-        'Fresh eggs, even those with clean, uncracked shells, may contain bacteria called Salmonella that can cause foodborne illness, often called “food poisoning.” ' +
-        'Cook eggs until both the yolk and the white are firm. ' +
-        'For recipes that call for eggs that are raw or undercooked when the dish is served, use either shell eggs that have been treated to destroy Salmonella, by pasteurization or another approved method, or pasteurized egg products.',
-    },
-  },
-  {
     id: 'food-safety-raw-milk',
     title: 'Unpasteurised milk',
     foodMatch: /^(?:goat milk\b|milk,\s*(?:whole|reduced fat|low fat|fat free|nfs)\b)/i,
@@ -160,6 +146,7 @@ function ruleFor(h: Hazard): Rule {
     title: h.title,
     category: 'safety',
     safetyAuthority: 'food-safety-body',
+    identityRequired: () => true,
     scope: 'entry',
     // Reads identity and an answer, not a nutrient: the coverage gate does not protect this rule.
     requiresNutrients: [],

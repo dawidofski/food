@@ -37,7 +37,7 @@ const EXPECTED_STRENGTH: Record<string, 'strong' | 'moderate' | 'limited' | 'unc
   // card, the certainty that the user reacts (their own declaration). It is not an effect size, and safety rules are
   // exempt from the MODERATE ceiling that applies to weak nutrition evidence.
   'allergen-flagged': 'strong', 'food-safety-rice': 'strong', 'food-safety-kidney-beans': 'strong',
-  'food-safety-sprouts': 'strong', 'food-safety-eggs': 'strong', 'food-safety-raw-milk': 'strong',
+  'food-safety-sprouts': 'strong', 'food-safety-raw-milk': 'strong',
 };
 
 /**
@@ -47,7 +47,7 @@ const EXPECTED_STRENGTH: Record<string, 'strong' | 'moderate' | 'limited' | 'unc
 const MAY_REACH_HIGH = new Set(['processed-meat']);
 
 test('the tone tests really run over the catalogue', () => {
-  expect(catalogue.length).toBeGreaterThanOrEqual(19);
+  expect(catalogue.length).toBeGreaterThanOrEqual(18);
   for (const r of catalogue) {
     expect(probes[r.id]?.length, `${r.id} has no probe for its portion note`).toBeGreaterThan(0);
     expect(EXPECTED_STRENGTH[r.id], `${r.id} has no pinned strength`).toBeDefined();

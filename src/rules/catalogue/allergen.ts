@@ -70,6 +70,8 @@ export const allergenRule: Rule = {
   title: 'Flagged allergen',
   category: 'safety',
   safetyAuthority: 'user-flag',
+  // There is a check to fail only when the user flagged something; at the shipped default (empty list) there is nothing to run.
+  identityRequired: (ctx) => (ctx.profile?.flaggedAllergens ?? []).some((f) => f.trim() !== ''),
   scope: 'entry',
   // Reads food identity and the profile, not a nutrient: the coverage gate does not protect this rule.
   requiresNutrients: [],

@@ -115,6 +115,26 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
   const failures: RuleFailure[] = [];
   const held = new Set<string>();
   for (const r of rules) {
+    // Fail visibly, not open: a safety rule that needs food identity cannot run without it, and silence would read as
+    // "checked, nothing found". Only a safety rule can ask for this; the rule is held and the caller shows the note.
+    if (r.category === 'safety' && ctx.pending.refs.length > 0 && ctx.foods.length === 0) {
+      let needs = false;
+      try {
+        needs = r.identityRequired?.(ctx) === true;
+      } catch (e) {
+        failures.push(describe(r, e));
+        held.add(r.id);
+        continue;
+      }
+      if (needs) {
+        failures.push({
+          ruleId: r.id, category: 'safety',
+          message: `rule "${r.id}" could not check this entry: the foods in it were not identified, so this safety check did not run`,
+        });
+        held.add(r.id);
+        continue;
+      }
+    }
     const p = r.safetyPrompt;
     if (!p) continue;
     let applies: boolean;
