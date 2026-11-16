@@ -19,20 +19,20 @@ describe('targets', () => {
 
   test('computeTargets matches Mifflin-St Jeor for the owner profile', () => {
     const t = computeTargets(ownerProfile, ON);
-    expect(t.rmrKcal).toBe(2061); // 10*100 + 6.25*197 - 5*35 + 5
-    expect(t.energyKcal).toBe(2834); // x 1.375 light activity
+    expect(t.rmrKcal).toBe(1755); // 10*80 + 6.25*180 - 5*35 + 5
+    expect(t.energyKcal).toBe(2413); // x 1.375 light activity
   });
 
   test('computeTargets pins the guideline-derived limits', () => {
     const t = computeTargets(ownerProfile, ON);
     expect(t.sodiumMg).toBe(2000);
-    expect(t.satFatG).toBe(31);
-    expect(t.addedSugarsG).toBe(71);
-    expect(t.addedSugarsIdealG).toBe(35);
+    expect(t.satFatG).toBe(27);
+    expect(t.addedSugarsG).toBe(60);
+    expect(t.addedSugarsIdealG).toBe(30);
     expect(t.transFatG).toBe(3);
-    expect(t.fibreG).toBe(40);
-    expect(t.proteinG).toBe(120);
-    expect(t.proteinFloorG).toBe(80);
+    expect(t.fibreG).toBe(34);
+    expect(t.proteinG).toBe(96);
+    expect(t.proteinFloorG).toBe(64);
     expect(t.isGeneric).toBe(false);
   });
 
@@ -67,22 +67,22 @@ describe('targets', () => {
     const p = {
       ...ownerProfile,
       weightLog: [
-        { date: '2026-01-01', kg: 100 },
-        { date: '2026-11-01', kg: 96 },
+        { date: '2026-01-01', kg: 80 },
+        { date: '2026-11-01', kg: 76 },
       ],
     };
-    expect(computeTargets(p, ON).proteinG).toBe(115);
+    expect(computeTargets(p, ON).proteinG).toBe(91);
   });
 
   test('currentWeightKg uses the latest-dated entry even when unsorted', () => {
     const p = {
       ...ownerProfile,
       weightLog: [
-        { date: '2026-11-01', kg: 96 },
-        { date: '2026-01-01', kg: 100 },
+        { date: '2026-11-01', kg: 76 },
+        { date: '2026-01-01', kg: 80 },
       ],
     };
-    expect(currentWeightKg(p)).toBe(96);
+    expect(currentWeightKg(p)).toBe(76);
   });
 
   test('overrides win over computed targets', () => {

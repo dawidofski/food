@@ -28,7 +28,7 @@ const KITCHEN_UNITS: Record<string, string> = {
 
 // Numbers: decimal point or decimal comma ("1.5", "1,5"), and fractions.
 // A comma between digits is ALWAYS a decimal separator, never a thousands separator. This app treats
-// it that way because its user writes Dutch: "1,500 kg" means 1.5 kg, and "1,000 g" reads as 1 g.
+// it that way because its user writes a decimal comma: "1,500 kg" means 1.5 kg, and "1,000 g" reads as 1 g.
 // Do not "helpfully" restore thousands handling: understating a gram count is far safer than
 // inflating one 1000x, and nobody types 1,000 g for a kilo.
 const NUMERIC = /^(-?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:\/\d+(?:\.\d+)?)?)/;

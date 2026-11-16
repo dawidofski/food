@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-15
 **Status:** awaiting approval
-**Owner:** the owner
+**Owner:** the app's single user
 
 ---
 
@@ -41,7 +41,7 @@ numbers exist to make the warnings honest and quantitative. They are not the poi
   habitual consumption, how the actual portion affects the picture, and a healthier
   alternative where one genuinely exists.
 - **G4.** Warnings are personalised against running daily totals, 7-day frequency history,
-  and the owner's own profile (height 197 cm, weight 100 kg, DOB [the owner's date of birth], male).
+  and the owner's own profile (the owner's height, weight, date of birth and sex).
 - **G5.** A secondary "what's missing" view surfaces deficiencies that warnings cannot
   catch — low fibre, thin protein, no vegetables for days, missing micronutrients.
 - **G6.** Works on a phone browser as the primary device, offline, from a GitHub Pages URL.
@@ -131,7 +131,7 @@ from his phone, so the sync benefit does not pay for the platform dependency.
 - Warnings are the centrepiece; the "what's missing" view is a quieter secondary surface
   and stays out of the entry flow.
 - No current conditions or allergies; the flagged-allergen mechanism ships with an empty list.
-- Profile: 197 cm, 100 kg, DOB [the owner's date of birth], male.
+- Profile: the owner's height, weight, date of birth and sex (entered in the app, never committed).
 - Foods missing from the dataset are added by hand as the owner's own foods, marked
   self-reported, counting toward totals, with blank nutrients left blank (§10a.1).
 - Batch cooking is in scope: enter the whole cooked quantity and the number of portions,
@@ -315,20 +315,20 @@ anti-goal A3 — if the app cannot be honest about weak evidence, it should not 
 
 Computed from the profile, recomputed whenever weight or the date changes:
 
-- **Age** from DOB ([the owner's date of birth]) — 35 at time of writing, derived never stored.
-- **RMR** via Mifflin–St Jeor, male: `10×100 + 6.25×197 − 5×35 + 5` = **2,061 kcal/day**.
+- **Age** from the date of birth, derived and never stored.
+- **RMR** via Mifflin–St Jeor, male: `10×weight + 6.25×height − 5×age + 5` = **2,061 kcal/day** for the owner's values.
 - **Energy target** = RMR × activity factor. The app asks for activity level on first run;
   default *lightly active* (×1.375) ≈ **2,834 kcal/day**. Designer's call; user-editable.
 - **Sodium** 2,000 mg/day (WHO). The US 2,300 mg figure is shown as a secondary reference.
 - **Saturated fat** < 10% of energy ≈ 31 g at 2,834 kcal.
 - **Added sugar** < 10% of energy ≈ 71 g; the 5% conditional ideal ≈ 35 g shown as the
   better target.
-- **Fibre** 30–35 g/day (14 g per 1,000 kcal).
-- **Protein** target 1.2 g/kg = **120 g/day**, with the 0.8 g/kg RDA floor (80 g) marked as
+- **Fibre** `max(30 g, 14 g per 1,000 kcal)`; see the final-fixes entry of the verification log for what is and is not sourced.
+- **Protein** target 1.2 g/kg (about 120 g/day at the owner's weight), with the 0.8 g/kg RDA floor (about 80 g) marked as
   the minimum rather than the goal.
 - **Micronutrients** against adult male reference intakes.
 
-**Explicit decision — no BMI judgments.** At 197 cm, BMI is a poor individual measure, and
+**Explicit decision — no BMI judgments.** At the owner's height, BMI is a poor individual measure, and
 weight commentary is outside what the owner asked for. The app shows weight as an editable
 number with history and a trend line, and says nothing evaluative about it.
 
@@ -495,9 +495,9 @@ A separate screen, deliberately outside the entry flow (per the owner's choice):
 
 ```ts
 Profile {
-  heightCm: 197
-  dob: '[the owner's date of birth]'
-  sex: 'male'
+  heightCm: number
+  dob: string          // ISO date
+  sex: 'male' | 'female' | 'unspecified'
   activityLevel: 'sedentary'|'light'|'moderate'|'active'|'veryActive'
   weightLog: { date: string; kg: number }[]     // current = latest
   flaggedAllergens: string[]                    // empty initially
@@ -924,3 +924,11 @@ Limits of this check, stated plainly:
 - These are population reference values, not personal requirements, and the view says so. A gap is stated only over days
   with complete data for that nutrient (known coverage and full energy-covered share), needs at least 4 such days, and only when the nutrient was under the
   reference on 80% or more of them.
+
+### Final whole-branch fixes (2026-11-16)
+
+**Personal data in history (C1).** The design document, the implementation plan, one source comment and the secret
+guard's own scope used to carry the owner's name, exact date of birth, height, weight and sex. They are removed from the
+current tree and `scripts/check-no-secrets.sh` now scans `docs/` and also matches the date of birth and the owner's first
+name. **The git history still contains those values** (66 commits predate this fix). Rewriting history was not done: it
+is the owner's decision. Anyone who publishes the repository should rewrite or squash first.

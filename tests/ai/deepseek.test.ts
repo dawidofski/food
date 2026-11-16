@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { interpretEntry, DEEPSEEK_URL } from '@/ai/deepseek';
+import { ownerProfile } from '../fixtures/profile';
 
 const completion = (content: string) => ({ choices: [{ message: { role: 'assistant', content } }] });
 const reply = (body: unknown, status = 200): Response =>
@@ -137,7 +138,7 @@ describe('interpretEntry', () => {
     const spy = mockOkSpy([]);
     await interpretEntry('one frikandel', opts(spy as unknown as typeof fetch));
     const raw = String(spy.mock.calls[0]![1]!.body);
-    const dob = ['1991', '10', '18'].join('-'); // built, so the secret guard does not flag this file
+    const dob = ownerProfile.dob;
     expect(raw).not.toContain(dob);
     expect(raw).not.toMatch(/weightLog|heightCm|entries|nutrients|totals|targets|today|profile/i);
     const body = JSON.parse(raw);

@@ -160,7 +160,7 @@ describe('settings: body data, weight log, allergens, conditions, overrides', ()
   test('edits body data and activity level, keeping the weight log', async () => {
     await putProfile(ownerProfile);
     render(<Settings />);
-    await screen.findByDisplayValue('197');
+    await screen.findByDisplayValue('180');
     type(/activity/i, 'active');
     type(/height/i, '181');
     await click(/save body data/i);

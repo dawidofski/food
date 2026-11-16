@@ -106,7 +106,7 @@ Run: `npm test` — Expected: PASS.
 
 - [ ] **Step 6: Add the secret guard**
 
-Create `scripts/check-no-secrets.sh`: greps the tracked tree for `sk-`, `DEEPSEEK`, and the string `[the owner's date of birth]`; exits non-zero on a hit. Wire it as a `pretest` npm script. This enforces C2 mechanically rather than by discipline.
+Create `scripts/check-no-secrets.sh`: greps the tracked tree for `sk-`, `DEEPSEEK`, and the string `<owner DOB>`; exits non-zero on a hit. Wire it as a `pretest` npm script. This enforces C2 mechanically rather than by discipline.
 
 - [ ] **Step 7: Commit**
 
@@ -208,13 +208,13 @@ git commit -m "feat: nutrient types and coverage-aware nutrient math"
 
 ```ts
 test('ageOn derives age from date of birth, not a stored number', () => {
-  expect(ageOn('[the owner's date of birth]', new Date('2026-11-15'))).toBe(35);
-  expect(ageOn('[the owner's date of birth]', new Date('2026-10-17'))).toBe(34); // day before birthday
+  expect(ageOn('<owner DOB>', new Date('2026-11-15'))).toBe(35);
+  expect(ageOn('<owner DOB>', new Date('2026-10-17'))).toBe(34); // day before birthday
 });
 
 test('computeTargets matches Mifflin-St Jeor for the owner profile', () => {
   const t = computeTargets(ownerProfile, new Date('2026-11-15'));
-  expect(t.rmrKcal).toBe(2061);      // 10*100 + 6.25*197 - 5*35 + 5
+  expect(t.rmrKcal).toBe(2061);      // 10*weight + 6.25*height - 5*age + 5
   expect(t.energyKcal).toBe(2834);   // x 1.375 light activity
 });
 
@@ -1458,7 +1458,7 @@ test('the request body never contains diary, profile or totals', async () => {
   const spy = mockOkSpy([]);
   await interpretEntry('one frikandel', ['Sausage, pork'], spy);
   const body = spy.mock.calls[0][1].body;
-  expect(body).not.toMatch(/[the owner's date of birth]|weightLog|sodiumMg.*today|entries/);
+  expect(body).not.toMatch(/<owner DOB>|weightLog|sodiumMg.*today|entries/);
 });
 
 test('the fallback is off until a key is entered', () => {
@@ -1514,7 +1514,7 @@ test('the app works before setup, using generic targets and saying so', async ()
 });
 
 test('no personal value appears anywhere in the source tree', () => {
-  expect(grepSrc(/[the owner's date of birth]|197\s*cm/)).toEqual([]);
+  expect(grepSrc(/<owner DOB>|<owner height>\s*cm/)).toEqual([]);
 });
 
 test('the api key field is masked and clearable', async () => {

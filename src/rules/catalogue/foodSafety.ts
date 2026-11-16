@@ -11,7 +11,7 @@ import { evaluate } from '../engine';
  * question, no card; unanswered, no card; answered no, no card and no repeated question.
  *
  * RAW EGGS ARE DELIBERATELY NOT A HAZARD HERE. The FDA advises against raw or undercooked eggs, but the UK FSA (2017)
- * treats Lion-marked runny eggs as low risk, and this app's user is in the Netherlands, where EU salmonella controls are
+ * treats Lion-marked runny eggs as low risk, and the owner is in the EU, where salmonella controls are
  * comparable to the UK's. A CRITICAL card, which cannot be collapsed, on a soft-boiled egg or homemade mayonnaise would
  * teach the user to dismiss the tier the allergen card depends on. The hazard is real for some people (pregnancy,
  * immunosuppression). The hook to re-add it is `Profile.conditions`: when such a condition is flagged, add a hazard

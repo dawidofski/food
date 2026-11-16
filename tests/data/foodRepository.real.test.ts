@@ -11,7 +11,7 @@ const fromDisk = (async (url: string) => {
 }) as typeof fetch;
 
 const ACCEPT = 0.25;
-// Unresolvable by design: Dutch foods absent from USDA, and foods whose only dataset
+// Unresolvable by design: non-US foods absent from USDA, and foods whose only dataset
 // equivalent is a different food (passata -> salted cooking sauce).
 const UNRESOLVABLE = ['frikandel', 'bitterballen', 'passata'];
 const QUERIES = [
