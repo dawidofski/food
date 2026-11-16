@@ -255,6 +255,12 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
           ))
         )}
         {targets.isGeneric && <p className="text-xs text-slate-600">Targets use general adult guidelines until your profile is set up.</p>}
+        <p data-testid="own-targets-note" className="text-xs text-slate-600">
+          The energy, protein and fibre targets are this app&rsquo;s own working figures, not a published recommendation (protein is 1.2 g
+          per kg of body weight; fibre is 14 g per 1,000 kcal, at least 30 g). For comparison, WHO advises at least 25 g of fibre a day and
+          the usual RDA for protein is 0.8 g per kg. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any
+          target in Settings.
+        </p>
       </section>
 
       <section aria-labelledby="week-h" className="space-y-3">

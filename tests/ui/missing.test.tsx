@@ -157,3 +157,13 @@ describe('missing view', () => {
     expect(container.textContent).not.toMatch(/bmi|overweight|underweight|obese|ideal weight|healthy weight/i);
   });
 });
+
+describe('the protein and fibre targets are labelled as the app\'s own', () => {
+  test('the Missing screen says the energy, protein and fibre targets are not a published recommendation', async () => {
+    await putProfile(ownerProfile);
+    render(<Missing />);
+    const note = await screen.findByTestId('own-targets-note');
+    expect(note.textContent).toMatch(/own working figures[^.]*not a published recommendation/i);
+    expect(note.textContent).toMatch(/WHO advises at least 25 g of fibre/i);
+  });
+});

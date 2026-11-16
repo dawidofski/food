@@ -944,3 +944,8 @@ is the owner's decision. Anyone who publishes the repository should rewrite or s
 
 **AI disclosure (I4).** Settings now states the second case: when nothing typed can be matched, the whole line (first 200 characters) is sent.
 
+**Fibre and protein targets (I6).** Neither figure was in this log, and both were shown as targets beside the cited micronutrient section.
+- *Fibre* `max(30 g, 14 g per 1,000 kcal)`: WHO's healthy diet fact sheet, re-read 2026-11-16, advises "at least 25 grams" of naturally occurring dietary fibre a day for people older than 10. The app's figure is higher than WHO's (about 34 g at typical targets). The 14 g per 1,000 kcal rate is the app's own working figure and was **not** confirmed at source: the EFSA opinion pages could not be read in this pass.
+- *Protein* 1.2 g/kg, with 0.8 g/kg as the floor: the 0.8 g/kg RDA is a published minimum, but 1.2 g/kg is the app's own choice and was **not** sourced. The EFSA protein reference was not retrievable in this pass.
+- *Resolution.* Both are labelled on the Missing screen as the app's own working figures, not a published recommendation, beside WHO's 25 g and the 0.8 g/kg RDA for comparison. They remain editable in Settings. Sourcing them to EFSA (fibre adequate intake, protein reference) is open work.
+

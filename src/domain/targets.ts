@@ -111,6 +111,8 @@ function derive(
   return {
     rmrKcal: Math.round(rmr),
     energyKcal: energy,
+    // The app's own working figures, not a published recommendation (see the verification log and the note on the
+    // Missing screen): protein 1.2 g/kg, fibre the larger of 30 g and 14 g per 1,000 kcal.
     proteinG: Math.round(1.2 * weightKg),
     proteinFloorG: Math.round(0.8 * weightKg),
     fibreG: Math.max(30, Math.round((14 * energy) / 1000)),
