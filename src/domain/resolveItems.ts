@@ -67,8 +67,12 @@ const CONTAINERS = ['can', 'bottle', 'package', 'packet', 'bar', 'box', 'carton'
 // Words naming a FRACTION of the food, not a serving of it. A whole item in the same group must
 // beat these ("1 banana" 126 g over "1 slice" 6 g). Genuine wholes are deliberately absent:
 // stick, patty, tail, whole, loaf, link, fillet. Ignored when the user named the unit themselves.
+// `meatball` is here for the loaf foods that carry both: "1 medium meatball" 28 g must not beat
+// "1 medium slice" 108 g, a silent 3.9x understatement on a red meat that reads as plausible at
+// the gate. It is safe for a real meatball food, because this tier lives inside group 0 and so
+// still outranks that food's group-1 cup ("1 meatball" 18 g over "1 cup" 144 g).
 const FRAGMENT_WORDS = new Set([
-  'slice', 'piece', 'pat', 'chunk', 'cube', 'wedge', 'sliver', 'bone', 'bite', 'strip', 'square', 'half', 'quarter',
+  'slice', 'piece', 'pat', 'chunk', 'cube', 'wedge', 'sliver', 'bone', 'bite', 'strip', 'square', 'half', 'quarter', 'meatball',
 ]);
 
 /**

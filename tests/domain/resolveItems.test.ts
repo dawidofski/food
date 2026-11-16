@@ -243,6 +243,33 @@ describe('quantityToGrams', () => {
     // The user naming the unit still overrides the demotion.
     expect(quantityToGrams({ count: 2, unitLabel: 'slice' }, { ...egg, portions: breast })).toBe(120);
   });
+  test('a meatball is a fragment of a meat loaf, but still the serving of a meatball food', () => {
+    // Real "Meat loaf, NS as to type of meat" rows. A meatball is not a serving of a loaf, and
+    // 28 g looks plausible at the gate, so the slice has to win: a silent 3.9x understatement on a
+    // red/processed meat would suppress a sodium warning that should fire.
+    const meatLoaf = [
+      { label: '1 small or thin slice', grams: 86 }, { label: '1 medium slice', grams: 108 },
+      { label: '1 large slice', grams: 144 }, { label: '1 cocktail meatball', grams: 7 },
+      { label: '1 small meatball', grams: 14 }, { label: '1 medium meatball', grams: 28 },
+      { label: '1 large meatball', grams: 42 }, { label: '1 cup', grams: 140 },
+      { label: '1 cubic inch', grams: 19 },
+    ];
+    for (let k = 0; k < meatLoaf.length; k++) {
+      const rotated = [...meatLoaf.slice(k), ...meatLoaf.slice(0, k)];
+      for (const o of [rotated, [...rotated].reverse()]) {
+        expect(quantityToGrams({ count: 1 }, { ...egg, portions: o }), `rotation ${k}`).toBe(108);
+      }
+    }
+    // A food whose own whole item IS a meatball keeps it: the fragment tier sits inside group 0,
+    // so it still outranks the group-1 cup ("Meatball, meatless", "Meatballs ... with sauce").
+    const meatless = [{ label: '1 meatball', grams: 18 }, { label: '1 cup', grams: 144 }];
+    const withSauce = [{ label: '1 cup', grams: 235 }, { label: '1 meatball with sauce', grams: 43 }];
+    for (const [portions, want] of [[meatless, 18], [withSauce, 43]] as const) {
+      for (const o of [portions, [...portions].reverse()]) {
+        expect(quantityToGrams({ count: 1 }, { ...egg, portions: o })).toBe(want);
+      }
+    }
+  });
   test('among fragments the size ladder still applies: the medium slice, not the largest', () => {
     const whiteBread = [
       { label: '1 small or thin/very thin slice', grams: 24 }, { label: '1 medium or regular slice', grams: 28 },

@@ -106,6 +106,19 @@ describe('pinned bare-count portions', () => {
     expect(r.refs[0]!.portionLabel).toBe('1 cup, cooked');
     expect(r.refs[0]!.grams).toBe(240);
   });
+  // "meat loaf" alone matches "Meat loaf, Puerto Rican style" (one 95 g serving row), so this
+  // names the variety to reach a food that carries both slice and meatball rows.
+  test('meat loaf is a 108 g slice, not a 28 g meatball', () => {
+    const r = resolveText('meat loaf made with ham');
+    expect(r.needsHelp).toEqual([]);
+    expect(r.refs[0]!.portionLabel).toBe('1 medium slice');
+    expect(r.refs[0]!.grams).toBe(108);
+  });
+  test('a meatball food still resolves to its own meatball, not a cup', () => {
+    const r = resolveText('meatballs with sauce');
+    expect(r.needsHelp).toEqual([]);
+    expect(r.refs[0]!.portionLabel).toMatch(/meatball/i);
+  });
   test('a chicken breast is the whole breast, not a 60 g medium slice', () => {
     const r = resolveText('a chicken breast');
     expect(r.needsHelp).toEqual([]);
