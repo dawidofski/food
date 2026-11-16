@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -109,9 +110,12 @@ describe('no personal value in the source tree', () => {
   }
   test('nothing the guard script forbids appears in src, the manifest or index.html', () => {
     const root = resolve(__dirname, '../..');
-    // The forbidden pattern lives in one place, the guard script, so this test never restates a personal value.
-    const script = readFileSync(join(root, 'scripts/check-no-secrets.sh'), 'utf8');
-    const source = /^PATTERN='(.+)'$/m.exec(script)?.[1];
+    // The forbidden pattern lives in one place, the guard script, so this test never restates a personal value. We ask
+    // the script for it rather than reading its text: the script assembles the values from fragments so that it does
+    // not itself put them in the public tree, which means they cannot be recovered by matching on a literal.
+    const source = execFileSync('bash', [join(root, 'scripts/check-no-secrets.sh'), '--print-pattern'], {
+      encoding: 'utf8',
+    }).trim();
     expect(source).toBeTruthy();
     const forbidden = new RegExp(source as string);
     const files = [

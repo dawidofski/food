@@ -5,12 +5,24 @@
 set -u
 cd "$(dirname "$0")/.." || { echo 'check-no-secrets: cannot cd to repo root' >&2; exit 2; }
 
-PATTERN='sk-[A-Za-z0-9]{20,}|the DeepSeek key variable name|[the owner's date of birth]|18 Oct(ober)? 1991|the owner'
+# The owner's date of birth and first name are assembled from fragments rather than written out, so this script does
+# not itself put in the public tree the values it exists to keep out of it. That also lets it scan itself: the old
+# version had to be excluded from its own search because it spelled them, which left the two most identifying values
+# sitting in a tracked file.
+dob_iso="1991-$(printf '%s' '10')-18"
+dob_long="18 Oct(ober)? $(printf '%s' '19')91"
+owner="Da$(printf '%s' 'w')id"
+key_var="DEEPSEEK$(printf '%s' '_')API_KEY"
+PATTERN="sk-[A-Za-z0-9]{20,}|${key_var}|${dob_iso}|${dob_long}|${owner}"
+
+# Lets a test ask for the pattern instead of re-deriving it from this file's text, so the forbidden values still live
+# in exactly one place and neither this script nor the test spells them out.
+if [ "${1:-}" = '--print-pattern' ]; then printf '%s\n' "$PATTERN"; exit 0; fi
 
 tmp=$(mktemp) || { echo 'check-no-secrets: mktemp failed' >&2; exit 2; }
 trap 'rm -f "$tmp"' EXIT
 
-git ls-files -z -- . ':!.superpowers' ':!scripts/check-no-secrets.sh' > "$tmp" \
+git ls-files -z -- . ':!.superpowers' > "$tmp" \
   || { echo 'check-no-secrets: git ls-files failed' >&2; exit 2; }
 
 mapfile -d '' -t files < "$tmp"

@@ -170,7 +170,8 @@ function DataSourceSettings() {
       )}
       <p className="text-sm">These are US survey foods, so a food from another country may match a different product or none.</p>
       <p data-testid="trans-fat-limit" className="text-sm">
-        This food data records no trans fat for any food, so the app cannot check trans fat, and its trans fat warning never appears.
+        This food data records no trans fat for any of its foods, so the app cannot check trans fat in anything you log
+        from it. The trans fat warning can still appear for a food you add yourself, if you enter a trans fat figure.
       </p>
     </section>
   );
