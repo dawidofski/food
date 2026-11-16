@@ -316,3 +316,43 @@ async function eraseStores(): Promise<void> {
   ]);
   if (!swept) throw sweepError;
 }
+
+// ---- import (one transaction) ----
+
+export type ImportRows = { entries: DiaryEntry[]; customFoods: CustomFood[]; batches: Batch[] };
+
+/**
+ * Writes already-validated rows to all three stores in ONE transaction, so an import lands whole or
+ * not at all. `replace` clears each store first; `merge` adds only ids that are not present and
+ * leaves every existing row exactly as it is (a local tombstone is never resurrected by a file).
+ * This is the one path that may write a non-active entry, because a backup must restore history
+ * as it was. `at` is normalised so the index invariant holds.
+ */
+export async function writeImportedRows(rows: ImportRows, mode: 'merge' | 'replace'): Promise<{ added: number; skipped: number }> {
+  const tx = (await db()).transaction(['entries', 'customFoods', 'batches'], 'readwrite');
+  const done = tx.done.catch(() => undefined);
+  let added = 0;
+  let skipped = 0;
+  try {
+    if (mode === 'replace') {
+      await Promise.all([tx.objectStore('entries').clear(), tx.objectStore('customFoods').clear(), tx.objectStore('batches').clear()]);
+    }
+    const put = async <T extends { id: string }>(store: { getKey(k: string): Promise<unknown>; put(v: T): Promise<unknown> }, row: T) => {
+      if (mode === 'merge' && (await store.getKey(row.id)) !== undefined) {
+        skipped++;
+        return;
+      }
+      await store.put(row);
+      added++;
+    };
+    for (const e of rows.entries) await put(tx.objectStore('entries'), { ...e, at: normaliseAt(e.at) });
+    for (const f of rows.customFoods) await put(tx.objectStore('customFoods'), f);
+    for (const b of rows.batches) await put(tx.objectStore('batches'), b);
+  } catch (err) {
+    safeAbort(tx);
+    await done;
+    throw err;
+  }
+  await tx.done;
+  return { added, skipped };
+}

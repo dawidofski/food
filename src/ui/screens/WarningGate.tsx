@@ -67,6 +67,9 @@ export function CheckNotes({ failures }: { failures: RuleFailure[] }) {
   );
 }
 
+/** Rules whose figures come from the person's targets, so on generic targets their cards must say so. */
+const TARGET_RULES = new Set(['added-sugar-entry', 'added-sugar-daily', 'nutrient-density', 'saturated-fat-daily', 'sodium-entry', 'sodium-daily', 'trans-fat']);
+
 const btn = 'min-h-12 rounded-lg border border-slate-400 px-4 text-base';
 
 export default function WarningGate({ flow }: { flow: EntryFlow }) {
@@ -99,6 +102,12 @@ export default function WarningGate({ flow }: { flow: EntryFlow }) {
             {flow.cards.map((c) => (
               <WarningCard key={c.ruleId} card={c} />
             ))}
+
+            {flow.genericTargets && flow.cards.some((c) => [c.ruleId, ...c.mergedFrom].some((id) => TARGET_RULES.has(id))) && (
+              <p data-testid="generic-targets-note" className="text-xs text-slate-700">
+                The figures on these cards use general adult guidelines, not targets worked out for you. Set up your profile in Settings to personalise them.
+              </p>
+            )}
 
             {flow.error && <p role="alert" className="text-sm text-red-800">{flow.error}</p>}
 

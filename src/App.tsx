@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getProfile } from '@/data/db';
+import { isSetupSkipped, skipSetup } from '@/state/setup';
+import FirstRun from '@/ui/screens/FirstRun';
 import Diary from '@/ui/screens/Diary';
 import Missing from '@/ui/screens/Missing';
 import BatchBuilder from '@/ui/screens/BatchBuilder';
@@ -10,6 +13,20 @@ type Tab = 'log' | 'diary' | 'missing' | 'batches' | 'foods' | 'settings';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('log');
+  /**
+   * First run asks for a profile, but only once: it is skippable because the app works on general adult targets
+   * without one, and a skip is remembered.
+   */
+  const [setup, setSetup] = useState<'loading' | 'needed' | 'done'>('loading');
+  useEffect(() => {
+    let live = true;
+    void getProfile().then((p) => {
+      if (live) setSetup(p !== null || isSetupSkipped() ? 'done' : 'needed');
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   /** Set when a portion is picked from the fridge list, so the log opens with it typed in. The gate still runs. */
   const [draft, setDraft] = useState('');
   const tabBtn = (id: Tab, label: string) => (
@@ -22,6 +39,10 @@ export default function App() {
       {label}
     </button>
   );
+  if (setup === 'loading') return null;
+  if (setup === 'needed') {
+    return <FirstRun onDone={() => setSetup('done')} onSkip={() => { skipSetup(); setSetup('done'); }} />;
+  }
   return (
     <>
       {tab === 'log' && <Log key={draft} initialDraft={draft} />}

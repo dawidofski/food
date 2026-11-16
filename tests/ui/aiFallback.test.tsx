@@ -180,14 +180,14 @@ describe('the settings screen', () => {
     expect((screen.queryByLabelText(/api key/i) as HTMLInputElement | null)?.value ?? '').not.toContain('test-key');
   });
 
-  test('the switch turns it off while keeping the key, and clear removes the key', async () => {
+  test('the switch turns it off while keeping the key, and clear key removes the key', async () => {
     setApiKey('test-key-abcd1234');
     setAiSwitch(true);
     render(<Settings />);
     await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: /use deepseek/i })); });
     expect(isAiEnabled()).toBe(false);
     expect(getApiKey()).toBe('test-key-abcd1234');
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /remove key/i })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /clear key/i })); });
     expect(getApiKey()).toBeNull();
     clearApiKey();
   });

@@ -1,11 +1,28 @@
 import { useState, type FormEvent } from 'react';
 import { clearApiKey, getApiKey, isAiSwitchedOn, maskKey, setAiSwitch, setApiKey } from '@/state/aiSettings';
+import { BackupSettings, EraseSettings } from './DataSettings';
+import ProfileSettings from './ProfileSettings';
 
 /**
- * Settings: the optional DeepSeek fallback. It is off until a key is entered and the person turns it on,
- * and what it sends is stated here, above the control that enables it.
+ * Settings: body data and targets, the optional DeepSeek fallback, backup and erase. The fallback is off until a key
+ * is entered and the person turns it on, and what it sends is stated here, above the control that enables it.
  */
-export default function Settings() {
+export default function Settings({ onErased }: { onErased?: () => void }) {
+  /** Bumped after an import or an erase, so every section re-reads what is now stored. */
+  const [version, setVersion] = useState(0);
+  const refresh = () => setVersion((v) => v + 1);
+  return (
+    <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
+      <h1 className="text-xl font-semibold">Settings</h1>
+      <ProfileSettings key={`profile-${version}`} />
+      <AiSettings key={`ai-${version}`} />
+      <BackupSettings onImported={refresh} />
+      <EraseSettings onErased={() => { refresh(); onErased?.(); }} />
+    </main>
+  );
+}
+
+function AiSettings() {
   const [key, setKey] = useState<string | null>(() => getApiKey());
   const [on, setOn] = useState<boolean>(() => isAiSwitchedOn());
   const [draft, setDraft] = useState('');
@@ -50,9 +67,7 @@ export default function Settings() {
   const showForm = key === null || replacing;
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
-      <h1 className="text-xl font-semibold">Settings</h1>
-
+    <>
       <section aria-labelledby="ai-heading" className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
         <h2 id="ai-heading" className="text-lg font-semibold">AI help for foods I can&rsquo;t match</h2>
         <p className="text-sm">
@@ -94,7 +109,7 @@ export default function Settings() {
                 </button>
               )}
               <button type="button" onClick={remove} className="min-h-11 rounded-lg border border-slate-400 px-4">
-                Remove key
+                Clear key
               </button>
             </div>
           </div>
@@ -127,6 +142,6 @@ export default function Settings() {
 
         {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
       </section>
-    </main>
+    </>
   );
 }

@@ -114,6 +114,8 @@ export type EntryFlow = {
   error: string | null;
   /** The text the person last submitted, so a correction can start from it. */
   lastText: string;
+  /** True when this entry was checked against the generic adult targets because no profile is set up. */
+  genericTargets: boolean;
   /** Bumps whenever an entry (including a cancelled one) is stored, so lists can refresh. */
   storedCount: number;
   /** With `revises`, the entry is stored as a revision of that entry, and only once the gate has been passed. */
@@ -208,6 +210,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const [error, setError] = useState<string | null>(null);
   const [lastText, setLastText] = useState('');
   const [storedCount, setStoredCount] = useState(0);
+  const [genericTargets, setGenericTargets] = useState(false);
   const session = useRef<Session | null>(null);
   const seq = useRef(0);
   /** What resolved when some items did not, kept so the person may continue without the unresolved ones. */
@@ -227,6 +230,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     setAiReadings([]);
     aiPending.current = null;
     setViewingAlternatives(false);
+    setGenericTargets(false);
   }, []);
 
   const store = useCallback(async (action: 'added' | 'addedAfterAlternatives' | 'cancelled'): Promise<boolean> => {
@@ -406,6 +410,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
           },
         };
         session.current = s;
+        setGenericTargets(s.base.targets.isGeneric);
         await evaluateSession(s, {}, true);
       } catch (e) {
         if (my !== seq.current) return;
@@ -493,6 +498,6 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   return {
     stage, cards, questions, failures, lines, unresolved, aiReadings, dataMissing, viewingAlternatives, outcome, error, lastText,
-    storedCount, submit, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
+    genericTargets, storedCount, submit, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
   };
 }

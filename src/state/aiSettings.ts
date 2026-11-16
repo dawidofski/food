@@ -9,7 +9,8 @@ import { lsKey } from '@/data/db';
  * never starts sending text anywhere: the switch is the consent, and the Settings screen states
  * what is sent before it can be flipped.
  */
-const KEY = lsKey('ai.deepseekKey');
+export const API_KEY_LS = lsKey('ai.deepseekKey');
+const KEY = API_KEY_LS;
 const SWITCH = lsKey('ai.enabled');
 
 export function getApiKey(): string | null {
