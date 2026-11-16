@@ -46,6 +46,16 @@ export function localDayRange(dayKey: string): { fromISO: string; toISO: string 
   };
 }
 
+/** `n` consecutive local day keys, oldest first, ending on the local day of `on`. Same noon rule as `last7DayKeys`. */
+export function lastNDayKeys(on: Date, n: number): string[] {
+  if (!Number.isFinite(on.getTime())) throw new RangeError('Invalid date');
+  const keys: string[] = [];
+  for (let back = n - 1; back >= 0; back--) {
+    keys.push(keyOf(new Date(on.getFullYear(), on.getMonth(), on.getDate() - back, 12)));
+  }
+  return keys;
+}
+
 /** Seven consecutive local day keys, oldest first, ending on the local day of `on`. */
 export function last7DayKeys(on: Date): string[] {
   if (!Number.isFinite(on.getTime())) throw new RangeError('Invalid date');

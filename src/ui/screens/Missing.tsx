@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { entriesBetween, getProfile, putProfile } from '@/data/db';
 import { last7DayKeys, localDayKey, localDayRange } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
+import { MIN_LOGGED_DAYS } from '@/domain/trends';
 import { computeTargets, MICRO_KIND } from '@/domain/targets';
 import { weekContext, type DayTotals } from '@/domain/totals';
 import type { DiaryEntry } from '@/types/diary';
@@ -15,8 +16,8 @@ import NutrientBar, { fmtAmount } from '@/ui/components/NutrientBar';
  * logged, with no score, grade, rating or streak, and no alarm styling. It is not a warning surface.
  */
 
-/** A gap across the week is only stated when at least this many of the seven days have entries. */
-export const MIN_LOGGED_DAYS = 4;
+/** A gap across the week is only stated when at least this many of the seven days have entries (defined with the trends, which gate the same way). */
+export { MIN_LOGGED_DAYS };
 
 export type MissingDeps = {
   now: () => Date;
