@@ -46,9 +46,20 @@ export const QUERY_SYNONYMS: Readonly<Record<string, string>> = Object.freeze({
   zucchinis: 'summer squash', // the "-is" plural guard keeps this unsingularised
   courgette: 'summer squash',
   yoghurt: 'yogurt',
+  // The dataset's whole pasta vocabulary is "Pasta, ...": a probe of all 5,431 names found zero
+  // entries containing spaghetti, macaroni, tagliatelle, linguine, farfalle or orzo, so without
+  // these every common word for pasta resolves to nothing. Safe to map, precisely because no
+  // dish entry carries those names for the mapping to hijack. Lasagne is deliberately absent:
+  // it names a composed dish, not plain pasta, so mapping it here would understate it.
   penne: 'pasta',
   fusilli: 'pasta',
   rigatoni: 'pasta',
+  spaghetti: 'pasta',
+  macaroni: 'pasta',
+  tagliatelle: 'pasta',
+  linguine: 'pasta',
+  farfalle: 'pasta',
+  orzo: 'pasta',
   rocket: 'arugula',
   coriander: 'cilantro',
   prawn: 'shrimp',

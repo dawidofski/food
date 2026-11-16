@@ -92,7 +92,9 @@ test('a singular query reaches a food the dataset names in the plural', () => {
 });
 
 test('penne and bare pasta resolve to plain refined "Pasta, cooked", outranking every qualified variant', () => {
-  for (const q of ['penne', 'pasta', 'fusilli']) {
+  // The dataset contains no name with spaghetti, macaroni, tagliatelle, linguine, farfalle or orzo in it, so without
+  // the synonym map every ordinary word for pasta resolves to nothing at all.
+  for (const q of ['penne', 'pasta', 'fusilli', 'spaghetti', 'macaroni', 'tagliatelle', 'linguine', 'farfalle', 'orzo']) {
     const hit = top(q)!;
     expect(hit.food.name).toBe('Pasta, cooked');
     expect(hit.food.classification.refinedGrain).toBe(true);
