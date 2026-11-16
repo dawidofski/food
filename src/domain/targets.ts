@@ -32,18 +32,20 @@ const SODIUM_MG = 2000; // WHO
 type MicroRef = Partial<Record<NutrientKey, number>>;
 
 /**
- * Adult (19-50) reference intakes: US/Canada DRI RDAs, and the 2019 Adequate Intake for potassium. They are population
- * planning values, not personal requirements. 'unspecified' takes the HIGHER iron reference (a deliberate over-inclusion:
- * 18 mg is the female 19-50 RDA) and the LOWER of the two for every other nutrient, so no gap is announced that
- * only one sex's figure would produce. Magnesium uses the 31-50 band. Recorded in the design document's verification log.
+ * Adult reference values from EFSA's Summary of Dietary Reference Values (January 2017 consolidated table): PRIs, and AIs
+ * for magnesium, potassium, vitamin D and vitamin B12. Population planning values, not personal requirements. Calcium is
+ * the 25-and-over band, a woman's iron is the premenopausal PRI, and zinc is the PRI at a phytate intake of 600 mg/d (the
+ * app cannot know the real one). Age is not modelled. 'unspecified' takes the HIGHER iron reference and the LOWER of the
+ * two for every other nutrient, so no gap is announced that only one sex's figure would produce. Table, column and
+ * limits are recorded in the design document's verification log.
  */
 const MICRO_MALE: MicroRef = {
-  calciumMg: 1000, ironMg: 8, magnesiumMg: 420, zincMg: 11, vitaminCMg: 90, vitaminDUg: 15,
-  vitaminB12Ug: 2.4, folateUg: 400, potassiumMg: 3400,
+  calciumMg: 950, ironMg: 11, magnesiumMg: 350, zincMg: 11.7, vitaminCMg: 110, vitaminDUg: 15,
+  vitaminB12Ug: 4, folateUg: 330, potassiumMg: 3500,
 };
 const MICRO_FEMALE: MicroRef = {
-  calciumMg: 1000, ironMg: 18, magnesiumMg: 320, zincMg: 8, vitaminCMg: 75, vitaminDUg: 15,
-  vitaminB12Ug: 2.4, folateUg: 400, potassiumMg: 2600,
+  calciumMg: 950, ironMg: 16, magnesiumMg: 300, zincMg: 9.3, vitaminCMg: 95, vitaminDUg: 15,
+  vitaminB12Ug: 4, folateUg: 330, potassiumMg: 3500,
 };
 
 function microsFor(sex: Sex): MicroRef {

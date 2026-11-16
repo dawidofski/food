@@ -887,32 +887,40 @@ Allergen flags (same task): dataset tags are the EU's 14 group names, so a flag 
 tags; a flag that reaches no tag raises a safety `failures` entry instead of silence. "wheat" maps to the gluten tag although a
 wheat allergy is not coeliac disease: the dataset has no finer tag, and an extra card costs less than a missed one.
 
+### Micronutrient reference intakes (Task 17), checked 2026-11-16
 
-### Micronutrient reference intakes (Task 17), 2026-11-16
+Source: EFSA, "Overview on Dietary Reference Values for the EU population as derived by the EFSA Panel on Dietetic
+Products, Nutrition and Allergies (NDA)", Summary of Dietary Reference Values, consolidated table of January 2017
+(https://www.efsa.europa.eu/sites/default/files/assets/DRV_Summary_tables_jan_17.pdf). The PDF was downloaded and its text
+extracted (pdftotext); every number below was read from it. An earlier draft of this section used remembered NASEM figures
+and said so; those were replaced by the values below. They feed the "worth a look" micronutrient section of the what's-missing view
+(`Targets.micronutrients`).
 
-Used for the "standing gaps" in the what's-missing view (`Targets.micronutrients`). **These were NOT verified at source in
-this task.** The NIH Office of Dietary Supplements fact sheets (ods.od.nih.gov) answered HTTP 403 to every request, and the
-NCBI bookshelf DRI tables returned a bot-check page. The only page that could be read was the Wikipedia "Dietary
-Reference Intake" article, whose table gives only the highest value across all ages from nine up, so it cross-checks the
-maxima (male magnesium 420 mg, male zinc 11 mg, vitamin C 90 mg, B12 2.4 ug, folate 400 ug, potassium 3,400 / 2,600 mg,
-female iron 18 mg) and nothing else. The figures below are the National Academies DRI values for adults aged 19-50 as
-recalled, and **must be checked against the NIH ODS fact sheets or the NASEM DRI tables before anyone relies on them.**
-
-| Nutrient | Male 19-50 | Female 19-50 | 'unspecified' | Kind |
+| Nutrient | Table and column | Male adult | Female adult | Kind of value |
 |---|---|---|---|---|
-| Calcium | 1,000 mg | 1,000 mg | 1,000 mg | RDA |
-| Iron | 8 mg | 18 mg | 18 mg (the higher, as specified) | RDA |
-| Magnesium (31-50 band) | 420 mg | 320 mg | 320 mg (lower) | RDA |
-| Zinc | 11 mg | 8 mg | 8 mg (lower) | RDA |
-| Vitamin C | 90 mg | 75 mg | 75 mg (lower) | RDA |
-| Vitamin D | 15 ug | 15 ug | 15 ug | RDA (600 IU) |
-| Vitamin B12 | 2.4 ug | 2.4 ug | 2.4 ug | RDA |
-| Folate | 400 ug DFE | 400 ug DFE | 400 ug | RDA |
-| Potassium | 3,400 mg | 2,600 mg | 2,600 mg (lower) | AI (2019) |
+| Calcium | Table 5 / Table 7, "Calcium (mg/d)", age group 25 and over | 950 mg (18-24: 1,000) | 950 mg | PRI |
+| Iron | Table 5 "Iron (mg/d)", age 18 and over | 11 mg | 16 mg premenopausal (footnote d: covers about 95% of premenopausal women); 11 mg postmenopausal (Table 7) | PRI |
+| Magnesium | Table 5 / 7 "Magnesium (mg/d)", age 18 and over | 350 mg | 300 mg | AI |
+| Zinc | Table 5 / 7 "Zinc (mg/d)", age 18 and over, by level of phytate intake (LPI) | 11.7 mg at LPI 600 mg/d (9.4 / 14.0 / 16.3 at 300 / 900 / 1,200) | 9.3 mg at LPI 600 (7.5 / 11.0 / 12.7) | PRI |
+| Vitamin C | Table 9 / 11 "Vitamin C (mg/d)", age 18 and over | 110 mg | 95 mg | PRI |
+| Vitamin D | Table 9 / 11 "Vitamin D (ug/d)", age 18 and over, footnote (e) | 15 ug | 15 ug | AI, "under conditions of assumed minimal cutaneous vitamin D synthesis" |
+| Vitamin B12 | Table 9 / 11 "Cobalamin (ug/d)", age 18 and over | 4.0 ug | 4.0 ug | AI |
+| Folate | Table 9 / 11 "Folate (ug DFE/d)", age 18 and over | 330 ug DFE | 330 ug DFE | PRI |
+| Potassium | Table 5 / 7 "Potassium (mg/d)", age 18 and over | 3,500 mg | 3,500 mg | AI |
 
-Choices: 'unspecified' takes the higher iron reference and the lower of the two for every other nutrient, so no gap is
-announced that only one sex's figure would produce. Age is not modelled: values are the 19-50 band, so a woman over 50 (iron
-8 mg, calcium 1,200 mg) or a person under 19 is not served by them. They are population planning figures, not personal
-requirements, and the view says so. A gap is stated only over days with complete data for that nutrient (known coverage and
-full energy-covered share), needs at least 4 such days, and only when the nutrient was under the reference on 80% or more of
-them.
+Limits of this check, stated plainly:
+
+- **PRI versus AI.** The PDF marks PRIs in bold and AIs in ordinary type. The text extraction used here loses typeface
+  and page images could not be rendered, so the PRI/AI column above follows EFSA's published opinions for each nutrient
+  and was NOT confirmed from the bold type in this session. The numbers themselves were read from the table. Confirm the kind
+  against pages 6, 8, 11 and 13 of the PDF. The screen says "reference" and does not call any value a requirement.
+- The extracted tables are laid out in columns, so the row for adults was identified by its position in each age
+  sequence (for vitamin C the sequence 20, 20, 30, 45, 70, 100, 110 for ages 7-11 months up to 18 and over).
+- **Age bands are not modelled.** Values are the adult bands: calcium 25 and over (a person aged 18-24 would need 1,000);
+  iron for a woman is the premenopausal figure; nothing is adjusted for age beyond that, pregnancy or lactation.
+- **Zinc depends on phytate intake**, which the app cannot know. The middle level, LPI 600 mg/d, is used.
+- `'unspecified'` takes the HIGHER iron reference (16 mg) and the LOWER of the two for every other nutrient, so no gap is
+  announced that only one sex's figure would produce.
+- These are population reference values, not personal requirements, and the view says so. A gap is stated only over days
+  with complete data for that nutrient (known coverage and full energy-covered share), needs at least 4 such days, and only when the nutrient was under the
+  reference on 80% or more of them.

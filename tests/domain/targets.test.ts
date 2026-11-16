@@ -117,15 +117,15 @@ describe('targets', () => {
       const m = computeTargets({ ...ownerProfile, sex: 'male' }, ON).micronutrients.ironMg!;
       const f = computeTargets({ ...ownerProfile, sex: 'female' }, ON).micronutrients.ironMg!;
       const u = computeTargets({ ...ownerProfile, sex: 'unspecified' }, ON).micronutrients.ironMg!;
-      expect(m).toBe(8);
-      expect(f).toBe(18);
+      expect(m).toBe(11);
+      expect(f).toBe(16);
       expect(u).toBe(Math.max(m, f));
     });
 
-    test('pins the adult 19-50 values', () => {
+    test('pins the EFSA adult values', () => {
       expect(computeTargets({ ...ownerProfile, sex: 'male' }, ON).micronutrients).toEqual({
-        calciumMg: 1000, ironMg: 8, magnesiumMg: 420, zincMg: 11, vitaminCMg: 90, vitaminDUg: 15,
-        vitaminB12Ug: 2.4, folateUg: 400, potassiumMg: 3400,
+        calciumMg: 950, ironMg: 11, magnesiumMg: 350, zincMg: 11.7, vitaminCMg: 110, vitaminDUg: 15,
+        vitaminB12Ug: 4, folateUg: 330, potassiumMg: 3500,
       });
     });
   });

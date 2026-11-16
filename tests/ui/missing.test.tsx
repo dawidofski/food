@@ -135,7 +135,7 @@ describe('missing view', () => {
     const gap = await screen.findByTestId('gap-calciumMg');
     expect(gap.textContent).toMatch(/calcium/i);
     expect(gap.textContent).toMatch(/5 of 5 days/);
-    expect(gap.textContent).toMatch(/1,000 mg/);
+    expect(gap.textContent).toMatch(/950 mg/);
   });
 
   test('weight is shown with history and no evaluative text', async () => {

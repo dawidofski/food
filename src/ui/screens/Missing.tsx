@@ -320,7 +320,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
             </p>
           )}
           <p className="text-xs text-slate-600">
-            Reference intakes are population planning figures for healthy adults, not a requirement for you personally.
+            Reference values are EFSA&rsquo;s population figures for adults (some are adequate intakes, which are estimates), not a requirement for you personally.
           </p>
         </section>
       )}
