@@ -1,6 +1,6 @@
 import { isKnownValue } from '@/domain/nutrients';
 import type { NutrientKey } from '@/types/nutrients';
-import type { Context, Level, Rule, SafetyQuestion, WarningCard } from './types';
+import type { Context, Level, Rule, RuleFailure, SafetyQuestion, WarningCard } from './types';
 
 export const MAX_CARDS = 3;
 const DEFAULT_MIN_COVERAGE = 0.8;
@@ -19,7 +19,7 @@ type Gate = { pass: false } | { pass: true; notes: string[] };
 function gate(rule: Rule, ctx: Context): Gate {
   const notes: string[] = [];
   const floor = rule.minCoverage ?? DEFAULT_MIN_COVERAGE;
-  const daily = (rule.scope ?? 'daily') === 'daily';
+  const daily = rule.scope === 'daily';
   const dayHasData = Object.keys(ctx.today.nutrients).length > 0;
 
   for (const key of rule.requiresNutrients) {
@@ -45,17 +45,23 @@ function gate(rule: Rule, ctx: Context): Gate {
   return { pass: true, notes };
 }
 
-function evaluateRule(rule: Rule, ctx: Context): { level: Level; notes: string[] } | null {
+function describe(rule: Rule, e: unknown): RuleFailure {
+  return {
+    ruleId: rule.id,
+    category: rule.category,
+    message: `rule "${rule.id}" threw while evaluating: ${e instanceof Error ? e.message : String(e)}`,
+  };
+}
+
+/** Throws only for the CRITICAL invariant; any other error from the rule itself is returned as a failure. */
+function evaluateRule(rule: Rule, ctx: Context): { level: Level; notes: string[] } | RuleFailure | null {
   const g = gate(rule, ctx);
   if (!g.pass) return null;
   let level: Level | null;
   try {
     level = rule.level(ctx);
   } catch (e) {
-    // Not swallowed: silently dropping a safety rule would hide a hazard, and a failing rule is a catalogue bug.
-    throw new Error(`rule "${rule.id}" threw while evaluating: ${e instanceof Error ? e.message : String(e)}`, {
-      cause: e,
-    });
+    return describe(rule, e);
   }
   if (level === null) return null;
   if (level === 'CRITICAL' && rule.category !== 'safety') {
@@ -80,13 +86,23 @@ function merge(a: WarningCard, b: WarningCard): WarningCard {
   };
 }
 
-export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; questions: SafetyQuestion[] } {
+export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; questions: SafetyQuestion[]; failures: RuleFailure[] } {
   // Safety questions come first. Unanswered means no card, never a guess; the gate asks and re-evaluates.
   const questions: SafetyQuestion[] = [];
+  const failures: RuleFailure[] = [];
   const held = new Set<string>();
   for (const r of rules) {
     const p = r.safetyPrompt;
-    if (!p || !p.applies(ctx)) continue;
+    if (!p) continue;
+    let applies: boolean;
+    try {
+      applies = p.applies(ctx);
+    } catch (e) {
+      failures.push(describe(r, e));
+      held.add(r.id);
+      continue;
+    }
+    if (!applies) continue;
     const answer = ctx.answers[p.answerKey];
     if (answer === undefined) {
       questions.push({ ruleId: r.id, question: p.question, answerKey: p.answerKey });
@@ -94,13 +110,24 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
       held.add(r.id); // answered no: the hazard condition is absent, whatever the rule's own level() says
     }
   }
-  if (questions.length > 0) return { cards: [], questions };
+  if (questions.length > 0) return { cards: [], questions, failures };
 
   const built: { card: WarningCard; order: number }[] = [];
   rules.forEach((rule, order) => {
     if (held.has(rule.id)) return;
     const res = evaluateRule(rule, ctx);
     if (!res) return;
+    if ('ruleId' in res) {
+      failures.push(res);
+      return;
+    }
+    let portionNote: string;
+    try {
+      portionNote = rule.portionNote(ctx);
+    } catch (e) {
+      failures.push(describe(rule, e));
+      return;
+    }
     built.push({
       order,
       card: {
@@ -112,7 +139,7 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
         cause: rule.cause,
         evidence: rule.evidence,
         horizon: rule.horizon,
-        portionNote: rule.portionNote(ctx),
+        portionNote,
         alternatives: rule.alternatives ?? [],
         ...(rule.nutrientKey ? { nutrientKey: rule.nutrientKey } : {}),
         ...(res.notes.length ? { dataNote: res.notes.join(' ') } : {}),
@@ -136,5 +163,5 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
   }
 
   merged.sort((x, y) => RANK[y.card.level] - RANK[x.card.level] || x.order - y.order);
-  return { cards: merged.slice(0, MAX_CARDS).map((m) => m.card), questions: [] };
+  return { cards: merged.slice(0, MAX_CARDS).map((m) => m.card), questions: [], failures };
 }

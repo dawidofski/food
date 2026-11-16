@@ -213,9 +213,11 @@ describe('evaluate (additional invariants)', () => {
     expect(evaluate([rule], ctx({ emptyDay: true })).cards).toHaveLength(1);
   });
 
-  test('a rule that omits scope is treated as daily, so it fails silent rather than firing off a thin total', () => {
+  test('scope is a required field: a rule that omits it does not compile', () => {
     const { scope: _s, ...rest } = addedSugarDailyRule;
-    expect(evaluate([rest as Rule], ctx({ addedSugarCoveredShare: 0.5 })).cards).toEqual([]);
+    // @ts-expect-error scope must be stated by the rule author
+    const incomplete: Rule = rest;
+    expect(incomplete.id).toBe('added-sugar-daily');
   });
 
   test('a known pending nutrient with unknown coverage stays silent', () => {
@@ -259,11 +261,11 @@ describe('evaluate (additional invariants)', () => {
     const first = evaluate([reheatedRiceRule], ctx({ food: 'rice' }));
     expect(first.questions).toHaveLength(1);
     const second = evaluate([reheatedRiceRule], ctx({ food: 'rice', answers: { reheatedRice: false } }));
-    expect(second).toEqual({ cards: [], questions: [] });
+    expect(second).toEqual({ cards: [], questions: [], failures: [] });
   });
 
   test('a question that does not apply to the food is not asked', () => {
-    expect(evaluate([reheatedRiceRule], ctx({ food: 'bread' }))).toEqual({ cards: [], questions: [] });
+    expect(evaluate([reheatedRiceRule], ctx({ food: 'bread' }))).toEqual({ cards: [], questions: [], failures: [] });
   });
 
   test('pending questions suppress every card, including unrelated ones', () => {
@@ -288,14 +290,41 @@ describe('evaluate (additional invariants)', () => {
   });
 
   test('an empty rules array yields nothing', () => {
-    expect(evaluate([], ctx())).toEqual({ cards: [], questions: [] });
+    expect(evaluate([], ctx())).toEqual({ cards: [], questions: [], failures: [] });
   });
 
-  test('a rule that throws fails loudly, naming the rule, rather than being skipped', () => {
-    const bad = stub('bad-rule', () => {
+  test('a throwing nutrition rule and a throwing safety rule are reported in failures; other rules still fire', () => {
+    const badN = stub('bad-nutrition', () => {
       throw new Error('boom');
     });
-    expect(() => evaluate([bad, infoRule], ctx())).toThrow(/bad-rule.*boom/);
+    const badS = stub(
+      'bad-safety',
+      () => {
+        throw new Error('bang');
+      },
+      { category: 'safety' },
+    );
+    const r = evaluate([badN, infoRule, badS, highRule], ctx());
+    expect(r.cards.map((x) => x.ruleId)).toEqual(['high', 'info']);
+    expect(r.failures).toEqual([
+      { ruleId: 'bad-nutrition', category: 'nutrition', message: 'rule "bad-nutrition" threw while evaluating: boom' },
+      { ruleId: 'bad-safety', category: 'safety', message: 'rule "bad-safety" threw while evaluating: bang' },
+    ]);
+  });
+
+  test('a rule whose portionNote or safety prompt throws is a failure, not a crash', () => {
+    const badNote = stub('bad-note', () => 'INFO', { portionNote: () => { throw new Error('note'); } });
+    const badPrompt = stub('bad-prompt', () => 'INFO', {
+      category: 'safety',
+      safetyPrompt: { answerKey: 'k', applies: () => { throw new Error('applies'); }, question: 'q?' },
+    });
+    const r = evaluate([badNote, badPrompt, moderateRule], ctx());
+    expect(r.cards.map((x) => x.ruleId)).toEqual(['moderate']);
+    expect(r.failures.map((f) => f.ruleId)).toEqual(['bad-prompt', 'bad-note']);
+  });
+
+  test('failures is empty when every rule evaluates', () => {
+    expect(evaluate([infoRule], ctx()).failures).toEqual([]);
   });
 
   test('a nutrition rule claiming CRITICAL does not throw while its inputs are unknown (silent first)', () => {

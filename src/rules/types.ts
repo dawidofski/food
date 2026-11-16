@@ -70,11 +70,10 @@ export type Rule = {
   /** The rule stays silent if any of these is not known in the pending entry. Absent means unknown, never zero. */
   requiresNutrients: NutrientKey[];
   /**
-   * Which total the rule reads. 'entry' reads only the pending entry. 'daily' (the default) reads today's
-   * running total plus the pending entry, so the coverage gate applies. Defaulting to 'daily' fails safe:
-   * a rule that forgets to declare 'entry' goes silent rather than firing off an understated total.
+   * Which total the rule reads, REQUIRED so no default can mislead. 'entry' reads only the pending entry.
+   * 'daily' reads today's running total plus the pending entry, so the coverage gate applies to it.
    */
-  scope?: 'entry' | 'daily';
+  scope: 'entry' | 'daily';
   /** Minimum share (0..1) of the day's energy with known values for each required nutrient. Default 0.8. */
   minCoverage?: number;
   /** Cards on the same nutrient merge into one. */
@@ -101,3 +100,6 @@ export type WarningCard = {
 };
 
 export type SafetyQuestion = { ruleId: string; question: string; answerKey: string };
+
+/** A rule that could not run. Reported, never silently dropped and never blocking: the caller shows it. */
+export type RuleFailure = { ruleId: string; category: 'nutrition' | 'safety'; message: string };
