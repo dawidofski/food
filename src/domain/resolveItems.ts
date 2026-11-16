@@ -1,5 +1,5 @@
 import type { DatasetFood } from '@/types/food';
-import type { FoodRef, Resolution } from '@/types/diary';
+import type { FoodRef, FoodSource, Resolution } from '@/types/diary';
 import type { NutrientSet } from '@/types/nutrients';
 import type { ParsedItem } from '@/domain/parseEntry';
 import type { Quantity } from '@/domain/quantity';
@@ -163,6 +163,38 @@ export function quantityToGrams(q: Quantity, food: DatasetFood): number | null {
   return choosePortion(q, food)?.grams ?? null;
 }
 
+/** The ref for one food at one gram amount: the only place a FoodRef is built from a DatasetFood. */
+function makeRef(source: FoodSource, food: DatasetFood, grams: number, label?: string): FoodRef {
+  const ref: FoodRef = { source, foodId: food.id, grams, classification: food.classification };
+  if (food.fped) {
+    const k = grams / 100;
+    ref.fped = {
+      vegCupEq: food.fped.vegCupEq * k,
+      fruitCupEq: food.fped.fruitCupEq * k,
+      wholeGrainOzEq: food.fped.wholeGrainOzEq * k,
+    };
+  }
+  if (label !== undefined) ref.portionLabel = label;
+  return ref;
+}
+
+/**
+ * One food that is already known, at a gram amount the person set: NOTHING is searched and nothing is guessed.
+ *
+ * This is the path a scanned barcode takes. A scan knows exactly which product it read, so running its name back
+ * through the fuzzy search would be the one place a near-miss could substitute a different food for the one in the
+ * person's hand. The result is an ordinary Resolution, so the gate, the rules and the diary treat it like any
+ * other entry. A non-positive or absurd gram amount yields an empty resolution rather than a bad total.
+ */
+export function resolveKnownFood(source: FoodSource, food: DatasetFood, grams: number, label?: string): Resolution {
+  if (!Number.isFinite(grams) || grams <= 0 || grams > MAX_ITEM_GRAMS) {
+    return { refs: [], nutrients: {}, coverage: {}, classification: mergeClassification([]), needsHelp: [], confidence: 0 };
+  }
+  const ref = makeRef(source, food, grams, label);
+  const { total, coverage } = sumNutrients([scalePer100g(food.per100g, grams)]);
+  return { refs: [ref], nutrients: total, coverage, classification: food.classification, needsHelp: [], confidence: 1 };
+}
+
 /**
  * Resolves parsed items against a lookup. An item that cannot be resolved safely goes to
  * `needsHelp` and the rest still count; nothing is guessed. Nutrients come from scalePer100g and
@@ -186,22 +218,7 @@ export function resolveItems(items: ParsedItem[], lookup: FoodLookup): Resolutio
       needsHelp.push(item);
       continue;
     }
-    const ref: FoodRef = {
-      source: hit.source,
-      foodId: hit.food.id,
-      grams: chosen.grams,
-      classification: hit.food.classification,
-    };
-    if (hit.food.fped) {
-      const k = chosen.grams / 100;
-      ref.fped = {
-        vegCupEq: hit.food.fped.vegCupEq * k,
-        fruitCupEq: hit.food.fped.fruitCupEq * k,
-        wholeGrainOzEq: hit.food.fped.wholeGrainOzEq * k,
-      };
-    }
-    if (chosen.label !== undefined) ref.portionLabel = chosen.label;
-    refs.push(ref);
+    refs.push(makeRef(hit.source, hit.food, chosen.grams, chosen.label));
     sets.push(scalePer100g(hit.food.per100g, chosen.grams));
     foods.push(hit.food);
     scores.push(hit.score);

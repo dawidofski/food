@@ -9,6 +9,7 @@ import type { DiaryEntry } from '@/types/diary';
 import BackupNudge from '@/ui/components/BackupNudge';
 import CoverageNote from '@/ui/components/CoverageNote';
 import { fmtAmount } from '@/ui/components/NutrientBar';
+import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 import EntryDetail from './EntryDetail';
 
@@ -117,6 +118,7 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
                 {timeOf(e.at)}
                 {isKnownValue(e.nutrients.energyKcal) && ` · ${fmtAmount(e.nutrients.energyKcal)} kcal`}
                 {e.items.some((i) => i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
+                {e.items.some((i) => i.source === 'off') && <OpenFoodFactsBadge />}
               </span>
             </button>
           </li>

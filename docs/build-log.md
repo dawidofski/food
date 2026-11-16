@@ -1866,3 +1866,256 @@ the dev server, which is how it was found; neither could recover without the con
 precisely because a database with no object stores has nowhere to keep a row, so there is nothing in it to lose,
 and the delete happens ONLY in that case. The healthy path is pinned by every test in `db.test.ts`, each of which
 writes through the same open and reads the row back.
+
+
+---
+
+
+To be merged into `docs/build-log.md`. Same convention as the rest: the entries that matter are marked **Ruling**.
+
+The findings that settled the design — CORS, the `es.` host, the unit of `sodium_100g`, the `added-sugars` false
+zeros — were established by probing the live API from a browser on 16 Nov 2026 and are not re-derived here. What
+follows is what that brief did not answer.
+
+---
+
+## What is read from Open Food Facts, and what is refused
+
+- **Ruling: `added-sugars` is never imported, for any product, with no exception.** The evidence is in the fixture
+  file itself: `added-sugars_100g` is `0` for Coca-Cola Original Taste (`sugars_100g: 10.6`) and `0` for LU Prince
+  biscuits (`sugars_100g: 32`). This app reads a present key as a KNOWN value, so importing that zero would make
+  the added-sugar rule say "0 g of added sugar, known" for a cola and **stay silent**. Nutella's `52.13` is right,
+  and is refused too: one rule with no exceptions beats a rule that has to judge each value, because the judging
+  is exactly what cannot be done from here. Pinned by a test that feeds the real Coca-Cola payload and asserts the
+  key is absent — `'addedSugarsG' in product.per100g` is `false`, not merely `undefined` — and by a second
+  assertion on the Nutella payload so the ban cannot be quietly narrowed to "only when it looks wrong". The
+  sugar-sweetened-drink rule keys on classification, so a scanned cola still warns; verified in a real browser.
+- **Ruling: trans fat is not imported either.** Not probed; decided by analogy and recorded as a judgement rather
+  than a finding. EU labels are not required to carry trans fat, so any `trans-fat_100g` in Open Food Facts is an
+  editor's contribution rather than a label reading, and carries the same false-zero risk as added sugars with
+  none of the evidence that settled them. Revisit only with a probe of real products that carry the field.
+- **Ruling: no vitamin or mineral is imported.** Their units in this API were NOT verified: none of the three
+  probed products carries one, and a unit error here is precisely the thousandfold mistake the `sodium_100g` note
+  exists to prevent. Not reading them costs nothing (they stay unknown, which they already were); reading them
+  wrong would put a fabricated figure into a daily total. Named in the review panel and in Settings as a gap.
+- Imported, therefore, and only these eight: `energy-kcal`, `proteins`, `fat`, `saturated-fat`, `carbohydrates`,
+  `sugars`, `fiber`, and `sodium` × 1000 into `sodiumMg`. A field that is missing produces an ABSENT key and a
+  sentence in the review panel naming it; a field that is present and zero is kept as a known zero, because that
+  is the label's own figure (Coca-Cola really has no fat).
+- **Ruling: an implausible figure refuses the whole product rather than dropping one nutrient.** A per-100 g
+  energy above 1000 kcal, or a macronutrient above 100 g, is a data-entry error, and a product carrying one has
+  demonstrated that nobody checked it. Importing the rest of it would be trusting the same editor twice.
+
+## `nutrition_data_per` is read, never assumed
+
+- **Ruling: only `"100g"` and `"serving"` are accepted, and `"serving"` only with a serving weight.** `"100g"`
+  uses the `_100g` fields as they stand. `"serving"` uses the `_serving` fields and scales them by
+  `serving_quantity`; with no usable serving weight the product is refused with "Open Food Facts gives this
+  product's figures per serving but does not say how much a serving weighs, so the amounts cannot be worked out",
+  and manual entry is offered. A missing or unrecognised `nutrition_data_per` is refused the same way. Open Food
+  Facts does appear to normalise `_100g` itself even for per-serving products, but that was not verified, and
+  deriving the figure from the fields the payload says are authoritative needs no assumption about its internals.
+  **Not verified against a real per-serving product**: all three probed products are `"100g"`. The path is covered
+  by a hand-built payload only, and that is recorded as a gap rather than claimed as tested.
+- A drink's "per 100 g" is per 100 ml. The product is marked `perMlNotPerGram` (beverage category, or a `ml`
+  serving size or pack size), the review panel says "This looks like a drink. Open Food Facts gives a drink's
+  figures per 100 ml, and this app counts 1 ml as 1 g", and the amount field is labelled "(1 ml counted as 1 g)".
+  A disclosure, not a silent conversion. Cola is about 1.04 g/ml, so the app understates a cola by ~4%; saying so
+  is better than inventing a density per product.
+
+## Classification, which drives warnings
+
+- **Ruling: `redMeat` and `processedMeat` are NOT set from Open Food Facts categories, and the app says so.** A
+  category that IS present (`en:charcuterie`, `en:hams`) would be trustworthy, so mapping the positives was
+  tempting. It was rejected because absence is the common case on exactly the products that matter, and the
+  absence of a card cannot be told from a clean result: a scanned chorizo would look checked. Rather than leave
+  that unsaid, the review panel states it outright — "The app cannot tell from Open Food Facts whether this is red
+  or processed meat, so those two warnings will not appear for anything you scan" — and Settings repeats it. A
+  stated gap beats a flag that fires on two thirds of the products it should.
+- **Ruling: `sweetDrink` IS set, from the product's own sugar figure rather than from a category.** A beverage
+  (`en:beverages`) that is not alcoholic, is not a juice or a milk drink, and whose own `sugars_100g` is at least
+  1 g, is a sugar-sweetened drink. The decision rests on a number off the label, not on a category guess, so
+  Coca-Cola Original (10.6) is flagged and Coca-Cola Zero (0.0, probed as a fourth product and kept as a fixture)
+  is not. The 1 g floor is the app's own choice, so a trace does not flag a drink. Known cost: an unsweetened
+  plant drink with natural sugars could be flagged, which is one INFO card.
+- `alcohol` is set from `en:alcoholic-beverages` or a positive alcohol figure. Unambiguous either way.
+- **Ruling: where the payload carries two NOVA groups that disagree, the worse one wins.** Nutella has
+  `product.nova_group: 3` and `product.nutriments['nova-group']: 4` — discovered while writing the fixture, not
+  expected. Taking the maximum is the same "worst case wins" rule `mergeClassification` already applies to a mixed
+  entry, and it errs toward showing the ultra-processed card rather than toward silence on a rule whose whole
+  point is a caution. Both figures are Open Food Facts' own; nothing is invented. When no group is given at all,
+  `novaGroup` is 1 — "not flagged", exactly the NOVA ASSUMPTION already recorded for custom foods — and the review
+  panel says the processing level is unknown.
+- `refinedGrain`, `vegetable`, `fruit`, `legume`, `oilyFish` are left false: no rule in the catalogue reads them
+  today and nothing in Open Food Facts maps onto them cleanly. There are no FPED cup-equivalents either, so a
+  scanned product contributes no vegetable or fruit amount — absent, which is unknown, never zero.
+
+## Allergens
+
+- **Ruling: a flagged allergen plus a scanned product is ALWAYS a reported `cannotCheck`, whether or not a tag
+  matched.** `allergens_tags` and `traces_tags` are `en:`-prefixed and are frequently empty for products that do
+  contain the allergen. The existing rule already holds that a missing tag is not an absence; for crowdsourced
+  data nobody need have looked at the packet at all. Silence at the gate reads as "checked, nothing found", so the
+  rule now says: *could not fully check X: the allergen list for a scanned product comes from Open Food Facts,
+  where anyone can edit it and where products that do contain an allergen often list none. Read the packet
+  yourself before you eat it.* It is reported even when a tag DID match and the CRITICAL card is already showing,
+  because the list may be short either way.
+- `cannotCheck` previously returned one reason. It now composes: an unrecognised flag and a scanned product are
+  both reported, not one instead of the other. Pinned by a test.
+- Traces are folded into `allergens`. A trace is a possible presence, and this rule's whole stance is "may be
+  present"; `traces` is kept separately so the review panel can name them as traces.
+- Tags are stripped of any language prefix (`en:`, `es:`, `fr:`) and four are renamed to this app's vocabulary
+  (`sulphur-dioxide-and-sulphites` → `sulphites`, `sesame-seeds` → `sesame`, `tree-nuts` → `nuts`,
+  `cereals-containing-gluten` → `gluten`). Everything else keeps the tag's own word, which the allergen rule folds
+  and singularises before matching and which can still meet a tag the person typed on a custom food.
+
+## The scan itself
+
+- `BarcodeDetector` with `getUserMedia`, formats `ean_13`, `ean_8`, `upc_a`, `upc_e`. **No dependency added and no
+  polyfill shipped.** The seam is `src/data/barcodeScanner.ts`: `scannerAvailability()`, `getDetector()`,
+  `openCamera()`, `stopCamera()`. A polyfill could be lazy-loaded inside `getDetector` without the screen changing.
+- **Ruling: there is never a button that does nothing.** `scannerAvailability()` distinguishes `no-api` (iOS
+  Safari, Firefox), `insecure` (not a secure context, so no camera is offered at all) and `no-camera`, and the
+  panel prints that reason instead of a Start button. A refused camera is reported when the stream is asked for,
+  not as an availability state, because the person may simply have said no. Typing the digits is offered in every
+  one of these cases and in the normal case too — the digits are printed under every barcode, so it always works.
+  Confirmed in the real browser: desktop Chrome has no `BarcodeDetector`, and the panel said so and fell back.
+- The camera is stopped on unmount (a `useEffect` cleanup), on a successful detect, on Cancel, on Stop, and before
+  the proposed food is handed to the entry flow. All of them. The detect loop is a 250 ms interval, cleared in the
+  same place.
+- **Ruling: the check digit is tested for 12- and 13-digit codes only.** An 8-digit code may be EAN-8 or UPC-E,
+  and a UPC-E carries the check digit of the UPC-A it expands to, so testing it under the EAN-8 rule would refuse
+  valid scans. Eight digits are accepted on length alone and a mistyped one simply comes back "not found". A
+  13-digit code with a bad check digit is refused BEFORE any request, so a typo does not become "not in Open Food
+  Facts" and send the person off to type nutrition by hand.
+- A half-read frame that fails the check digit is ignored and scanning continues; it is not an error.
+
+## How a scanned product reaches the diary
+
+- **Ruling: a scan never adds anything.** It produces a proposed food in a review panel — name, brand, barcode,
+  pack size, the eight figures per 100 (and what they come to at the amount being eaten), a list of what the app
+  could not find out, both dates, the licence — and only a press of "Check this and log it" sends it into the
+  ordinary warning gate and confirmation. Pinned: after a lookup the entries store is still empty, and after the
+  gate opens it is still empty.
+- **Ruling: the scanned product is NOT searched for again by name.** `useEntryFlow` gained `submitKnownFood`,
+  which builds the resolution directly through the new `resolveKnownFood` in `resolveItems.ts`. A scan knows
+  exactly which product it read; running its name back through the fuzzy search would be the one place a
+  near-miss could substitute a different food for the one in the person's hand. From there it is an ordinary
+  entry: the same rules, gate, cards, failures and confirmation.
+- `rawText` is stored as `"<grams> g <name>"`, which is what the Recent list re-submits on "log that again". That
+  path DOES go through the search, which is why `offLookup` is searchable at all (see below).
+- `resolveItems` was refactored so both paths build a `FoodRef` through one `makeRef`; no behaviour changed and
+  its tests are untouched.
+
+## The cache
+
+- A new object store, `offProducts`, keyed by barcode. **`DB_VERSION` is now 2**, and `create()` was rewritten to
+  add whatever is missing rather than assuming an empty database, so it serves a fresh open, a 1 → 2 upgrade and
+  the existing repair path alike. Verified in a real browser: the dev database upgraded in place and now reports
+  all four stores.
+- **The repair test was quietly weakened by the version bump and was fixed.** `tests/data/dbRepair.test.ts`
+  planted an empty database at version **1**; with `DB_VERSION` at 2 that is just an ordinary upgrade, and the
+  repair — which only runs for a database that already claims the CURRENT version — would have stopped being
+  tested, silently. `DB_VERSION` is now exported and the test plants at it. Worth remembering for the next bump.
+- **Ruling: the cache stores the MAPPED product, not the raw payload.** A full payload is about 130 KB; three
+  scans a day would be 140 MB a year on a phone, to hold fields nothing reads. The cost is real and recorded: a
+  later improvement to the mapping does not reach a product already cached. That is why the review panel carries
+  an "Ask Open Food Facts again" button, which refetches and replaces the stored copy — one tap, and the only way
+  a product edited upstream reaches a barcode already scanned.
+- A not-found, offline or failed lookup stores NOTHING. An absent product must never become a cached empty one.
+- `eraseEverything` clears the new store (it is in the transaction's list), and the in-memory index empties
+  through the existing `onEraseEverything` hook, so an erased product is neither stored nor searchable.
+- **The cache is not in the export file.** Every entry snapshots its own nutrients at commit, so a restored diary
+  keeps its numbers; it loses only the product's NAME in the entry detail, exactly as a deleted custom food does.
+  `exportImport.ts` was taught to accept `source: 'off'` so a backup containing a scanned entry imports.
+
+## Where a scanned product sits among the other food providers
+
+- `withBatches(withCustomFoods(withOpenFoodFacts(datasetLookup)))`: batches, then the person's own foods, then
+  scanned products, then the USDA dataset. Earlier providers win an exact-name tie, so the person's own food still
+  beats a crowdsourced one for their own word.
+- **Ruling: scanned products are searchable by name, and this is a deliberate trade.** It is what makes "log that
+  again" work from the Recent list. The consequence is that after scanning a Coca-Cola, typing "cola" resolves to
+  the scanned product rather than the USDA survey cola, because both score alike and the scanned provider is
+  listed first. That is arguably the better answer — it is the actual product in the fridge — and it is visible:
+  the gate shows the Open Food Facts badge with the product's last-edited date before anything is saved. Nothing
+  crowdsourced can enter the cache without a deliberate scan, so the search only ever ranges over products the
+  owner scanned themselves.
+
+## Wording, verbatim
+
+The badge, wherever a scanned food appears (gate, Recent, Diary, entry detail):
+
+> **Open Food Facts · edited 12 Nov 2026**
+
+with the title text: *These numbers come from Open Food Facts, a public database that anyone can edit. They were
+copied from a product label by a member of the public, not measured by a laboratory, and they may be wrong, out of
+date or incomplete. This product was last edited there on 12 Nov 2026.* The date is shown on the badge itself
+wherever it is known, not only in the tooltip; in the list rows, where no product record is to hand, the badge
+appears without a date.
+
+The review panel's own date line:
+
+> These figures come from **Open Food Facts**, a public database that anyone can edit. They were copied off a
+> packet by a member of the public, not measured by a laboratory.
+> Last edited there on 12 Nov 2026. Looked up just now, on 16 Nov 2026.
+> Open Food Facts data is used under the Open Database License (ODbL) 1.0.
+
+A cached product says instead: *Looked up on 16 Nov 2026 and kept on this device since, so it has not been asked
+for again.*
+
+The privacy line under the barcode field, and the fuller version in Settings:
+
+> A lookup sends the barcode to Open Food Facts and nothing else: no diary, no profile, no totals and nothing that
+> identifies you.
+
+## Not done, and unsure
+
+- **No per-serving product was probed**, so the `nutrition_data_per: "serving"` conversion is tested only against
+  a payload written by hand. It is the one import path with no real example behind it.
+- **The camera was not exercised.** Desktop Chrome has no `BarcodeDetector` and the preview pane has no camera, so
+  the scan path itself — `getUserMedia`, the detect loop, `track.stop()` — has been reasoned about and typed but
+  never run. The owner's Android Chrome is the first place it will execute. Everything around it (availability
+  reporting, the manual fallback, the lookup, the review, the gate, the cache) was verified in a real browser at
+  375 px, including a live request to the real API.
+- **The light theme was checked by removing the `dark` class in the page, not by switching the app's theme**, so
+  as not to overwrite the owner's stored preference on the dev origin. The badge and panel read correctly in both.
+- The dev-server database at `localhost:5173` now holds **one cached product** (the Coca-Cola used for the live
+  check) and no diary entry. Erase it from Settings if it is unwanted.
+- `offProductMeta` is read during render in the entry detail, once per item, from an in-memory map. Fine at this
+  scale; a long entry would call it twice per row.
+- Open Food Facts' API etiquette asks for a descriptive `User-Agent`, which a browser will not let a page set.
+  Nothing here can comply. What is offered instead: one request per scan, the cache, and no bulk fetching.
+- `data_quality_errors_tags` exists and could gate an import. It is read by nothing here; the plausibility
+  ceilings do that job more directly. Worth revisiting if a bad product gets through.
+- The review panel is long — eight figures plus five or six gap sentences — and on a 375 px screen the confirm
+  button is well below the fold. That is the project's house style (say everything, hide nothing) but it is the
+  one place this feature might deserve a second look on the phone.
+
+## Process
+
+- Test-first. `tests/domain/openFoodFacts.test.ts` was written and run red (unresolved import) before the module
+  existed, then 24 assertions green; `tests/data/offLookup.test.ts` likewise; `tests/ui/barcodeScan.test.tsx` was
+  written and run with all 14 failing before the screen existed. The three allergen-rule tests were run red
+  against the unmodified rule.
+- The UI tests drive the REAL cache and the real mapping, with only `fetch` replaced by a stub serving the
+  recorded payloads, so the product the entry flow reads back by barcode is the one the cache actually stored.
+  Nothing in the suite touches the network.
+- `tests/fixtures/off/payloads.ts` holds four real payloads (Coca-Cola, LU Prince, Nutella, Coca-Cola Zero) and a
+  real not-found reply, fetched on 16 Nov 2026 and trimmed to the fields this app reads plus several it ignores.
+  Values are untouched, false zeros included — that is the point of them.
+- `npm test` 54 files / 1169 tests green, `npx tsc --noEmit` clean, `npm run build` clean.
+
+## Review addition (controller)
+
+**Ruling: the database repair deletes ONLY a database holding no object stores at all, never one missing some.**
+When the repair was written there were three stores created together, so "missing any" and "holding nothing" were
+the same condition. The barcode work made `create` additive across versions, and the two conditions parted
+company: a database can now legitimately hold a full diary while lacking a store added in a later version. The
+repair's own comment still claimed it was safe "because a database with no object stores cannot be holding
+anything" — true of the claim, no longer true of the test it was guarding. Left alone, a future version bump
+could have deleted a real diary on open, and the comment would have read as if that were intended. The guard is
+now `holdsNothing` (zero stores); a partial database throws and the diary reports that it could not be read,
+which is recoverable, where a wrong delete is not. Pinned by `tests/data/dbNeverDeletesData.test.ts`, which
+plants a diary with an entry and all stores but `offProducts` and asserts the entry survives; verified red by
+mutating the guard to `if (false)`.

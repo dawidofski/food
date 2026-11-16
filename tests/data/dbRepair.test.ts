@@ -10,10 +10,15 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
  * Deleting it is safe because a database with no object stores has nowhere to keep a row, so there is nothing in
  * it to lose. These tests pin both halves: the broken one is replaced, and a healthy one is never touched.
  */
-function plantEmptyV1(): Promise<void> {
+/**
+ * Plants a database at the CURRENT version with no object stores — the one state `upgrade` cannot fix, because it
+ * does not run. The version must track DB_VERSION: planted at an older version this would merely exercise the
+ * ordinary upgrade path and would stop testing the repair at all, silently, the next time a store is added.
+ */
+function plantEmptyAtCurrentVersion(version: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('food-diary', 1);
-    req.onupgradeneeded = () => undefined; // version 1, deliberately without the stores
+    const req = indexedDB.open('food-diary', version);
+    req.onupgradeneeded = () => undefined; // deliberately without the stores
     req.onsuccess = () => { req.result.close(); resolve(); };
     req.onerror = () => reject(req.error);
   });
@@ -37,7 +42,8 @@ beforeEach(async () => {
 
 describe('opening a diary that was left without its object stores', () => {
   test('it is rebuilt instead of failing every read for ever', async () => {
-    await plantEmptyV1();
+    const { DB_VERSION } = await import('@/data/db');
+    await plantEmptyAtCurrentVersion(DB_VERSION);
     expect(await storeNames()).toEqual([]);
 
     const { addEntry, getEntry } = await import('@/data/db');
@@ -51,7 +57,7 @@ describe('opening a diary that was left without its object stores', () => {
     });
 
     expect((await getEntry('a'))!.id).toBe('a');
-    expect(await storeNames()).toEqual(expect.arrayContaining(['entries', 'customFoods', 'batches']));
+    expect(await storeNames()).toEqual(expect.arrayContaining(['entries', 'customFoods', 'batches', 'offProducts']));
   });
 
   // The other half — that a database WITH its stores is never deleted — is already pinned by every test in

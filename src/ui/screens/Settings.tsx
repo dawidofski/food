@@ -22,6 +22,7 @@ export default function Settings({ onErased }: { onErased?: () => void }) {
       <BackupSettings onImported={refresh} />
       <StorageSettings />
       <DataSourceSettings />
+      <BarcodeSettings />
       <EraseSettings onErased={() => { refresh(); onErased?.(); }} />
     </main>
   );
@@ -175,6 +176,69 @@ function DataSourceSettings() {
       <p data-testid="trans-fat-limit" className="text-sm">
         This food data records no trans fat for any of its foods, so the app cannot check trans fat in anything you log
         from it. The trans fat warning can still appear for a food you add yourself, if you enter a trans fat figure.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Open Food Facts: what it is, what a lookup sends, and the two standing rulings about what this app will not
+ * take from it. Sits beside "Where the food numbers come from", because it is the second place the numbers in
+ * this diary can come from. The privacy paragraph is written to the same standard as the DeepSeek disclosure
+ * above: it says exactly what leaves the device.
+ */
+function BarcodeSettings() {
+  return (
+    <section aria-labelledby="off-heading" data-testid="off-source" className="space-y-2 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
+      <h2 id="off-heading" className="text-lg font-semibold">Barcodes and Open Food Facts</h2>
+      <p className="text-sm">
+        Scanning a barcode on the Log screen looks the product up in Open Food Facts, a public database of food
+        products. It is crowdsourced: anyone can add or change any product, the figures were copied off a packet by
+        a member of the public rather than measured in a laboratory, and they may be wrong, stale or incomplete.
+        Anything logged from a scan is marked &ldquo;Open Food Facts&rdquo; wherever it appears, with the date the
+        product was last edited there.
+      </p>
+      <p className="text-sm">
+        <strong>What a lookup sends:</strong> only the barcode, and nothing else. Your diary, your profile, your
+        targets and your totals are not sent, and nothing that identifies you goes with the request &mdash; no
+        account, no key, no cookie and no name. Each scan is one request. Products you have scanned are kept on this device so the
+        same barcode is never asked for twice, and they are removed when you erase everything.
+      </p>
+      <ul className="list-disc space-y-1 pl-5 text-sm">
+        <li>
+          <strong>Added sugars are never taken from it.</strong> Open Food Facts records 0 g of added sugar for
+          products that plainly contain it &mdash; a cola, a chocolate biscuit &mdash; and a zero here would be read
+          as a known figure and would silence the added-sugar warning. Added sugar is left unknown for every scanned
+          product. Total sugars are read.
+        </li>
+        <li>
+          <strong>Vitamins, minerals and trans fat are not read from it</strong>, so they are unknown for a scanned
+          product rather than zero.
+        </li>
+        <li>
+          <strong>An empty allergen list is not an all-clear.</strong> The allergen lists there are contributed by
+          the public and are often empty for products that do contain the allergen. If you have flagged an allergen,
+          a scanned product always comes with a note saying it could not be fully checked. Read the packet.
+        </li>
+        <li>
+          The app cannot tell from Open Food Facts whether a product is red or processed meat, so those two warnings
+          do not appear for anything scanned.
+        </li>
+      </ul>
+      <p className="text-sm">
+        Product data from Open Food Facts is made available under the{' '}
+        <a className="underline" href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer noopener">
+          Open Database License (ODbL) 1.0
+        </a>
+        , and individual contents under the{' '}
+        <a className="underline" href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer noopener">
+          Database Contents License 1.0
+        </a>
+        . Open Food Facts is at{' '}
+        <a className="underline" href="https://world.openfoodfacts.org/" target="_blank" rel="noreferrer noopener">
+          openfoodfacts.org
+        </a>
+        .
       </p>
     </section>
   );

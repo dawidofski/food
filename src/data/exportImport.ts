@@ -115,7 +115,8 @@ function refs(v: unknown, where: string): void {
   arr(v, where).forEach((r, i) => {
     const w = `${where}[${i}]`;
     const o = obj(r, w);
-    oneOf(o.source, ['dataset', 'custom', 'batch'], `${w}.source`);
+    // 'off' is a product scanned from a barcode. A backup written by a later version must still import here.
+    oneOf(o.source, ['dataset', 'custom', 'batch', 'off'], `${w}.source`);
     str(o.foodId, `${w}.foodId`);
     num(o.grams, `${w}.grams`);
     classification(o.classification, `${w}.classification`);

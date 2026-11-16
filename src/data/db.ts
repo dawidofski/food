@@ -1,5 +1,6 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
+import type { OffProduct } from '@/types/food';
 import type { Profile } from '@/types/profile';
 
 /**
@@ -17,10 +18,18 @@ interface FoodDiaryDB extends DBSchema {
   entries: { key: string; value: DiaryEntry; indexes: { at: string } };
   customFoods: { key: string; value: CustomFood };
   batches: { key: string; value: Batch };
+  /** Products scanned from a barcode and read from Open Food Facts, keyed by barcode. A cache, not history. */
+  offProducts: { key: string; value: OffProduct };
 }
 
 const DB_NAME = 'food-diary';
-const DB_VERSION = 1;
+/**
+ * 2 adds `offProducts`. Raise this for EVERY store added: `upgrade` runs only when the stored version is below it,
+ * and `create` below is written to add whatever is missing, so an old database gains the new store and a fresh one
+ * gets everything. The repair path in `open()` relies on `create` being safe to call on a database that already
+ * holds some of the stores.
+ */
+export const DB_VERSION = 2;
 /** Every localStorage key this app writes MUST go through `lsKey`, so `eraseEverything` can find it. */
 export const LS_PREFIX = 'fd.';
 export const lsKey = (name: string): string => `${LS_PREFIX}${name}`;
@@ -28,19 +37,35 @@ const PROFILE_KEY = lsKey('profile');
 
 let dbPromise: Promise<IDBPDatabase<FoodDiaryDB>> | null = null;
 
-const STORES = ['entries', 'customFoods', 'batches'] as const;
+const STORES = ['entries', 'customFoods', 'batches', 'offProducts'] as const;
 
+/** Adds whatever is missing, so it serves a fresh database, a version upgrade and the repair in `open()` alike. */
 function create(d: IDBPDatabase<FoodDiaryDB>): void {
-  const entries = d.createObjectStore('entries', { keyPath: 'id' });
-  // INVARIANT: `at` is always a canonical UTC ISO string (toISOString), so lexicographic
-  // index order is chronological order. Every write path goes through normaliseAt.
-  entries.createIndex('at', 'at');
-  d.createObjectStore('customFoods', { keyPath: 'id' });
-  d.createObjectStore('batches', { keyPath: 'id' });
+  if (!d.objectStoreNames.contains('entries')) {
+    const entries = d.createObjectStore('entries', { keyPath: 'id' });
+    // INVARIANT: `at` is always a canonical UTC ISO string (toISOString), so lexicographic
+    // index order is chronological order. Every write path goes through normaliseAt.
+    entries.createIndex('at', 'at');
+  }
+  if (!d.objectStoreNames.contains('customFoods')) d.createObjectStore('customFoods', { keyPath: 'id' });
+  if (!d.objectStoreNames.contains('batches')) d.createObjectStore('batches', { keyPath: 'id' });
+  if (!d.objectStoreNames.contains('offProducts')) d.createObjectStore('offProducts', { keyPath: 'barcode' });
 }
 
 function missingStores(d: IDBPDatabase<FoodDiaryDB>): string[] {
   return STORES.filter((s) => !d.objectStoreNames.contains(s));
+}
+
+/**
+ * The ONLY state the repair below may act on: a database holding no object stores whatsoever.
+ *
+ * `missingStores` is not the same test and must not be used for this. It reports a database that is missing ANY
+ * store, and since `create` became additive across versions, a database can legitimately hold entries while
+ * lacking a newer store. Deleting on `missingStores` would therefore throw away a real diary, which is the exact
+ * opposite of what this code is for. An empty database is the safe case because there is nowhere for a row to be.
+ */
+function holdsNothing(d: IDBPDatabase<FoodDiaryDB>): boolean {
+  return d.objectStoreNames.length === 0;
 }
 
 /**
@@ -53,12 +78,24 @@ function missingStores(d: IDBPDatabase<FoodDiaryDB>): string[] {
  * could not be read" forever and the only cure would be DevTools.
  *
  * Repair is safe precisely because a database with no object stores cannot be holding anything: there is nowhere
- * for a row to be. We delete only in that case, never when the stores are present, so no path here can discard
- * data. If the deletion or the second open fails, the original failure stands and the caller reports it.
+ * for a row to be. We delete ONLY in that case — see `holdsNothing`, and note that "missing some store" is a
+ * different and much more common condition that must never reach the delete.
+ *
+ * If some stores are present and others are not, something has happened that this code does not understand, and
+ * the one thing it must not do is guess. It throws instead, and the diary reports that it could not be read,
+ * which is recoverable; a wrong delete is not.
  */
 async function open(): Promise<IDBPDatabase<FoodDiaryDB>> {
-  const first = await openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, { upgrade: (d, oldVersion) => { if (oldVersion < 1) create(d); } });
-  if (missingStores(first).length === 0) return first;
+  const first = await openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, { upgrade: (d) => create(d) });
+  const missing = missingStores(first);
+  if (missing.length === 0) return first;
+
+  if (!holdsNothing(first)) {
+    const held = [...first.objectStoreNames].join(', ');
+    first.close();
+    throw new Error(`The diary is missing ${missing.join(', ')} but still holds ${held}, so it was left alone.`);
+  }
+
   first.close();
   await deleteDB(DB_NAME);
   return openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, { upgrade: (d) => create(d) });
@@ -284,6 +321,32 @@ export async function decrementBatchPortion(id: string): Promise<void> {
   await tx.done;
 }
 
+// ---- scanned products from Open Food Facts ----
+
+/**
+ * A CACHE, not history. It exists so a product scanned twice is fetched once (Open Food Facts asks for restraint and
+ * a browser cannot send the User-Agent its API etiquette asks for, so the politeness this app can offer is one
+ * request per scan and no re-fetching). Every diary entry snapshots its own nutrients at commit, so clearing this
+ * store rewrites nothing: a past entry keeps its numbers and only loses the product's name in the detail view.
+ */
+export async function putOffProduct(p: OffProduct): Promise<void> {
+  assertFiniteValues('per100g', p.per100g);
+  if (p.servingGrams !== undefined) assertFiniteNumber('servingGrams', p.servingGrams);
+  await (await db()).put('offProducts', p);
+}
+
+export async function getOffProduct(barcode: string): Promise<OffProduct | undefined> {
+  return (await db()).get('offProducts', barcode);
+}
+
+export async function allOffProducts(): Promise<OffProduct[]> {
+  return (await db()).getAll('offProducts');
+}
+
+export async function deleteOffProduct(barcode: string): Promise<void> {
+  await (await db()).delete('offProducts', barcode);
+}
+
 // ---- profile (localStorage) ----
 
 export async function getProfile(): Promise<Profile | null> {
@@ -346,11 +409,12 @@ async function eraseStores(): Promise<void> {
   }
 
   const d = await db();
-  const tx = d.transaction(['entries', 'customFoods', 'batches'], 'readwrite');
+  const tx = d.transaction(['entries', 'customFoods', 'batches', 'offProducts'], 'readwrite');
   await Promise.all([
     tx.objectStore('entries').clear(),
     tx.objectStore('customFoods').clear(),
     tx.objectStore('batches').clear(),
+    tx.objectStore('offProducts').clear(),
     tx.done,
   ]);
   if (!swept) throw sweepError;

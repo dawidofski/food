@@ -169,6 +169,11 @@ likewise stays a lower mark on the protein bar, not a bar of its own.
   and justify, not invented here. Protein moves to **2.0 g/kg** (section 6).
 - *Gain*: energy = expenditure + a surplus, same treatment.
 
+The goal screen runs this conversion in **both directions**, because people think in both: pick a rate and it
+shows the daily deficit or surplus it needs; pick a deficit and it shows the rate it implies. Same 7,700 kcal/kg,
+same figure shown on screen, same wording as the weight page's arithmetic block (§8.5), so the two screens can
+never appear to disagree with each other.
+
 The app must say, in one plain sentence, that these targets assume the expenditure figure is right, and name which
 of the three sources it is.
 
@@ -312,8 +317,24 @@ Weight page contents, in order:
 3. **The projection**: a band forward to twelve weeks, widening with distance, drawn so it cannot be mistaken for
    measurement. It assumes today's eating continues and says so on the page.
 4. **Why**, as arithmetic in its own block: average logged intake, the expenditure figure and which of the three
-   sources it came from, and the balance between them. Where logging is patchy it says that instead of averaging
-   over days it cannot see.
+   sources it came from, the balance between them, and — the owner asked for this explicitly — **that balance
+   expressed as a rate**, because "about 0.4 kg a week" is a number a person can act on and "−430 kcal a day" is
+   not.
+
+   The conversion is 7,700 kcal per kg, shown on the page so the figure is never a black box. Worked examples,
+   all approximate: a 300 kcal daily deficit is about **0.27 kg a week**; 700 kcal is about **0.64 kg**; 1 kg a
+   week needs about **1,100 kcal a day**. (The owner's own estimate had 700 kcal at 1 kg a week. That is roughly
+   the value you get from mixing up the per-pound figure, 3,500 kcal, with kilograms — an easy slip, and the
+   reason the page shows the conversion rather than only the answer.)
+
+   **The implied rate and the measured rate are shown together, and the page expects them to disagree.** That
+   disagreement is the most informative thing here: if the arithmetic implies 0.6 kg a week and the scale says
+   0.2, then the logging is incomplete, or the expenditure figure is too high, or both — and the page says that
+   plainly rather than picking a winner. Where they differ, **the measured rate is the one that governs the
+   projection**; the arithmetic never overrides the scale. This is also exactly the signal that feeds the
+   observed-expenditure source in §7.1.
+
+   Where logging is patchy it says so instead of averaging over days it cannot see.
 5. **What contributed**, as the honest version of "which foods affect my weight": the entries carrying the most
    energy over the period, as a plain list. Labelled as arithmetic about energy, with no claim that any of them
    caused a weight change.

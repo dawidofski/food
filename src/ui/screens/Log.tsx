@@ -5,15 +5,27 @@ import type { DiaryEntry } from '@/types/diary';
 import EntryRow from '@/ui/components/EntryRow';
 import WarningGate, { CheckNotes, ResolvedLines } from './WarningGate';
 import { FoodEditor } from './MyFoods';
+import ScanBarcode, { type ScanDeps } from './ScanBarcode';
 
 const RECENT_LIMIT = 8;
 
-export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: FlowDeps; initialDraft?: string }) {
+export default function Log({
+  deps = defaultDeps,
+  initialDraft = '',
+  scan,
+}: {
+  deps?: FlowDeps;
+  initialDraft?: string;
+  /** The barcode scanner's seam, injected by tests so nothing touches a camera or the network. */
+  scan?: ScanDeps;
+}) {
   const flow = useEntryFlow(deps);
   const [draft, setDraft] = useState(initialDraft);
   const [recent, setRecent] = useState<DiaryEntry[]>([]);
   /** The name to start the editor with, or null when the editor is closed. */
   const [editorName, setEditorName] = useState<string | null>(null);
+  /** True while the barcode panel is open. A scan proposes a food; it never adds one. */
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -43,8 +55,8 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
     void flow.submit(draft);
   };
 
-  // Typed text and an open food editor are unsaved work too.
-  useHoldUpdates(draft.trim() !== '' || editorName !== null);
+  // Typed text, an open food editor and a part-finished scan are unsaved work too.
+  useHoldUpdates(draft.trim() !== '' || editorName !== null || scanning);
 
   const gateOpen = flow.stage === 'gate' || flow.stage === 'questions';
 
@@ -66,18 +78,43 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
         <button type="submit" className="min-h-14 rounded-xl bg-slate-900 dark:bg-slate-100 px-6 text-lg text-white dark:text-slate-900">Log</button>
       </form>
 
+      {!scanning && (
+        <button
+          type="button"
+          onClick={() => { setEditorName(null); setScanning(true); }}
+          className="min-h-12 w-full rounded-xl border border-slate-400 dark:border-slate-500 px-4 text-base"
+        >
+          Scan a barcode
+        </button>
+      )}
+
+      {scanning && (
+        <ScanBarcode
+          {...(scan ? { deps: scan } : {})}
+          onClose={() => setScanning(false)}
+          onEnterManually={() => { setScanning(false); setEditorName(''); }}
+          onLog={(food, grams, text) => {
+            setScanning(false);
+            setDraft('');
+            void flow.submitKnownFood(food, grams, text);
+          }}
+        />
+      )}
+
       {flow.stage === 'resolving' && <p className="text-sm text-slate-600 dark:text-slate-400">Checking&hellip;</p>}
       {flow.error && !gateOpen && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{flow.error}</p>}
 
-      {flow.stage === 'needsHelp' && editorName !== null && (
+      {editorName !== null && (
         <section className="rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
           <FoodEditor
             initialName={editorName.charAt(0).toUpperCase() + editorName.slice(1)}
             onCancel={() => setEditorName(null)}
-            onSaved={() => {
+            onSaved={(saved) => {
               setEditorName(null);
-              // The food now exists, so the same text can resolve.
-              void flow.submit(flow.lastText);
+              // The food now exists, so the same text can resolve. Opened from a scan that found nothing there is
+              // no earlier text, so the new food's own name is put in the box ready to log.
+              if (flow.lastText.trim() !== '') void flow.submit(flow.lastText);
+              else setDraft(saved.name);
             }}
           />
         </section>

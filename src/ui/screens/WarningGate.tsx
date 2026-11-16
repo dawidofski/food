@@ -1,5 +1,6 @@
 import type { EntryFlow, ResolvedLine } from '@/state/useEntryFlow';
 import type { RuleFailure } from '@/rules/types';
+import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 import WarningCard from '@/ui/components/WarningCard';
 import { fmtGrams } from '@/ui/format';
@@ -30,6 +31,7 @@ export function ResolvedLines({ lines }: { lines: ResolvedLine[] }) {
             )}
             {l.source === 'batch' && <span className="ml-1 text-sm font-normal text-slate-700 dark:text-slate-300">(from a batch)</span>}
             {(l.source === 'custom' || l.selfReported) && <SelfReportedBadge />}
+            {l.source === 'off' && <OpenFoodFactsBadge {...(l.offLastModified !== undefined ? { lastModified: l.offLastModified } : {})} />}
           </p>
           {l.unusual && (
             <p data-testid="unusual-serving" className="mt-1 rounded-lg border border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-2 text-amber-950 dark:text-amber-200">

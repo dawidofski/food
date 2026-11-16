@@ -47,6 +47,36 @@ describe('allergen rule', () => {
     const d = ctx({ flagged: ['sesame'], foodName: 'Hummus', foodAllergens: ['sesame'] });
     expect(allergenRule.portionNote(d)).toMatch(/indicative/i);
   });
+  test('a scanned product is reported as never fully checked, instead of a silent all-clear', () => {
+    // Open Food Facts allergen lists are contributed by the public and are often empty for products that DO
+    // contain the allergen. Silence here would read as "checked, nothing found", which is the one thing this
+    // rule may never say.
+    const scanned = ctx({ flagged: ['peanuts'], foodName: 'Príncipe', foodAllergens: [], foodSource: 'off' });
+    const note = allergenRule.cannotCheck!(scanned);
+    expect(note).not.toBeNull();
+    expect(note).toMatch(/open food facts/i);
+    expect(note).toMatch(/Príncipe/);
+    expect(note).not.toMatch(/allergen-free|free of/i);
+
+    // and still when the product does carry a matching tag: the list may be incomplete either way.
+    const tagged = ctx({ flagged: ['milk'], foodName: 'Nutella', foodAllergens: ['milk'], foodSource: 'off' });
+    expect(allergenRule.cannotCheck!(tagged)).toMatch(/open food facts/i);
+    expect(allergenRule.level(tagged)).toBe('CRITICAL');
+  });
+  test('nothing is reported for a scanned product when no allergen is flagged', () => {
+    // The shipped default is an empty flag list; there is no check to fail.
+    expect(allergenRule.cannotCheck!(ctx({ foodName: 'Nutella', foodAllergens: [], foodSource: 'off' }))).toBeNull();
+  });
+  test('an unrecognised flag and a scanned product are both reported, not one instead of the other', () => {
+    const both = ctx({ flagged: ['kiwi'], foodName: 'Nutella', foodAllergens: [], foodSource: 'off' });
+    const note = allergenRule.cannotCheck!(both)!;
+    expect(note).toMatch(/kiwi/);
+    expect(note).toMatch(/open food facts/i);
+  });
+  test("a scanned product's tags are named as the public database's, not as the app's own", () => {
+    const c = ctx({ flagged: ['milk'], foodName: 'Nutella', foodAllergens: ['milk'], foodSource: 'off' });
+    expect(allergenRule.portionNote(c)).toMatch(/open food facts/i);
+  });
   test('the engine returns a CRITICAL card for it and none by default', () => {
     expect(evaluate([allergenRule], ctx({ flagged: ['peanuts'], foodAllergens: ['peanuts'] })).cards[0]?.level).toBe('CRITICAL');
     expect(evaluate([allergenRule], ctx({ foodAllergens: ['peanuts'] })).cards).toEqual([]);

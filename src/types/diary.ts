@@ -1,8 +1,15 @@
 import type { ClassificationFlags, Coverage, NutrientSet } from './nutrients';
 import type { ParsedItem } from '@/domain/parseEntry';
 
-/** Which provider a food came from. Custom foods and batches arrive in later tasks. */
-export type FoodSource = 'dataset' | 'custom' | 'batch';
+/**
+ * Which provider a food came from.
+ *  - 'dataset': the bundled USDA FNDDS survey foods.
+ *  - 'custom': a food the person entered themselves, shown as self-reported.
+ *  - 'batch': a portion of something they cooked.
+ *  - 'off': a product scanned from its barcode and read from Open Food Facts. CROWDSOURCED: anyone may edit it,
+ *    no laboratory measured it, and it carries its own badge saying so wherever it appears.
+ */
+export type FoodSource = 'dataset' | 'custom' | 'batch' | 'off';
 
 export type FoodRef = {
   source: FoodSource;

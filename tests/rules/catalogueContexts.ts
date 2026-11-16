@@ -48,7 +48,7 @@ export type Opts = {
   /** Resolved food identity of the pending entry. Absent = no identity known. */
   foodName?: string;
   foodAllergens?: string[];
-  foodSource?: 'dataset' | 'custom' | 'batch';
+  foodSource?: 'dataset' | 'custom' | 'batch' | 'off';
   /** The user's flagged allergens (profile). Default none, which is the shipped default. */
   flagged?: string[];
   answers?: Record<string, boolean>;

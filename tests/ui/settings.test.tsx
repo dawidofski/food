@@ -392,6 +392,22 @@ describe('settings: data source and what cannot be checked', () => {
     expect(screen.getByTestId('trans-fat-limit').textContent).toMatch(/cannot check trans fat/i);
     vi.unstubAllGlobals();
   });
+
+  test('the barcode section names Open Food Facts, its licence, and what a lookup sends', async () => {
+    render(<Settings />);
+    const box = await screen.findByTestId('off-source');
+    const text = box.textContent ?? '';
+    expect(text).toMatch(/Open Food Facts/);
+    expect(text).toMatch(/Open Database Licen[cs]e|ODbL/i);
+    expect(box.querySelector('a[href*="opendatacommons.org"]')).not.toBeNull();
+    // the privacy disclosure, in the spirit of the DeepSeek one above it
+    expect(text).toMatch(/only the barcode/i);
+    expect(text).toMatch(/not .*(your diary|diary).*(profile|totals)|diary, your profile/i);
+    // and the two standing rulings
+    expect(text).toMatch(/added sugar/i);
+    expect(text).toMatch(/allergen/i);
+    expect(text).not.toMatch(/allergen-free/i);
+  });
 });
 
 describe('erasing from inside the app', () => {

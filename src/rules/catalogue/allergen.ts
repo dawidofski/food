@@ -84,6 +84,20 @@ export function unrecognisedAllergenFlags(flagged: string[]): string[] {
 
 type Hit = { food: FoodIdentity; tags: string[] };
 
+/**
+ * Foods whose allergen list came from Open Food Facts. Crowdsourced: anyone may edit a product, and the allergen
+ * list is EMPTY for a great many products that do contain the allergen. The dataset's own tags already carry this
+ * caveat (see THE LOAD-BEARING SENTENCE above); for a scanned product it is stronger still, because nobody at all
+ * has to have looked at the packet.
+ *
+ * Silence would read as "checked, nothing found" at the gate, so a flagged allergen plus a scanned food is always
+ * reported through `cannotCheck`, whether or not a tag happened to match. That is the project's standing choice:
+ * a check that could not be made is reported, never left to look like a clean result.
+ */
+function scannedFoods(ctx: Context): FoodIdentity[] {
+  return ctx.foods.filter((f) => f.source === 'off');
+}
+
 function hits(ctx: Context): Hit[] {
   const flagged = new Set((ctx.profile?.flaggedAllergens ?? []).flatMap(expandAllergenFlag));
   if (flagged.size === 0) return [];
@@ -102,10 +116,23 @@ export const allergenRule: Rule = {
   safetyAuthority: 'user-flag',
   // There is a check to fail only when the user flagged something; at the shipped default (empty list) there is nothing to run.
   cannotCheck: (ctx) => {
-    const bad = unrecognisedAllergenFlags(ctx.profile?.flaggedAllergens ?? []);
-    return bad.length === 0
-      ? null
-      : `rule "allergen-flagged" could not check ${bad.map((b) => `"${b}"`).join(', ')}: ${bad.length === 1 ? 'it is' : 'they are'} not an allergen the app has tags for, so foods are not checked against ${bad.length === 1 ? 'it' : 'them'}. Check labels yourself.`;
+    const flagged = (ctx.profile?.flaggedAllergens ?? []).filter((f) => f.trim() !== '');
+    if (flagged.length === 0) return null;
+    const parts: string[] = [];
+    const bad = unrecognisedAllergenFlags(flagged);
+    if (bad.length > 0) {
+      parts.push(
+        `could not check ${bad.map((b) => `"${b}"`).join(', ')}: ${bad.length === 1 ? 'it is' : 'they are'} not an allergen the app has tags for, so foods are not checked against ${bad.length === 1 ? 'it' : 'them'}. Check labels yourself.`,
+      );
+    }
+    // Reported whether or not a tag matched: an empty Open Food Facts allergen list is not an all-clear.
+    const scanned = scannedFoods(ctx);
+    if (scanned.length > 0) {
+      parts.push(
+        `could not fully check ${scanned.map((f) => f.name).join(', ')}: the allergen list for a scanned product comes from Open Food Facts, where anyone can edit it and where products that do contain an allergen often list none. Read the packet yourself before you eat it.`,
+      );
+    }
+    return parts.length === 0 ? null : parts.map((p) => `rule "allergen-flagged" ${p}`).join(' ');
   },
   identityRequired: (ctx) => (ctx.profile?.flaggedAllergens ?? []).some((f) => f.trim() !== ''),
   scope: 'entry',
@@ -124,13 +151,19 @@ export const allergenRule: Rule = {
   level: (ctx) => (hits(ctx).length > 0 ? 'CRITICAL' : null),
   portionNote: (ctx) => {
     const h = hits(ctx);
-    if (h.length === 0) return 'No food in this entry carries a tag matching an allergen you flagged. That is not a statement that none is present.';
+    if (h.length === 0) {
+      return scannedFoods(ctx).length > 0
+        ? 'No food in this entry carries a tag matching an allergen you flagged, and a scanned product’s allergen list comes from Open Food Facts and is often empty for products that do contain one. That is not a statement that none is present.'
+        : 'No food in this entry carries a tag matching an allergen you flagged. That is not a statement that none is present.';
+    }
     return h
-      .map(({ food, tags }) =>
-        food.source === 'custom'
-          ? `${food.name}: you set the tag ${tags.join(', ')} on this custom food, so this is your own statement.`
-          : `${food.name}: tagged ${tags.join(', ')}. The tag is indicative and the food may contain more than it lists.`,
-      )
+      .map(({ food, tags }) => {
+        if (food.source === 'custom') return `${food.name}: you set the tag ${tags.join(', ')} on this custom food, so this is your own statement.`;
+        if (food.source === 'off') {
+          return `${food.name}: Open Food Facts lists ${tags.join(', ')} for this product. That list is contributed by the public, not measured, and may name less than the packet does.`;
+        }
+        return `${food.name}: tagged ${tags.join(', ')}. The tag is indicative and the food may contain more than it lists.`;
+      })
       .join(' ');
   },
 };

@@ -2,11 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { localDayKey } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
 import { deleteEntry } from '@/data/db';
+import { offProductMeta } from '@/data/offCache';
 import { useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry, Level } from '@/types/diary';
 import type { NutrientKey } from '@/types/nutrients';
 import CoverageNote, { NUTRIENT_LABEL } from '@/ui/components/CoverageNote';
 import { fmtAmount } from '@/ui/components/NutrientBar';
+import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 import WarningGate from './WarningGate';
 
@@ -94,6 +96,7 @@ export default function EntryDetail({
             {i.source !== 'batch' && Number.isFinite(i.grams) && ` — ${fmtAmount(i.grams)} g`}
             {i.source === 'batch' && <span className="ml-1 text-sm text-slate-700 dark:text-slate-300">(portion from a batch)</span>}
             {(i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
+            {i.source === 'off' && <OpenFoodFactsBadge {...(offProductMeta(i.foodId)?.lastModified !== undefined ? { lastModified: offProductMeta(i.foodId)!.lastModified! } : {})} />}
           </li>
         ))}
       </ul>

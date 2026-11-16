@@ -5,10 +5,11 @@ import { batchHasCustomIngredient, batchWeightKnown, portionsFor, refreshBatches
 import { datasetLookup } from '@/data/datasetLookup';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
 import { datasetState, loadFoods } from '@/data/foodRepository';
+import { offProductMeta, refreshOffFoods, withOpenFoodFacts } from '@/data/offCache';
 import { last7DayKeys, localDayRange } from '@/domain/dayBoundary';
 import type { FoodLookup } from '@/domain/foodLookup';
 import { parseEntry, type ParsedItem } from '@/domain/parseEntry';
-import { resolveItems } from '@/domain/resolveItems';
+import { resolveItems, resolveKnownFood } from '@/domain/resolveItems';
 import { applyAi, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
 import { interpretEntry } from '@/ai/deepseek';
 import { getApiKey, isAiEnabled } from '@/state/aiSettings';
@@ -20,6 +21,7 @@ import { foodsAskedAbout, rememberedAnswers, rememberNo } from '@/state/safetyMe
 import { evaluate } from '@/rules/engine';
 import type { Context, FoodIdentity, Rule, RuleFailure, SafetyQuestion, WarningCard } from '@/rules/types';
 import type { DiaryEntry, FoodRef, FoodSource, Resolution } from '@/types/diary';
+import type { DatasetFood } from '@/types/food';
 import type { Profile } from '@/types/profile';
 
 export type FlowStage = 'idle' | 'resolving' | 'needsHelp' | 'aiReview' | 'questions' | 'gate' | 'committed';
@@ -27,7 +29,7 @@ export type FlowStage = 'idle' | 'resolving' | 'needsHelp' | 'aiReview' | 'quest
 /** What one parsed item resolved to: the user's only check against a near-miss match. */
 export type ResolvedLine = {
   name: string;
-  /** Where the numbers came from; 'custom' is shown as self-reported. */
+  /** Where the numbers came from; 'custom' is shown as self-reported, 'off' as read from Open Food Facts. */
   source: FoodSource;
   count?: number;
   portionLabel?: string;
@@ -38,6 +40,10 @@ export type ResolvedLine = {
   weightUnknown?: boolean;
   /** A batch with a custom-food ingredient inherits the self-reported marking. */
   selfReported?: boolean;
+  /** For a scanned product: ISO datetime of the last edit anyone made to it in Open Food Facts. */
+  offLastModified?: string;
+  /** For a scanned product: ISO datetime this app fetched it, so a cached figure never reads as a fresh one. */
+  offFetchedAt?: string;
   unusual?: UnusualServing;
 };
 
@@ -62,7 +68,8 @@ export type FlowDeps = {
 };
 
 export const defaultDeps: FlowDeps = {
-  lookup: withBatches(withCustomFoods(datasetLookup)),
+  // Order matters on an exact-name tie: the person's own food first, then a product they scanned, then the dataset.
+  lookup: withBatches(withCustomFoods(withOpenFoodFacts(datasetLookup))),
   rules: catalogue,
   now: () => new Date(),
   loadData: async () => {
@@ -70,6 +77,7 @@ export const defaultDeps: FlowDeps = {
     // The person's own foods are optional: if they cannot be read, the dataset still works.
     await refreshCustomFoods().catch(() => undefined);
     await refreshBatches().catch(() => undefined);
+    await refreshOffFoods().catch(() => undefined);
   },
   isDataReady: () => datasetState() === 'ready',
   store: { addEntry, entriesBetween, getProfile, reviseEntry, deleteEntry, countActiveEntries },
@@ -124,6 +132,13 @@ export type EntryFlow = {
   storedCount: number;
   /** With `revises`, the entry is stored as a revision of that entry, and only once the gate has been passed. */
   submit: (text: string, opts?: { revises?: Revises }) => Promise<void>;
+  /**
+   * A food that is already known, at a gram amount the person set: the path a scanned barcode takes. The text is
+   * only what gets stored as `rawText` and shown in the diary; the food is NOT searched for again, so no
+   * near-miss can substitute a different product for the one in the person's hand. From here on it is an
+   * ordinary entry: the same rules, the same warning gate, the same confirmation. Nothing is added silently.
+   */
+  submitKnownFood: (food: DatasetFood, grams: number, text: string, source?: FoodSource) => Promise<void>;
   answer: (answerKey: string, yes: boolean) => void;
   addAnyway: () => Promise<void>;
   showAlternatives: () => void;
@@ -159,6 +174,7 @@ function describeLines(items: ParsedItem[], res: Resolution, lookup: FoodLookup)
     const food = lookup.get(ref.source, ref.foodId);
     const count = item?.quantity.count;
     const unweighed = ref.source === 'batch' && !batchWeightKnown(ref.foodId);
+    const off = ref.source === 'off' ? offProductMeta(ref.foodId) : undefined;
     // An unweighed batch portion has a nominal gram figure that means nothing, so it is never judged or displayed.
     const unusual = item && !unweighed ? unusualServing(item, ref.grams, food) : null;
     const perPortionGrams = unitGrams(ref.portionLabel, ref.grams, count);
@@ -168,6 +184,8 @@ function describeLines(items: ParsedItem[], res: Resolution, lookup: FoodLookup)
       grams: ref.grams,
       ...(unweighed ? { weightUnknown: true } : {}),
       ...(ref.source === 'batch' && batchHasCustomIngredient(ref.foodId) ? { selfReported: true } : {}),
+      ...(off ? { offFetchedAt: off.fetchedAt } : {}),
+      ...(off?.lastModified !== undefined ? { offLastModified: off.lastModified } : {}),
       ...(count !== undefined && item?.quantity.grams === undefined ? { count } : {}),
       ...(ref.portionLabel !== undefined ? { portionLabel: ref.portionLabel } : {}),
       ...(perPortionGrams !== undefined ? { perPortionGrams } : {}),
@@ -454,6 +472,16 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     [run],
   );
 
+  const submitKnownFood = useCallback(
+    async (food: DatasetFood, grams: number, text: string, source: FoodSource = 'off') => {
+      revisesRef.current = null;
+      pendingResolution.current = null;
+      const items: ParsedItem[] = [{ rawFragment: text, quantity: { grams }, foodQuery: food.name }];
+      await run(text, { items, resolution: resolveKnownFood(source, food, grams) });
+    },
+    [run],
+  );
+
   const continueWithout = useCallback(async () => {
     const p = pendingResolution.current;
     const text = lastText;
@@ -525,6 +553,6 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   return {
     stage, cards, questions, failures, lines, unresolved, aiReadings, dataMissing, viewingAlternatives, outcome, error, lastText,
-    genericTargets, storedCount, submit, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
+    genericTargets, storedCount, submit, submitKnownFood, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
   };
 }
