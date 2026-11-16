@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { addEntry, entriesBetween, getProfile } from '@/data/db';
+import { addEntry, decrementBatchPortion, entriesBetween, getProfile } from '@/data/db';
+import { portionsFor, refreshBatches, withBatches } from '@/domain/batches';
 import { datasetLookup } from '@/data/datasetLookup';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
 import { datasetState, loadFoods } from '@/data/foodRepository';
@@ -45,13 +46,14 @@ export type FlowDeps = {
 };
 
 export const defaultDeps: FlowDeps = {
-  lookup: withCustomFoods(datasetLookup),
+  lookup: withBatches(withCustomFoods(datasetLookup)),
   rules: catalogue,
   now: () => new Date(),
   loadData: async () => {
     await loadFoods();
     // The person's own foods are optional: if they cannot be read, the dataset still works.
     await refreshCustomFoods().catch(() => undefined);
+    await refreshBatches().catch(() => undefined);
   },
   isDataReady: () => datasetState() === 'ready',
   store: { addEntry, entriesBetween, getProfile },
@@ -194,7 +196,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       id: globalThis.crypto.randomUUID(),
       at: d.now().toISOString(),
       rawText: s.text,
-      resolution: 'local',
+      resolution: s.resolution.refs.some((r) => r.source === 'batch') ? 'batch' : 'local',
       items: s.resolution.refs,
       nutrients: s.resolution.nutrients,
       coverage: s.resolution.coverage,
@@ -214,6 +216,17 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     } catch (e) {
       setError(`This entry could not be saved: ${e instanceof Error ? e.message : String(e)}`);
       return false;
+    }
+    // A portion eaten comes off the fridge counter. The entry is already safe, so a counter failure must not undo it.
+    if (action !== 'cancelled') {
+      for (const ref of s.resolution.refs) {
+        if (ref.source !== 'batch') continue;
+        const per = d.lookup.get('batch', ref.foodId)?.portions[0]?.grams;
+        const n = per !== undefined ? portionsFor(ref.grams, per) : 1;
+        try {
+          for (let i = 0; i < n; i++) await decrementBatchPortion(ref.foodId);
+        } catch { /* the counter is a convenience; the diary entry stands */ }
+      }
     }
     setStoredCount((n) => n + 1);
     return true;

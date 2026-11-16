@@ -82,6 +82,8 @@ export type Batch = {
   nutrientsPerPortion: NutrientSet;
   coverage: Coverage;
   classification: ClassificationFlags;
+  /** Union of the ingredients' allergen tags, so a logged portion meets the allergen rule. Absent = none recorded. */
+  allergens?: string[];
   portionsRemaining: number;
   /** ISO datetime. */
   cookedAt: string;

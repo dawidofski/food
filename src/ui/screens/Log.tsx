@@ -7,9 +7,9 @@ import { FoodEditor } from './MyFoods';
 
 const RECENT_LIMIT = 8;
 
-export default function Log({ deps = defaultDeps }: { deps?: FlowDeps }) {
+export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: FlowDeps; initialDraft?: string }) {
   const flow = useEntryFlow(deps);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(initialDraft);
   const [recent, setRecent] = useState<DiaryEntry[]>([]);
   /** The name to start the editor with, or null when the editor is closed. */
   const [editorName, setEditorName] = useState<string | null>(null);
