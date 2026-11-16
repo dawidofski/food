@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { allCustomFoods, eraseEverything } from '@/data/db';
+import { addEntry, allCustomFoods, eraseEverything, getEntry } from '@/data/db';
 import { combineLookups, type FoodLookup } from '@/domain/foodLookup';
 import { parseEntry } from '@/domain/parseEntry';
 import { resolveItems } from '@/domain/resolveItems';
 import {
-  createCustomFood, customFoodToDatasetShape, customLookup, parseNutrientField, refreshCustomFoods, updateCustomFood,
+  createCustomFood, customFoodToDatasetShape, deleteCustomFood, customLookup, parseNutrientField, refreshCustomFoods, updateCustomFood,
   withCustomFoods,
 } from '@/domain/customFoods';
 import { dayTotals, weekContext } from '@/domain/totals';
@@ -147,6 +147,34 @@ describe('custom foods', () => {
     expect(d.per100g).toEqual({});
     expect(customLookup.get('custom', f.id)?.name).toBe('Frikandel');
     expect(combineLookups(customLookup).get('dataset', f.id)).toBeUndefined();
+  });
+});
+
+describe('erase and delete', () => {
+  test('eraseEverything empties the search cache, not just storage', async () => {
+    await createCustomFood({ name: 'Frikandel', per100g: { energyKcal: 280 } });
+    expect(customLookup.search('frikandel', 1)).toHaveLength(1);
+    await eraseEverything();
+    expect(customLookup.search('frikandel', 1)).toEqual([]);
+    const none: FoodLookup = { search: () => [], get: () => undefined };
+    expect(resolveItems(parseEntry('one frikandel').items, withCustomFoods(none)).needsHelp).toHaveLength(1);
+  });
+
+  test('deleting a food removes it from search, and a past entry keeps its numbers', async () => {
+    const f = await createCustomFood({ name: 'Frikandel', per100g: { energyKcal: 280, sodiumMg: 700 } });
+    const res = resolveItems(parseEntry('one frikandel').items, lookup());
+    await addEntry({
+      id: 'e1', at: new Date().toISOString(), rawText: 'one frikandel', resolution: 'local', items: res.refs,
+      nutrients: res.nutrients, coverage: res.coverage, classification: res.classification, warningsShown: [],
+      userAction: 'added', state: 'active',
+    });
+    await deleteCustomFood(f.id);
+    expect(await allCustomFoods()).toEqual([]);
+    expect(customLookup.search('frikandel', 1)).toEqual([]);
+    expect(customLookup.get('custom', f.id)).toBeUndefined();
+    const kept = await getEntry('e1');
+    expect(kept?.nutrients).toEqual({ energyKcal: 280, sodiumMg: 700 });
+    expect(kept?.rawText).toBe('one frikandel');
   });
 });
 

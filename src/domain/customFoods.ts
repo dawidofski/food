@@ -7,13 +7,14 @@
  * `buildCustomFood` copies only keys holding a finite number, so undefined, null and NaN are
  * dropped or refused, never defaulted.
  */
-import { allCustomFoods, getCustomFood, putCustomFood } from '@/data/db';
+import { allCustomFoods, deleteCustomFood as removeCustomFood, getCustomFood, onEraseEverything, putCustomFood } from '@/data/db';
 import { buildSearchIndex, normalizeTokens, search, type SearchIndex } from '@/data/foodSearch';
 import { combineLookups, type FoodLookup } from '@/domain/foodLookup';
 import type { CustomFood } from '@/types/diary';
 import type { DatasetFood } from '@/types/food';
 import { NUTRIENT_KEYS, type ClassificationFlags, type NutrientKey, type NutrientSet } from '@/types/nutrients';
 
+/** novaGroup 1 here means "not flagged", not "unprocessed": see the NOVA ASSUMPTION in buildCustomFood. */
 export const NO_FLAGS: ClassificationFlags = {
   processedMeat: false, redMeat: false, sweetDrink: false, alcohol: false, novaGroup: 1,
   refinedGrain: false, vegetable: false, fruit: false, legume: false, oilyFish: false,
@@ -77,6 +78,10 @@ function buildCustomFood(id: string, input: CustomFoodInput): CustomFood {
     throw new RangeError(`The portion weight must be more than 0 and at most ${MAX_PORTION_GRAMS} g`);
   }
   const label = portion.label.trim() === '' ? '1 serving' : portion.label.trim();
+  // NOVA ASSUMPTION (a recorded choice, not an accident of the type): ClassificationFlags.novaGroup cannot say
+  // "unknown", so a custom food not ticked as ultra-processed is stored as group 1. The daily ultra-processed share
+  // therefore counts it as NOT ultra-processed, and that card under-fires rather than over-fires. That is the safe
+  // direction for a rule whose evidence is 'limited'. Only group 4 is read by any rule.
   const flags: ClassificationFlags = { ...NO_FLAGS, ...(input.classification ?? {}) };
   if (![1, 2, 3, 4].includes(flags.novaGroup)) flags.novaGroup = 1;
   const dedupe = (xs: string[]) => [...new Set(xs.map((x) => x.trim()).filter((x) => x !== ''))];
@@ -146,6 +151,14 @@ function install(list: CustomFood[]): void {
 /** Reloads the in-memory index from storage. The flow calls this before each lookup via loadData. */
 export async function refreshCustomFoods(): Promise<void> {
   install(await allCustomFoods());
+}
+
+// A wipe of the stored foods must also empty this cache, or erased foods stay searchable and loggable.
+onEraseEverything(() => install([]));
+
+export async function deleteCustomFood(id: string): Promise<void> {
+  await removeCustomFood(id);
+  await refreshCustomFoods();
 }
 
 const sameWords = (a: string, b: string): boolean => normalizeTokens(a).join(' ') === normalizeTokens(b).join(' ');

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { allCustomFoods } from '@/data/db';
 import {
-  ALLERGEN_TAGS, NO_FLAGS, createCustomFood, parseNutrientField, updateCustomFood, type CustomFoodInput,
+  ALLERGEN_TAGS, NO_FLAGS, createCustomFood, deleteCustomFood, parseNutrientField, updateCustomFood, type CustomFoodInput,
 } from '@/domain/customFoods';
 import type { CustomFood } from '@/types/diary';
 import { NUTRIENT_KEYS, type ClassificationFlags, type NutrientKey } from '@/types/nutrients';
@@ -43,13 +43,16 @@ type Props = {
   initialName?: string;
   onSaved: (food: CustomFood) => void;
   onCancel: () => void;
+  /** Called after a delete; the delete control shows only when editing a saved food. */
+  onDeleted?: () => void;
 };
 
 /**
  * The custom-food form. Every nutrient field starts EMPTY and an empty field is saved as unknown (no key), never as 0:
  * state is kept as the raw text, and the only text-to-number step is parseNutrientField.
  */
-export function FoodEditor({ food, initialName = '', onSaved, onCancel }: Props) {
+export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDeleted }: Props) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [name, setName] = useState(food?.name ?? initialName);
   const [synonyms, setSynonyms] = useState(food?.synonyms.join(', ') ?? '');
   const [portionLabel, setPortionLabel] = useState(food?.referencePortion.label ?? '1 serving');
@@ -212,7 +215,32 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel }: Props)
       <div className="flex flex-col gap-2">
         <button type="submit" disabled={saving} className={`${btn} bg-slate-900 text-white`}>Save food</button>
         <button type="button" onClick={onCancel} className={btn}>Cancel</button>
+        {food && !confirmingDelete && (
+          <button type="button" onClick={() => setConfirmingDelete(true)} className={`${btn} text-red-800`}>Delete this food</button>
+        )}
       </div>
+      {food && confirmingDelete && (
+        <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-red-700 p-3">
+          <p className="text-base">
+            Delete &ldquo;{food.name}&rdquo;? It will no longer be found when you log. Entries you already logged keep
+            their numbers; nothing in your diary changes.
+          </p>
+          <button
+            type="button" className={`${btn} w-full bg-red-800 text-white`}
+            onClick={() => {
+              void deleteCustomFood(food.id)
+                .then(() => onDeleted?.())
+                .catch((err: unknown) => {
+                  setConfirmingDelete(false);
+                  setError(`Could not delete: ${err instanceof Error ? err.message : String(err)}`);
+                });
+            }}
+          >
+            Yes, delete it
+          </button>
+          <button type="button" onClick={() => setConfirmingDelete(false)} className={`${btn} w-full`}>Keep it</button>
+        </div>
+      )}
     </form>
   );
 }
@@ -239,6 +267,7 @@ export default function MyFoods() {
         <FoodEditor
           food={editing === 'new' ? undefined : editing}
           onSaved={() => { setEditing(null); load(); }}
+          onDeleted={() => { setEditing(null); load(); }}
           onCancel={() => setEditing(null)}
         />
       </main>

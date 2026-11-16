@@ -100,6 +100,20 @@ describe('custom foods in the UI', () => {
   });
 });
 
+describe('delete control', () => {
+  test('asks first, says past entries keep their numbers, then deletes', async () => {
+    await createCustomFood({ name: 'Frikandel' });
+    render(<MyFoods />);
+    fireEvent.click(await screen.findByRole('button', { name: /edit frikandel/i }));
+    fireEvent.click(screen.getByRole('button', { name: /delete this food/i }));
+    expect(screen.getByRole('group', { name: /confirm delete/i })).toHaveTextContent(/already logged keep their numbers/i);
+    expect(await allCustomFoods()).toHaveLength(1);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /yes, delete it/i })); });
+    await waitFor(async () => expect(await allCustomFoods()).toHaveLength(0));
+    expect(await screen.findByText(/nothing here yet/i)).toBeInTheDocument();
+  });
+});
+
 describe('CoverageNote', () => {
   test('a daily total including an unknown value shows a floor and a coverage note', () => {
     render(<CoverageNote nutrient="addedSugarsG" coverage="partial" missingItems={2} />);

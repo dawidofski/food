@@ -201,6 +201,14 @@ export async function getCustomFood(id: string): Promise<CustomFood | undefined>
   return (await db()).get('customFoods', id);
 }
 
+/**
+ * Hard delete, on purpose: custom foods are reference data, not history. Every DiaryEntry snapshots its own
+ * nutrients, coverage and rawText at commit, so past entries keep their numbers and nothing is rewritten.
+ */
+export async function deleteCustomFood(id: string): Promise<void> {
+  await (await db()).delete('customFoods', id);
+}
+
 export async function allCustomFoods(): Promise<CustomFood[]> {
   return (await db()).getAll('customFoods');
 }
@@ -263,7 +271,22 @@ export async function putProfile(p: Profile): Promise<void> {
  * If the localStorage sweep failed, its error is rethrown AFTER the IndexedDB clear: the caller can
  * then say "your diary was cleared, but your profile could not be removed".
  */
+/** In-memory caches built from stored data register here so an erase cannot leave data searchable. */
+const eraseListeners = new Set<() => void>();
+export function onEraseEverything(fn: () => void): void {
+  eraseListeners.add(fn);
+}
+
 export async function eraseEverything(): Promise<void> {
+  try {
+    await eraseStores();
+  } finally {
+    // Even if storage threw, nothing erased may stay reachable from memory.
+    eraseListeners.forEach((fn) => fn());
+  }
+}
+
+async function eraseStores(): Promise<void> {
   let sweepError: unknown;
   let swept = true;
   try {
