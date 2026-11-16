@@ -6,6 +6,8 @@ import { NUTRIENT_KEYS, type Coverage, type NutrientKey, type NutrientSet } from
 
 export type DayTotals = {
   dayKey: string;
+  /** Counted entries that day. 0 is an empty day; >0 with empty `nutrients` means entries exist but carry no nutrient data. */
+  entryCount: number;
   /** A key is absent when no entry that day knew it: unknown, never zero. */
   nutrients: NutrientSet;
   coverage: Coverage;
@@ -105,6 +107,7 @@ function buildDay(entries: DiaryEntry[], dayKey: string): DayTotals {
 
   return {
     dayKey,
+    entryCount: day.length,
     nutrients: total,
     coverage,
     energyCoveredShare,

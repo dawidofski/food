@@ -82,10 +82,21 @@ export type Rule = {
   safetyPrompt?: SafetyPrompt;
 };
 
+/** A claim absorbed into a merged card, with its OWN evidence: a claim is never shown under another rule's source. */
+export type MergedClaim = {
+  ruleId: string;
+  concern: string;
+  portionNote: string;
+  evidence: Evidence;
+  citation: Citation;
+};
+
 export type WarningCard = {
   ruleId: string;
   /** Rule ids merged into this card (same nutrient), excluding `ruleId`. */
   mergedFrom: string[];
+  /** Same-nutrient rules absorbed into this card, each with its own concern, note and citation. */
+  merged: MergedClaim[];
   level: Level;
   title: string;
   concern: string;

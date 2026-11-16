@@ -14,6 +14,8 @@ type Opts = {
   /** Day-level coverage label for added sugar; defaults to 'partial' when the share is below 1. */
   addedSugarDayCoverage?: 'known' | 'partial' | 'unknown';
   emptyDay?: boolean;
+  /** Entries exist today but none carries any nutrient data. */
+  dayAllUnknown?: boolean;
   food?: string;
   answers?: Record<string, boolean>;
 };
@@ -30,12 +32,12 @@ function ctx(o: Opts = {}): Context {
     delete pendingN.addedSugarsG;
     pendingC.addedSugarsG = 'unknown';
   }
-  const todayN: NutrientSet = o.emptyDay ? {} : { energyKcal: 1000, sodiumMg: o.sodiumHeavy ? 1500 : 200, addedSugarsG: 10 };
+  const todayN: NutrientSet = o.emptyDay || o.dayAllUnknown ? {} : { energyKcal: 1000, sodiumMg: o.sodiumHeavy ? 1500 : 200, addedSugarsG: 10 };
   const share = {} as Record<NutrientKey, number>;
   const todayC: Coverage = {};
   for (const k of NUTRIENT_KEYS) {
-    share[k] = o.emptyDay ? 0 : 1;
-    todayC[k] = o.emptyDay ? 'unknown' : 'known';
+    share[k] = o.emptyDay || o.dayAllUnknown ? 0 : 1;
+    todayC[k] = o.emptyDay || o.dayAllUnknown ? 'unknown' : 'known';
   }
   if (o.addedSugarCoveredShare !== undefined) {
     todayN.addedSugarsG = 60; // enough that a daily added-sugar rule would fire
@@ -44,7 +46,7 @@ function ctx(o: Opts = {}): Context {
   }
   if (o.addedSugarDayCoverage) todayC.addedSugarsG = o.addedSugarDayCoverage;
   const today: DayTotals = {
-    dayKey: '2026-11-15', nutrients: todayN, coverage: todayC, energyCoveredShare: share,
+    dayKey: '2026-11-15', entryCount: o.emptyDay ? 0 : 2, nutrients: todayN, coverage: todayC, energyCoveredShare: share,
     vegCupEq: 0, vegCoverage: 'known', hasVegetableFlag: false,
   };
   const food = o.food ?? 'plain';
@@ -237,13 +239,56 @@ describe('evaluate (additional invariants)', () => {
     expect(cards.map((x) => x.nutrientKey).sort()).toEqual(['addedSugarsG', 'sodiumMg']);
   });
 
-  test('a merged card keeps the highest level and joins the portion notes', () => {
-    const { cards } = evaluate([sodiumEntryRule, sodiumDailyRule], ctx({ sodiumHeavy: true }));
-    expect(cards[0]!.level).toBe('HIGH');
-    expect(cards[0]!.ruleId).toBe('sodium-daily');
-    expect(cards[0]!.mergedFrom).toEqual(['sodium-entry']);
-    expect(cards[0]!.portionNote).toContain('This entry is salty.');
-    expect(cards[0]!.portionNote).toContain('The day is salty.');
+  test('a merged card keeps its own prose and carries each absorbed claim under its own citation', () => {
+    const entry = stub('sodium-entry', () => 'MODERATE', {
+      requiresNutrients: ['sodiumMg'], nutrientKey: 'sodiumMg', scope: 'entry', portionNote: () => 'This entry is salty.',
+      concern: 'entry concern',
+      evidence: { ...sodiumEntryRule.evidence, body: 'EFSA', citation: { ...sodiumEntryRule.evidence.citation, title: 'ENTRY SOURCE' } },
+    });
+    const daily = stub('sodium-daily', () => 'HIGH', {
+      requiresNutrients: ['sodiumMg'], nutrientKey: 'sodiumMg', scope: 'entry', portionNote: () => 'The day is salty.',
+      evidence: { ...sodiumEntryRule.evidence, body: 'WHO', citation: { ...sodiumEntryRule.evidence.citation, title: 'DAILY SOURCE' } },
+    });
+    const { cards } = evaluate([entry, daily], ctx({ sodiumHeavy: true }));
+    const c = cards[0]!;
+    expect(c.level).toBe('HIGH');
+    expect(c.ruleId).toBe('sodium-daily');
+    expect(c.mergedFrom).toEqual(['sodium-entry']);
+    expect(c.portionNote).toBe('The day is salty.');
+    expect(c.portionNote).not.toContain('This entry is salty.');
+    expect(c.evidence.citation.title).toBe('DAILY SOURCE');
+    expect(c.merged).toEqual([
+      { ruleId: 'sodium-entry', concern: 'entry concern', portionNote: 'This entry is salty.', evidence: entry.evidence, citation: entry.evidence.citation },
+    ]);
+    expect(c.merged[0]!.citation.title).toBe('ENTRY SOURCE');
+  });
+
+  test('three rules on one nutrient flatten into one card with two absorbed claims', () => {
+    const mk = (id: string, l: Level) => stub(id, () => l, { requiresNutrients: ['sodiumMg'], nutrientKey: 'sodiumMg', scope: 'entry' });
+    const { cards } = evaluate([mk('x', 'INFO'), mk('y', 'HIGH'), mk('z', 'MODERATE')], ctx());
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.ruleId).toBe('y');
+    expect(cards[0]!.merged.map((m) => m.ruleId).sort()).toEqual(['x', 'z']);
+  });
+
+  test('a card does not alias the catalogue: mutating it leaves the rule untouched', () => {
+    const rule = stub('alias', () => 'INFO', { alternatives: [{ label: 'a', reason: 'r' }] });
+    const card = evaluate([rule], ctx()).cards[0]!;
+    card.evidence.summary = 'changed';
+    card.evidence.citation.title = 'changed';
+    card.alternatives[0]!.label = 'changed';
+    card.alternatives.push({ label: 'x', reason: 'y' });
+    expect(rule.evidence.summary).toBe('summary');
+    expect(rule.evidence.citation.title).toBe('t');
+    expect(rule.alternatives).toEqual([{ label: 'a', reason: 'r' }]);
+  });
+
+  test('a day with entries but no nutrient data is not an empty day: a daily rule stays silent', () => {
+    const rule = stub('fibre-low', () => 'INFO', { requiresNutrients: ['sodiumMg'], scope: 'daily' });
+    const c = ctx({ dayAllUnknown: true });
+    expect(c.today.entryCount).toBeGreaterThan(0);
+    expect(c.today.nutrients).toEqual({});
+    expect(evaluate([rule], c).cards).toEqual([]);
   });
 
   test('a CRITICAL card survives the three-card cap even when declared last', () => {
@@ -329,6 +374,43 @@ describe('evaluate (additional invariants)', () => {
 
   test('the development/test signal is on under vitest', () => {
     expect(import.meta.env.DEV).toBe(true);
+  });
+
+  describe('evidence strength caps the level', () => {
+    const weak = (strength: 'uncertain' | 'limited', level: Level) =>
+      stub(`weak-${strength}-${level}`, () => level, { evidence: { ...infoRule.evidence, strength } });
+
+    test.each(['uncertain', 'limited'] as const)('%s evidence may reach MODERATE', (s) => {
+      expect(evaluate([weak(s, 'MODERATE')], ctx()).cards).toHaveLength(1);
+      expect(evaluate([weak(s, 'INFO')], ctx()).cards).toHaveLength(1);
+    });
+
+    test.each(['uncertain', 'limited'] as const)('%s evidence returning HIGH throws under test', (s) => {
+      expect(() => evaluate([weak(s, 'HIGH')], ctx())).toThrow(/evidence/i);
+    });
+
+    test('limited evidence on a safety rule returning CRITICAL throws under test', () => {
+      const r = stub('weak-safety', () => 'CRITICAL', { category: 'safety', evidence: { ...infoRule.evidence, strength: 'limited' } });
+      expect(() => evaluate([r], ctx())).toThrow(/evidence/i);
+    });
+
+    test('strong and moderate evidence may reach HIGH', () => {
+      expect(evaluate([stub('s', () => 'HIGH', { evidence: { ...infoRule.evidence, strength: 'strong' } })], ctx()).cards).toHaveLength(1);
+      expect(evaluate([highRule], ctx()).cards).toHaveLength(1);
+    });
+
+    test('in production an overclaiming rule is reported in failures and skipped', () => {
+      vi.stubEnv('DEV', false);
+      try {
+        const r = evaluate([weak('uncertain', 'HIGH'), moderateRule], ctx());
+        expect(r.cards.map((c) => c.ruleId)).toEqual(['moderate']);
+        expect(r.failures).toHaveLength(1);
+        expect(r.failures[0]).toMatchObject({ ruleId: 'weak-uncertain-HIGH', category: 'nutrition' });
+        expect(r.failures[0]!.message).toMatch(/evidence/i);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
   });
 
   describe('in a production build', () => {

@@ -1,6 +1,6 @@
 import { isKnownValue } from '@/domain/nutrients';
 import type { NutrientKey } from '@/types/nutrients';
-import type { Context, Level, Rule, RuleFailure, SafetyQuestion, WarningCard } from './types';
+import type { Context, Level, MergedClaim, Rule, RuleFailure, SafetyQuestion, WarningCard } from './types';
 
 export const MAX_CARDS = 3;
 const DEFAULT_MIN_COVERAGE = 0.8;
@@ -20,7 +20,7 @@ function gate(rule: Rule, ctx: Context): Gate {
   const notes: string[] = [];
   const floor = rule.minCoverage ?? DEFAULT_MIN_COVERAGE;
   const daily = rule.scope === 'daily';
-  const dayHasData = Object.keys(ctx.today.nutrients).length > 0;
+  const dayHasEntries = ctx.today.entryCount > 0;
 
   for (const key of rule.requiresNutrients) {
     const label = LABEL[key];
@@ -31,8 +31,9 @@ function gate(rule: Rule, ctx: Context): Gate {
       notes.push(`Some foods in this entry have no ${label} data, so its ${label} may be understated.`);
     }
 
-    // An empty day has nothing to understate: the projection is the pending entry alone.
-    if (!daily || !dayHasData) continue;
+    // A day with no entries has nothing to understate: the projection is the pending entry alone. A day WITH
+    // entries but no nutrient data is not empty: its coverage reads 'unknown', so the check below stays silent.
+    if (!daily || !dayHasEntries) continue;
     // Today's total: BOTH signals must pass. energyCoveredShare can read 1 while coverage is 'partial'
     // (entries with no energy figure are invisible to the ratio), so neither alone is trustworthy.
     const share = ctx.today.energyCoveredShare[key];
@@ -53,7 +54,7 @@ function describe(rule: Rule, e: unknown): RuleFailure {
   };
 }
 
-/** Throws only for the CRITICAL invariant, and only in dev/test; every other problem is returned as a failure. */
+/** Throws only for a level-contract violation (nutrition CRITICAL, or a level above the evidence cap), and only in dev/test; every other problem is returned as a failure. */
 function evaluateRule(rule: Rule, ctx: Context): { level: Level; notes: string[] } | RuleFailure | null {
   const g = gate(rule, ctx);
   if (!g.pass) return null;
@@ -64,12 +65,17 @@ function evaluateRule(rule: Rule, ctx: Context): { level: Level; notes: string[]
     return describe(rule, e);
   }
   if (level === null) return null;
+  let violation: string | null = null;
   if (level === 'CRITICAL' && rule.category !== 'safety') {
-    const message = `rule "${rule.id}" is a nutrition rule and declared CRITICAL; CRITICAL is reserved for safety rules`;
+    violation = `rule "${rule.id}" is a nutrition rule and declared CRITICAL; CRITICAL is reserved for safety rules`;
+  } else if (RANK[level] > RANK.MODERATE && (rule.evidence.strength === 'uncertain' || rule.evidence.strength === 'limited')) {
+    violation = `rule "${rule.id}" declared ${level} on ${rule.evidence.strength} evidence; ${rule.evidence.strength} evidence is capped at MODERATE`;
+  }
+  if (violation !== null) {
     // Loud where it can be fixed (dev and test), non-blocking where it cannot (a shipped build must stay usable).
     // import.meta.env.DEV is statically replaced by Vite in a production build.
-    if (import.meta.env.DEV) throw new Error(message);
-    return { ruleId: rule.id, category: rule.category, message };
+    if (import.meta.env.DEV) throw new Error(violation);
+    return { ruleId: rule.id, category: rule.category, message: violation };
   }
   return { level, notes: g.notes };
 }
@@ -78,14 +84,19 @@ function unique(xs: (string | undefined)[]): string[] {
   return [...new Set(xs.filter((x): x is string => !!x))];
 }
 
+function claimOf(c: WarningCard): MergedClaim {
+  return { ruleId: c.ruleId, concern: c.concern, portionNote: c.portionNote, evidence: c.evidence, citation: c.evidence.citation };
+}
+
+/** The higher-level card keeps ALL its own prose and evidence; the other is attached whole, never concatenated. */
 function merge(a: WarningCard, b: WarningCard): WarningCard {
   const [hi, lo] = RANK[b.level] > RANK[a.level] ? [b, a] : [a, b];
   const note = unique([hi.dataNote, lo.dataNote]).join(' ');
   const { dataNote: _dropped, ...rest } = hi;
   return {
     ...rest,
-    portionNote: unique([hi.portionNote, lo.portionNote]).join(' '),
     mergedFrom: [...hi.mergedFrom, lo.ruleId, ...lo.mergedFrom],
+    merged: [...hi.merged, claimOf(lo), ...lo.merged],
     ...(note ? { dataNote: note } : {}),
   };
 }
@@ -137,14 +148,15 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
       card: {
         ruleId: rule.id,
         mergedFrom: [],
+        merged: [],
         level: res.level,
         title: rule.title,
         concern: rule.concern,
         cause: rule.cause,
-        evidence: rule.evidence,
+        evidence: { ...rule.evidence, citation: { ...rule.evidence.citation } },
         horizon: rule.horizon,
         portionNote,
-        alternatives: rule.alternatives ?? [],
+        alternatives: (rule.alternatives ?? []).map((x) => ({ ...x })),
         ...(rule.nutrientKey ? { nutrientKey: rule.nutrientKey } : {}),
         ...(res.notes.length ? { dataNote: res.notes.join(' ') } : {}),
       },
@@ -166,6 +178,8 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
     }
   }
 
+  // More than three CRITICAL cards is possible and all but three are cut; safety rules are few and mutually
+  // exclusive in practice, so no tiebreak beyond declaration order is applied.
   merged.sort((x, y) => RANK[y.card.level] - RANK[x.card.level] || x.order - y.order);
   return { cards: merged.slice(0, MAX_CARDS).map((m) => m.card), questions: [], failures };
 }

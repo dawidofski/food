@@ -72,6 +72,14 @@ describe('dayTotals', () => {
     expect(t.nutrients.energyKcal).toBe(100);
   });
 
+  test('entryCount separates an empty day from a day whose entries carry no nutrient data', () => {
+    expect(dayTotals([], '2026-11-15').entryCount).toBe(0);
+    const bare = make('2026-11-15', { nutrients: {}, coverage: {} });
+    const t = dayTotals([bare, make('2026-11-14')], '2026-11-15');
+    expect(t.entryCount).toBe(1);
+    expect(t.nutrients).toEqual({});
+  });
+
   test('an empty day has no NaN anywhere', () => {
     const t = dayTotals([], '2026-11-15');
     expect(t.nutrients).toEqual({});
