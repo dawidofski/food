@@ -57,8 +57,8 @@ export function CheckNotes({ failures }: { failures: RuleFailure[] }) {
       {failures.map((f) => (
         <p key={f.ruleId + f.message}>
           {f.category === 'safety'
-            ? f.ruleId === 'allergen'
-              ? `We could not check this entry for your flagged allergens: ${f.message}.`
+            ? f.ruleId === 'allergen-flagged'
+              ? `We could not check this entry for your flagged allergens. ${f.message.replace(/^rule "allergen-flagged" /, '')}`
               : `We could not run a safety check on this entry (${f.ruleId}): ${f.message}.`
             : `One check did not run (${f.ruleId}): ${f.message}.`}
         </p>

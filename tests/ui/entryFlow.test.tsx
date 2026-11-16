@@ -8,6 +8,7 @@ import { loadFoods, resetFoodRepository } from '@/data/foodRepository';
 import { localDayKey, localDayRange } from '@/domain/dayBoundary';
 import type { FoodLookup } from '@/domain/foodLookup';
 import { catalogue } from '@/rules/catalogue';
+import { allergenRule } from '@/rules/catalogue/allergen';
 import type { Rule, WarningCard as Card } from '@/rules/types';
 import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
 import Log from '@/ui/screens/Log';
@@ -305,16 +306,16 @@ describe('merged claims are recorded in warningsShown', () => {
 });
 
 describe('requirement 7: failures are visible and never block', () => {
-  const brokenSafety = rule({
-    id: 'allergen', category: 'safety', safetyAuthority: 'user-flag',
-    cannotCheck: () => 'a flagged allergen has no tag',
-  });
   const apple = food('ap', 'Apple', [{ label: '1 medium', grams: 180 }]);
 
-  test('a safety failure is named plainly at the gate and the entry can still be added', async () => {
-    await typeAndSubmit('an apple', fakeDeps([apple], [brokenSafety]));
+  test('an unrecognised allergen flag is named plainly at the gate by the REAL allergen rule, and the entry can still be added', async () => {
+    await putProfile({ ...ownerProfile, flaggedAllergens: ['kryptonite'] });
+    await typeAndSubmit('an apple', fakeDeps([apple], [allergenRule]));
     const note = await screen.findByTestId('check-note');
-    expect(note.textContent).toMatch(/could not check this entry for your flagged allergens/i);
+    expect(note.textContent).toMatch(/^We could not check this entry for your flagged allergens\./i);
+    expect(note.textContent).toMatch(/kryptonite/);
+    expect(note.textContent).not.toMatch(/could not run a safety check/i);
+    expect((note.textContent!.match(/allergen-flagged/g) ?? []).length).toBeLessThanOrEqual(1);
     await click(/add anyway/i);
     await waitFor(async () => expect(await entriesToday()).toHaveLength(1));
   });
