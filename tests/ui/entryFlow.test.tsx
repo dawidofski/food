@@ -269,7 +269,7 @@ describe('requirement 6: merged claims sit under their own citation', () => {
       ...processedMeatCard,
       mergedFrom: ['sodium'],
       merged: [{
-        ruleId: 'sodium', concern: 'Sodium claim.', portionNote: 'Sodium note.',
+        ruleId: 'sodium', level: 'MODERATE', concern: 'Sodium claim.', portionNote: 'Sodium note.',
         evidence: { strength: 'moderate', body: 'WHO', summary: 'WHO sodium summary.', citation: citation('WHOSODIUM'), isAssociational: true },
         citation: citation('WHOSODIUM'),
       }],
@@ -283,6 +283,24 @@ describe('requirement 6: merged claims sit under their own citation', () => {
     // the primary claim is not inside the merged block
     expect(within(claim).queryByText(processedMeatCard.concern)).not.toBeInTheDocument();
     expect(outer.textContent).toMatch(/IARC/);
+  });
+});
+
+describe('merged claims are recorded in warningsShown', () => {
+  test('every claim of a merged card is stored at its own level', async () => {
+    const hi = rule({ id: 'hi', level: () => 'HIGH', nutrientKey: 'sodiumMg', title: 'Hi' });
+    const lo = rule({ id: 'lo', level: () => 'MODERATE', nutrientKey: 'sodiumMg', title: 'Lo' });
+    const info = rule({ id: 'inf', level: () => 'INFO', nutrientKey: 'sodiumMg', title: 'Inf' });
+    await typeAndSubmit('an apple', fakeDeps([food('ap', 'Apple', [{ label: '1 medium', grams: 180 }])], [lo, hi, info]));
+    await screen.findAllByTestId('merged-claim');
+    await click(/add anyway/i);
+    await waitFor(async () => expect(await entriesToday()).toHaveLength(1));
+    const [e] = await entriesToday();
+    expect(e!.warningsShown).toEqual([
+      { ruleId: 'hi', level: 'HIGH' },
+      { ruleId: 'lo', level: 'MODERATE' },
+      { ruleId: 'inf', level: 'INFO' },
+    ]);
   });
 });
 

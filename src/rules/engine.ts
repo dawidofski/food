@@ -93,7 +93,7 @@ function unique(xs: (string | undefined)[]): string[] {
 }
 
 function claimOf(c: WarningCard): MergedClaim {
-  return { ruleId: c.ruleId, concern: c.concern, portionNote: c.portionNote, evidence: c.evidence, citation: c.evidence.citation };
+  return { ruleId: c.ruleId, level: c.level, concern: c.concern, portionNote: c.portionNote, evidence: c.evidence, citation: c.evidence.citation };
 }
 
 /** The higher-level card keeps ALL its own prose and evidence; the other is attached whole, never concatenated. */

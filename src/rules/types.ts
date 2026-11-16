@@ -130,6 +130,8 @@ export type Rule = {
 /** A claim absorbed into a merged card, with its OWN evidence: a claim is never shown under another rule's source. */
 export type MergedClaim = {
   ruleId: string;
+  /** The level this claim had as its own card before it was absorbed. */
+  level: Level;
   concern: string;
   portionNote: string;
   evidence: Evidence;

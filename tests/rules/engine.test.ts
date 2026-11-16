@@ -259,7 +259,7 @@ describe('evaluate (additional invariants)', () => {
     expect(c.portionNote).not.toContain('This entry is salty.');
     expect(c.evidence.citation.title).toBe('DAILY SOURCE');
     expect(c.merged).toEqual([
-      { ruleId: 'sodium-entry', concern: 'entry concern', portionNote: 'This entry is salty.', evidence: entry.evidence, citation: entry.evidence.citation },
+      { ruleId: 'sodium-entry', level: 'MODERATE', concern: 'entry concern', portionNote: 'This entry is salty.', evidence: entry.evidence, citation: entry.evidence.citation },
     ]);
     expect(c.merged[0]!.citation.title).toBe('ENTRY SOURCE');
   });

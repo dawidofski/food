@@ -191,7 +191,11 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       nutrients: s.resolution.nutrients,
       coverage: s.resolution.coverage,
       classification: s.resolution.classification,
-      warningsShown: cardsRef.current.map((c) => ({ ruleId: c.ruleId, level: c.level })),
+      // Every claim the person read, each at its own level: a card's absorbed claims are part of what was shown.
+      warningsShown: cardsRef.current.flatMap((c) => [
+        { ruleId: c.ruleId, level: c.level },
+        ...c.merged.map((m) => ({ ruleId: m.ruleId, level: m.level })),
+      ]),
       userAction: action,
       state: 'active',
     };
