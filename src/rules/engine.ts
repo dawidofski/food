@@ -53,7 +53,7 @@ function describe(rule: Rule, e: unknown): RuleFailure {
   };
 }
 
-/** Throws only for the CRITICAL invariant; any other error from the rule itself is returned as a failure. */
+/** Throws only for the CRITICAL invariant, and only in dev/test; every other problem is returned as a failure. */
 function evaluateRule(rule: Rule, ctx: Context): { level: Level; notes: string[] } | RuleFailure | null {
   const g = gate(rule, ctx);
   if (!g.pass) return null;
@@ -65,7 +65,11 @@ function evaluateRule(rule: Rule, ctx: Context): { level: Level; notes: string[]
   }
   if (level === null) return null;
   if (level === 'CRITICAL' && rule.category !== 'safety') {
-    throw new Error(`rule "${rule.id}" is a nutrition rule and declared CRITICAL; CRITICAL is reserved for safety rules`);
+    const message = `rule "${rule.id}" is a nutrition rule and declared CRITICAL; CRITICAL is reserved for safety rules`;
+    // Loud where it can be fixed (dev and test), non-blocking where it cannot (a shipped build must stay usable).
+    // import.meta.env.DEV is statically replaced by Vite in a production build.
+    if (import.meta.env.DEV) throw new Error(message);
+    return { ruleId: rule.id, category: rule.category, message };
   }
   return { level, notes: g.notes };
 }

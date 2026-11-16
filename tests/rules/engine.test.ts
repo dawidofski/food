@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { evaluate } from '@/rules/engine';
 import type { Context, Level, Rule } from '@/rules/types';
 import { ownerProfile } from '../fixtures/profile';
@@ -325,6 +325,24 @@ describe('evaluate (additional invariants)', () => {
 
   test('failures is empty when every rule evaluates', () => {
     expect(evaluate([infoRule], ctx()).failures).toEqual([]);
+  });
+
+  test('the development/test signal is on under vitest', () => {
+    expect(import.meta.env.DEV).toBe(true);
+  });
+
+  describe('in a production build', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    test('a nutrition rule claiming CRITICAL is reported in failures and skipped; other rules still fire', () => {
+      vi.stubEnv('DEV', false);
+      expect(import.meta.env.DEV).toBe(false);
+      const r = evaluate([nutritionRuleClaimingCritical, highRule, criticalRule], ctx());
+      expect(r.cards.map((c) => c.ruleId)).toEqual(['critical', 'high']);
+      expect(r.failures).toHaveLength(1);
+      expect(r.failures[0]).toMatchObject({ ruleId: 'fat-critical', category: 'nutrition' });
+      expect(r.failures[0]!.message).toMatch(/safety/i);
+    });
   });
 
   test('a nutrition rule claiming CRITICAL does not throw while its inputs are unknown (silent first)', () => {
