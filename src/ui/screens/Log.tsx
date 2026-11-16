@@ -123,12 +123,12 @@ export default function Log({ deps = defaultDeps, initialDraft = '' }: { deps?: 
           <ul className="space-y-1">
             {flow.aiReadings.map((r) => (
               <li key={r.phrase} className="text-sm">
-                AI read &ldquo;{r.phrase}&rdquo; as: {r.reads.join(' and ')}
+                You typed &ldquo;{r.phrase}&rdquo;. The AI described it as &ldquo;{r.description}&rdquo;, which matches {r.reads.join(' and ')} in the database.
               </li>
             ))}
           </ul>
           <p className="text-sm text-slate-700">
-            The AI only matched your words to a food in the database. The amounts below come from the database, not from the AI.
+            The AI only described your words; the food was then found in the database. The amounts below come from the database, not from the AI.
           </p>
           {flow.lines.length > 0 && <ResolvedLines lines={flow.lines} />}
           <div className="flex flex-col gap-2">

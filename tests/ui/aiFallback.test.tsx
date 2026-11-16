@@ -29,7 +29,7 @@ const lookup: FoodLookup = {
 };
 
 const aiOf = (suggestions: AiSuggestion[], over: Partial<AiDeps> = {}) => {
-  const interpret = vi.fn(async (_t: string, _c: string[], _o: unknown) => suggestions);
+  const interpret = vi.fn(async (_t: string, _o: unknown) => suggestions);
   const ai: AiDeps = { isEnabled: () => true, getKey: () => 'test-key', isOnline: () => true, interpret, ...over };
   return { ai, interpret };
 };
@@ -56,11 +56,13 @@ afterEach(cleanup);
 
 describe('the AI fallback in the add flow', () => {
   test('a phrase that does not resolve is shown as an AI reading and nothing is stored until it is confirmed', async () => {
-    const { ai, interpret } = aiOf([{ candidateName: 'Sausage, pork', quantity: 2, unit: 'link' }]);
+    const { ai, interpret } = aiOf([{ description: 'deep-fried minced pork sausage', quantity: 2, unit: 'link' }]);
     await typeAndSubmit('two frikandel', depsWith(ai));
     expect(await screen.findByTestId('ai-review')).toBeInTheDocument();
     expect(screen.getByTestId('ai-review')).toHaveTextContent(/AI/);
     expect(screen.getByTestId('ai-review')).toHaveTextContent(/frikandel/);
+    // The phrase, the model's description and the dataset food it landed on are all shown.
+    expect(screen.getByTestId('ai-review')).toHaveTextContent(/deep-fried minced pork sausage/);
     expect(screen.getByTestId('ai-review')).toHaveTextContent(/Sausage, pork/);
     expect(interpret).toHaveBeenCalledTimes(1);
     // The model was sent only the unresolved phrase, never the whole entry's other parts.
@@ -75,6 +77,30 @@ describe('the AI fallback in the add flow', () => {
     expect(e!.items[0]!.foodId).toBe('s');
   });
 
+  test('the model is never given a list of foods, and it cannot pick one', async () => {
+    const { ai, interpret } = aiOf([{ description: 'deep-fried minced pork sausage', quantity: 1, unit: 'piece' }]);
+    await typeAndSubmit('one frikandel', depsWith(ai));
+    await screen.findByTestId('ai-review');
+    expect(interpret.mock.calls[0]).toHaveLength(2); // (phrase, options): no candidate list
+  });
+
+  test('text that parses to nothing is still sent for help, and a reading is offered', async () => {
+    const { ai, interpret } = aiOf([{ description: 'apple', quantity: 1, unit: 'piece' }]);
+    await typeAndSubmit('2 tbsp', depsWith(ai));
+    expect(await screen.findByTestId('ai-review')).toBeInTheDocument();
+    expect(interpret.mock.calls[0]![0]).toBe('2 tbsp');
+    expect(await entriesToday()).toHaveLength(0);
+    await click(/use this reading/i);
+    await waitFor(async () => expect(await entriesToday()).toHaveLength(1));
+    expect((await entriesToday())[0]!.items[0]!.foodId).toBe('a');
+  });
+
+  test('empty text is never sent', async () => {
+    const { ai, interpret } = aiOf([]);
+    await typeAndSubmit('   ', depsWith(ai));
+    expect(interpret).not.toHaveBeenCalled();
+  });
+
   test('only the unresolved phrase is sent, not the resolved part of the entry', async () => {
     const { ai, interpret } = aiOf([]);
     await typeAndSubmit('an apple and a frikandel', depsWith(ai));
@@ -85,7 +111,7 @@ describe('the AI fallback in the add flow', () => {
   });
 
   test('declining the reading falls back to manual entry and stores nothing', async () => {
-    const { ai } = aiOf([{ candidateName: 'Sausage, pork', quantity: 1, unit: 'piece' }]);
+    const { ai } = aiOf([{ description: 'deep-fried minced pork sausage', quantity: 1, unit: 'piece' }]);
     await typeAndSubmit('one frikandel', depsWith(ai));
     await click(/don.t use/i);
     expect(await screen.findByText(/don.t know/i)).toBeInTheDocument();
@@ -93,8 +119,8 @@ describe('the AI fallback in the add flow', () => {
     expect(await entriesToday()).toHaveLength(0);
   });
 
-  test('a suggestion the dataset cannot resolve is dropped and the flow ends in manual entry', async () => {
-    const { ai } = aiOf([{ candidateName: 'Plutonium, raw', quantity: 1, unit: 'g' }]);
+  test('a description the dataset has nothing for is dropped and the flow ends in manual entry', async () => {
+    const { ai } = aiOf([{ description: 'plutonium', quantity: 1, unit: 'g' }]);
     await typeAndSubmit('one frikandel', depsWith(ai));
     expect(await screen.findByText(/don.t know/i)).toBeInTheDocument();
     expect(screen.queryByTestId('ai-review')).not.toBeInTheDocument();
@@ -111,7 +137,7 @@ describe('the AI fallback in the add flow', () => {
     ['offline', { isOnline: () => false }],
     ['no key', { getKey: () => null }],
   ])('the model is not called when %s', async (_n, over) => {
-    const { ai, interpret } = aiOf([{ candidateName: 'Sausage, pork', quantity: 1, unit: 'piece' }], over);
+    const { ai, interpret } = aiOf([{ description: 'deep-fried minced pork sausage', quantity: 1, unit: 'piece' }], over);
     await typeAndSubmit('one frikandel', depsWith(ai));
     expect(await screen.findByText(/don.t know/i)).toBeInTheDocument();
     expect(interpret).not.toHaveBeenCalled();
@@ -137,6 +163,7 @@ describe('the settings screen', () => {
     expect(text).toMatch(/DeepSeek/);
     expect(text).toMatch(/third party|outside (your|this) (device|phone)/i);
     expect(text).toMatch(/only that (single )?(unresolved )?phrase/i);
+    expect(text).not.toMatch(/list of food names/i);
     expect(text).toMatch(/diary.*profile.*targets.*totals.*never sent/i);
     expect(isAiEnabled()).toBe(false);
     expect(screen.queryByRole('checkbox', { name: /use deepseek/i })).not.toBeInTheDocument();

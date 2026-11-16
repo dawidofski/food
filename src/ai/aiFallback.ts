@@ -1,4 +1,5 @@
 import type { FoodLookup } from '@/domain/foodLookup';
+import type { DatasetFood } from '@/types/food';
 import type { ParsedItem } from '@/domain/parseEntry';
 import { parseQuantity, type Quantity } from '@/domain/quantity';
 import { resolveItems } from '@/domain/resolveItems';
@@ -10,11 +11,11 @@ export type AiDeps = {
   isEnabled: () => boolean;
   getKey: () => string | null;
   isOnline: () => boolean;
-  interpret: (text: string, candidates: string[], opts: InterpretOptions) => Promise<AiSuggestion[]>;
+  interpret: (text: string, opts: InterpretOptions) => Promise<AiSuggestion[]>;
 };
 
-/** One unresolved phrase and how the model read it, for the person to check before any rule runs. */
-export type AiReading = { phrase: string; reads: string[] };
+/** One unresolved phrase, the model's plain-English description of it, and the dataset foods that description landed on. */
+export type AiReading = { phrase: string; description: string; reads: string[] };
 
 export type AiApplied = { items: ParsedItem[]; resolution: Resolution; readings: AiReading[] };
 
@@ -38,27 +39,41 @@ export function shouldEngage(res: Resolution): boolean {
 /** The phrases worth sending: only items that did not resolve. Never the whole entry, never a resolved item. */
 export const unresolvedPhrases = (res: Resolution): ParsedItem[] => res.needsHelp;
 
-// Broad dataset queries so the model has real names to choose from even when the person's word
-// (a Dutch snack, a brand) shares no token with any dataset entry. Names only; no user data.
-const BROAD_QUERIES = [
-  'sausage', 'frankfurter', 'beef', 'pork', 'chicken', 'fish', 'cheese', 'bread', 'pasta', 'rice',
-  'potato', 'soup', 'salad', 'pastry', 'cake', 'cookie', 'sandwich', 'pizza',
-];
-const MAX_SHORTLIST = 40;
-const MAX_TOKEN_NAMES = 20;
+const STOPWORDS = new Set(['the', 'and', 'with', 'for', 'from', 'made', 'type', 'kind', 'style']);
 
-/** Dataset food names to offer the model. Custom foods and batches are the person's own and never leave the device. */
-export function shortlist(phrase: string, lookup: FoodLookup): string[] {
-  const names = new Set<string>();
-  const add = (q: string, limit: number, cap: number) => {
-    for (const h of lookup.search(q, limit)) {
-      if (h.source === 'dataset' && names.size < cap) names.add(h.food.name);
+type Seen = { food: DatasetFood; covered: Set<string> };
+
+/**
+ * Step two: OUR search, not the model's choice. The description is plain words from the model, used
+ * only as search terms against the bundled dataset (never as a food id or a number). The search
+ * needs every query word in a food's name, so a long description rarely matches whole; each word is
+ * searched on its own and the food covering the most description words wins, ties going to the
+ * food that also matches the last word (the head noun: "...pork sausage" is a sausage), then to
+ * the shorter name. Custom foods and batches are never candidates for an AI reading.
+ */
+export function findFoodByDescription(description: string, lookup: FoodLookup): DatasetFood | null {
+  const whole = lookup.search(description, 5).find((h) => h.source === 'dataset');
+  if (whole) return whole.food;
+  const words = [...new Set(description.toLowerCase().match(/[a-z]{3,}/g) ?? [])].filter((w) => !STOPWORDS.has(w));
+  if (words.length === 0) return null;
+  const head = words[words.length - 1]!;
+  const seen = new Map<string, Seen>();
+  for (const w of words) {
+    for (const h of lookup.search(w, 15)) {
+      if (h.source !== 'dataset') continue;
+      const e = seen.get(h.food.id) ?? { food: h.food, covered: new Set<string>() };
+      e.covered.add(w);
+      seen.set(h.food.id, e);
     }
+  }
+  let best: Seen | null = null;
+  const better = (e: Seen, b: Seen): boolean => {
+    if (e.covered.size !== b.covered.size) return e.covered.size > b.covered.size;
+    if (e.covered.has(head) !== b.covered.has(head)) return e.covered.has(head);
+    return e.food.name.length < b.food.name.length;
   };
-  const words = phrase.toLowerCase().match(/[a-z]{4,}/g) ?? [];
-  for (const w of new Set(words)) add(w, 6, MAX_TOKEN_NAMES);
-  for (const q of BROAD_QUERIES) add(q, 2, MAX_SHORTLIST);
-  return [...names];
+  for (const e of seen.values()) if (best === null || better(e, best)) best = e;
+  return best?.food ?? null;
 }
 
 // Words that mean "one of it", not a measure the dataset has a portion row for. "1 piece" must not
@@ -86,12 +101,14 @@ function pinned(base: FoodLookup): FoodLookup {
 }
 
 /**
- * Asks the model about each unresolved phrase and folds anything that resolves back into the
- * items. Returns null when the AI path adds nothing (off, offline, no suggestion survived).
- * Nothing here reads a nutrient from the model: each suggestion becomes a ParsedItem that the
- * ordinary resolveItems turns into grams and nutrients from the bundled dataset.
+ * Asks the model to DESCRIBE each unresolved phrase (or the whole text, when nothing parsed at all),
+ * searches the dataset ourselves with that description, and folds anything that resolves back into
+ * the items. Returns null when the AI path adds nothing (off, offline, nothing usable came back).
+ * Nothing here reads a nutrient or a food choice from the model: each description is looked up in
+ * the bundled dataset and the ordinary resolveItems turns the found food into grams and nutrients.
  */
 export async function applyAi(
+  text: string,
   items: ParsedItem[],
   resolution: Resolution,
   lookup: FoodLookup,
@@ -99,30 +116,40 @@ export async function applyAi(
 ): Promise<AiApplied | null> {
   if (!ai || !ai.isEnabled() || !ai.isOnline()) return null;
   const key = ai.getKey();
-  const targets = unresolvedPhrases(resolution);
-  if (!key || !shouldEngage(resolution) || targets.length === 0) return null;
+  if (!key) return null;
+  // Nothing parsed at all is the most unresolvable case: the whole text is the unresolved phrase.
+  const nothingParsed = items.length === 0 && /\p{L}{2,}/u.test(text);
+  const targets: { key: ParsedItem | null; phrase: string }[] = nothingParsed
+    ? [{ key: null, phrase: text.trim() }]
+    : shouldEngage(resolution) ? unresolvedPhrases(resolution).map((i) => ({ key: i, phrase: i.rawFragment })) : [];
+  if (targets.length === 0) return null;
 
   const base = pinned(lookup);
   const replacements = new Map<ParsedItem, ParsedItem[]>();
+  const added: ParsedItem[] = [];
   const readings: AiReading[] = [];
   for (const target of targets) {
-    const suggestions = await ai.interpret(target.rawFragment, shortlist(target.rawFragment, lookup), { apiKey: key });
+    const suggestions = await ai.interpret(target.phrase, { apiKey: key });
     const accepted: ParsedItem[] = [];
     const reads: string[] = [];
+    const described: string[] = [];
     for (const s of suggestions) {
+      const found = findFoodByDescription(s.description, lookup);
+      if (!found) continue;
       const { quantity, label } = toQuantity(s);
-      const item: ParsedItem = { rawFragment: target.rawFragment, quantity, foodQuery: s.candidateName };
+      const item: ParsedItem = { rawFragment: target.phrase, quantity, foodQuery: found.name };
       // Keep only what the dataset can actually resolve; the rest stays unresolved for manual entry.
       if (resolveItems([item], base).needsHelp.length > 0) continue;
       accepted.push(item);
-      reads.push(`${label} ${s.candidateName}`);
+      reads.push(`${label} ${found.name}`);
+      described.push(s.description);
     }
-    if (accepted.length > 0) {
-      replacements.set(target, accepted);
-      readings.push({ phrase: target.rawFragment, reads });
-    }
+    if (accepted.length === 0) continue;
+    if (target.key) replacements.set(target.key, accepted);
+    else added.push(...accepted);
+    readings.push({ phrase: target.phrase, description: described.join('; '), reads });
   }
-  if (replacements.size === 0) return null;
-  const merged = items.flatMap((i) => replacements.get(i) ?? [i]);
+  if (readings.length === 0) return null;
+  const merged = [...items.flatMap((i) => replacements.get(i) ?? [i]), ...added];
   return { items: merged, resolution: resolveItems(merged, base), readings };
 }

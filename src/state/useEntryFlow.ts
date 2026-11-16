@@ -347,12 +347,12 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
         const lns = describeLines(items, resolution, d.lookup);
         setLines(lns);
         setUnresolved(resolution.needsHelp);
-        if (!resolutionOverride && ready && resolution.needsHelp.length > 0) {
+        if (!resolutionOverride && ready && (resolution.needsHelp.length > 0 || items.length === 0)) {
           // Keep the local result first: declining the model's reading falls back to it.
           pendingResolution.current = { items, resolution };
           // Only the unresolved phrase leaves the device, and only when the person switched this on.
           // The reading is shown for correction BEFORE any rule runs; a failure here is silent.
-          const applied = await applyAi(items, resolution, d.lookup, d.ai).catch(() => null);
+          const applied = await applyAi(text, items, resolution, d.lookup, d.ai).catch(() => null);
           if (my !== seq.current) return;
           if (applied) {
             aiPending.current = applied;

@@ -56,8 +56,7 @@ export default function Settings() {
       <section aria-labelledby="ai-heading" className="space-y-3 rounded-xl border-2 border-slate-400 p-3">
         <h2 id="ai-heading" className="text-lg font-semibold">AI help for foods I can&rsquo;t match</h2>
         <p className="text-sm">
-          Optional, and off by default. When a food you type is not in the database, the app can ask DeepSeek, an AI service, which
-          food in the database you probably meant.
+          Optional, and off by default. When a food you type is not in the database, the app can ask DeepSeek, an AI service, what it means.
         </p>
         <ul className="list-disc space-y-1 pl-5 text-sm">
           <li>
@@ -65,12 +64,11 @@ export default function Settings() {
             DeepSeek&rsquo;s own data policy.
           </li>
           <li>
-            Only that single unresolved phrase is sent, with a list of food names from the database. Your diary, your profile, your
+            Only that single unresolved phrase is sent, and nothing else. Your diary, your profile, your
             targets and your totals are never sent.
           </li>
           <li>
-            The AI never supplies nutrition. It can only pick a food from the database; every number still comes from that database, and
-            you check its reading before anything is saved.
+            The AI never supplies nutrition and never picks a food. It only describes what your word means; the app then searches its own database, every number comes from that database, and you check the reading before anything is saved.
           </li>
           <li>Your key stays in this browser only. It is not part of the app&rsquo;s code and is removed if you erase everything.</li>
         </ul>
