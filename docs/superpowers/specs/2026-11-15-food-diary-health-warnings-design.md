@@ -938,3 +938,9 @@ is the owner's decision. Anyone who publishes the repository should rewrite or s
 - *Saturated fat.* The cardiovascular-risk sentence could not be re-read: the WHO fats news item and the publication page give only the 10% limit and a general "cardiovascular diseases" focus, and the guideline PDF was not retrievable. **Dropped.** The card now says only that WHO makes the 10% figure a strong recommendation and rates its certainty as moderate (certainty as read from the PDF in the Task 11 pass).
 - *Trans fat.* The coronary heart disease, death and dose-response wording was never read at source (the Task 11 pass read the 1% recommendation and the definition only) and could not be confirmed now. **Dropped**, and `isAssociational` is now false because the card states no association. This was the weakest-sourced sentence in the catalogue.
 
+**Trans fat never fires on dataset food (I3).** Counted 2026-11-16 in the shipped foods file: `transFatG` is present for 0 of 5,431 foods (FNDDS does not report trans fat; recorded in `scripts/README.md`). Earlier wording, that USDA "often lacks" it, understated this. The trans fat rule can act only on a custom food that carries a figure. The rule header now says so, and Settings states that the app cannot check trans fat.
+
+**Data source shown (minor).** Settings now displays the citation and release from `public/data/meta.json` (USDA FNDDS/FPED, CC0), and says the foods are US survey foods.
+
+**AI disclosure (I4).** Settings now states the second case: when nothing typed can be matched, the whole line (first 200 characters) is sent.
+

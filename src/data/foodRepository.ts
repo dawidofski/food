@@ -56,6 +56,23 @@ async function doLoad(fetchImpl: typeof fetch, gen: number): Promise<void> {
   }
 }
 
+export type DatasetMeta = { citation: string; release: string; count: number | null };
+
+/** The bundled data's own citation and release, for display. Null when meta.json cannot be read; never rejects. */
+export async function loadDatasetMeta(fetchImpl: typeof fetch = fetch): Promise<DatasetMeta | null> {
+  try {
+    const m = (await fetchJson(fetchImpl, dataUrl('meta.json'), { cache: 'no-cache' })) as Record<string, unknown> | null;
+    if (!m || typeof m.citation !== 'string') return null;
+    return {
+      citation: m.citation,
+      release: typeof m.fdcRelease === 'string' ? m.fdcRelease : '',
+      count: typeof m.count === 'number' ? m.count : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Loads the bundled dataset. Idempotent, shares in-flight work, and never rejects. */
 export function loadFoods(fetchImpl: typeof fetch = fetch): Promise<void> {
   if (inflight) return inflight;

@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { loadDatasetMeta, type DatasetMeta } from '@/data/foodRepository';
 import { clearApiKey, getApiKey, isAiSwitchedOn, maskKey, setAiSwitch, setApiKey } from '@/state/aiSettings';
 import { BackupSettings, EraseSettings } from './DataSettings';
 import ProfileSettings from './ProfileSettings';
@@ -17,6 +18,7 @@ export default function Settings({ onErased }: { onErased?: () => void }) {
       <ProfileSettings key={`profile-${version}`} />
       <AiSettings key={`ai-${version}`} />
       <BackupSettings onImported={refresh} />
+      <DataSourceSettings />
       <EraseSettings onErased={() => { refresh(); onErased?.(); }} />
     </main>
   );
@@ -79,7 +81,8 @@ function AiSettings() {
             DeepSeek&rsquo;s own data policy.
           </li>
           <li>
-            Only that single unresolved phrase is sent, and nothing else. Your diary, your profile, your
+            Only the phrase it could not match is sent, and nothing else. If nothing you typed could be matched at all,
+            the whole line you typed is sent instead, cut to its first 200 characters. Your diary, your profile, your
             targets and your totals are never sent.
           </li>
           <li>
@@ -143,5 +146,32 @@ function AiSettings() {
         {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
       </section>
     </>
+  );
+}
+
+/** Where the numbers come from, and what the app cannot check. Read from the bundled data's own meta.json. */
+function DataSourceSettings() {
+  const [meta, setMeta] = useState<DatasetMeta | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadDatasetMeta().then((m) => { if (live) setMeta(m); });
+    return () => { live = false; };
+  }, []);
+  return (
+    <section aria-labelledby="data-heading" data-testid="data-source" className="space-y-2 rounded-xl border-2 border-slate-400 p-3">
+      <h2 id="data-heading" className="text-lg font-semibold">Where the food numbers come from</h2>
+      {meta ? (
+        <>
+          <p className="text-sm">{meta.citation}</p>
+          {meta.release && <p className="text-sm">Release: {meta.release}.</p>}
+        </>
+      ) : (
+        <p className="text-sm">The data source details could not be loaded.</p>
+      )}
+      <p className="text-sm">These are US survey foods, so a food from another country may match a different product or none.</p>
+      <p data-testid="trans-fat-limit" className="text-sm">
+        This food data records no trans fat for any food, so the app cannot check trans fat, and its trans fat warning never appears.
+      </p>
+    </section>
   );
 }

@@ -162,7 +162,8 @@ describe('the settings screen', () => {
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/DeepSeek/);
     expect(text).toMatch(/third party|outside (your|this) (device|phone)/i);
-    expect(text).toMatch(/only that (single )?(unresolved )?phrase/i);
+    expect(text).toMatch(/only the phrase it could not match/i);
+    expect(text).toMatch(/nothing you typed could be matched[\s\S]*whole line[\s\S]*200 characters/i);
     expect(text).not.toMatch(/list of food names/i);
     expect(text).toMatch(/diary.*profile.*targets.*totals.*never sent/i);
     expect(isAiEnabled()).toBe(false);

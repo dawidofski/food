@@ -376,3 +376,16 @@ describe('settings: backup', () => {
     expect(await getProfile()).toEqual(ownerProfile);
   });
 });
+
+describe('settings: data source and what cannot be checked', () => {
+  test('shows the dataset citation and release from meta.json, and says trans fat cannot be checked', async () => {
+    const meta = { citation: 'USDA FoodData Central. Public domain, CC0 1.0 Universal.', fdcRelease: 'FNDDS 2021-2023 test release', count: 5431, file: 'x.json' };
+    vi.stubGlobal('fetch', (async () => ({ ok: true, status: 200, text: async () => JSON.stringify(meta) })) as unknown as typeof fetch);
+    render(<Settings />);
+    const box = await screen.findByTestId('data-source');
+    await waitFor(() => expect(box.textContent).toMatch(/CC0 1\.0/));
+    expect(box.textContent).toMatch(/FNDDS 2021-2023 test release/);
+    expect(screen.getByTestId('trans-fat-limit').textContent).toMatch(/cannot check trans fat/i);
+    vi.unstubAllGlobals();
+  });
+});

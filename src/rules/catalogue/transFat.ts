@@ -2,6 +2,10 @@ import type { Citation, Evidence, Rule } from '../types';
 import { pending, usable, whole } from './shared';
 
 /**
+ * THIS RULE CANNOT FIRE ON THE SHIPPED FOOD DATA. FNDDS records no trans fat, so `transFatG` is present for 0 of 5,431
+ * foods (scripts/README.md). It can act only on a custom food that carries a trans fat figure. Settings tells the owner
+ * the app cannot check trans fat.
+ *
  * Verified against the WHO 2023 guideline: reduce trans-fatty acids to 1% of energy (strong recommendation, moderate
  * certainty). Two plan assumptions did not survive the source:
  *  - the 1% limit covers ALL trans fat, ruminant (dairy, meat) as well as industrial, and the food data does not
