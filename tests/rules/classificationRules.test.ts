@@ -248,12 +248,12 @@ describe('the classification rules as a group', () => {
     for (const id of ids) expect(citationProblems(catalogue.find((x) => x.id === id)!.evidence.citation)).toEqual([]);
   });
   test('rules that read flags and no nutrient say so by declaring none', () => {
-    const empty = catalogue.filter((r) => r.requiresNutrients.length === 0).map((r) => r.id).sort();
+    const empty = catalogue.filter((r) => r.category === 'nutrition' && r.requiresNutrients.length === 0).map((r) => r.id).sort();
     expect(empty).toEqual(['alcohol', 'processed-meat', 'processed-meat-frequency', 'red-meat-weekly', 'sweet-drink', 'ultra-processed']);
     expect([...nutrientDensityRule.requiresNutrients].sort()).toEqual(['energyKcal', 'fibreG', 'proteinG']);
   });
   test('only processed meat reaches HIGH, over every probe', () => {
-    for (const r of catalogue) {
+    for (const r of catalogue.filter((x) => x.category === 'nutrition')) {
       for (const p of probes[r.id] ?? []) {
         if (r.id !== 'processed-meat') expect(['INFO', 'MODERATE']).toContain(r.level(p.ctx));
       }

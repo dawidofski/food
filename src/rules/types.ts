@@ -1,4 +1,4 @@
-import type { Level, Resolution } from '@/types/diary';
+import type { FoodSource, Level, Resolution } from '@/types/diary';
 import type { NutrientKey } from '@/types/nutrients';
 import type { Profile, Targets } from '@/types/profile';
 import type { DayTotals, WeekContext } from '@/domain/totals';
@@ -41,8 +41,26 @@ export type Evidence = {
 
 export type Horizon = 'occasional' | 'habitual' | 'both';
 
+/**
+ * The identity of one resolved food in the pending entry, as the caller knows it. Safety rules match on THIS, never on
+ * what the user typed: USDA identity cannot tell how a food was handled, and free text is user input.
+ */
+export type FoodIdentity = {
+  name: string;
+  /** Indicative tags from the build pipeline (or set by the user on a custom food). An absent tag is NOT "allergen-free". */
+  allergens: string[];
+  source: FoodSource;
+};
+
 export type Context = {
   pending: Resolution;
+  /** The resolved foods of the pending entry. Empty when the caller cannot name them: identity rules then stay silent. */
+  foods: FoodIdentity[];
+  /**
+   * What the user typed. Present for display and tracing ONLY: no rule may read it to raise a level. A safety rule that
+   * did could be triggered by anything a person types, on the one tier that cannot be collapsed.
+   */
+  rawText?: string;
   today: DayTotals;
   week: WeekContext;
   targets: Targets;
@@ -79,6 +97,12 @@ export type Rule = {
 
   /** The rule stays silent if any of these is not known in the pending entry. Absent means unknown, never zero. */
   requiresNutrients: NutrientKey[];
+  /**
+   * SAFETY RULES ONLY. Where the card's authority comes from: a safety card is exempt from the evidence ceiling and must
+   * still say why it is CRITICAL. 'user-flag': the person told the app they react to it (definitional, not evidential).
+   * 'food-safety-body': a food-safety authority's published advice, which `evidence.citation` carries.
+   */
+  safetyAuthority?: 'user-flag' | 'food-safety-body';
   /**
    * Which total the rule reads, REQUIRED so no default can mislead. 'entry' reads only the pending entry.
    * 'daily' reads today's running total plus the pending entry, so the coverage gate applies to it.

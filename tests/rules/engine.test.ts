@@ -51,6 +51,7 @@ function ctx(o: Opts = {}): Context {
   };
   const food = o.food ?? 'plain';
   return {
+    foods: [],
     pending: {
       refs: [{ source: 'dataset', foodId: food, grams: 100, classification: flags }],
       nutrients: pendingN, coverage: pendingC, classification: flags, needsHelp: [], confidence: 1,

@@ -850,3 +850,21 @@ source; and a prose mention of WHO satisfied by an IARC citation (IARC being par
 and the second cannot be caught without reading the source. Adding lexical tests for them would force misquoting
 sources, which is the error round 2 corrected. Verifying a conclusion against its source is this log's job, not a unit
 test's.
+
+### Safety rules (Task 13), checked 2026-11-16
+
+Every hazard was read at the publisher's own page (fetched; the passages below were extracted from the page text). A search
+summary was never taken as the source. Each citation `conclusion` is a verbatim run of the page's own sentences.
+
+| Hazard | Authority and page | What it says | Result |
+|---|---|---|---|
+| Reheated / warm-held rice | FSA, "Home food fact checker" (gov.uk, published 2 June 2020) | Uncooked rice can contain *Bacillus cereus* spores; the spores can survive cooking; the longer cooked rice is left at room temperature the more likely bacteria or toxins make it unsafe; reheat only once, steaming hot; chill leftovers ideally within one hour. The FSA student guide adds "You can get food poisoning from eating reheated rice." | **Confirmed.** The card asks whether the rice was kept warm or cooled slowly, since the page's hazard is the holding, not the reheat. The NHS rice page now redirects to this FSA page. |
+| Raw kidney beans | FDA, "Natural Toxins in Food" (current as of 26 Sept 2024) | PHA is a lectin in raw or undercooked beans; at high levels in raw beans it can lead to nausea, severe vomiting and diarrhea; soak at least 5 hours then boil in fresh water at least 30 minutes. Canned and properly cooked beans are low in PHA. | **Confirmed.** Canned and fast-food entries are not matched. Only the FDA 30-minute figure is used; the commonly quoted 10-minute and slow-cooker claims were found only in secondary sources and are not in the card. |
+| Raw sprouts | FDA, "Selecting and Serving Produce Safely" (current as of 5 Mar 2024) | Sprouts served raw or lightly cooked may contain bacteria that can cause foodborne illness; a few bacteria on the seed can grow to high levels; more vulnerable people should avoid raw or lightly cooked sprouts of any kind. | **Confirmed.** The "more vulnerable" group is defined on the page "as identified above"; the card does not name it. |
+| Raw eggs | FDA, "What You Need to Know About Egg Safety" (current as of 5 Mar 2024) | Fresh eggs, even with clean uncracked shells, may contain *Salmonella*; cook until yolk and white are firm; raw or undercooked recipes need pasteurised eggs or egg products. | **Confirmed, with a jurisdiction caveat.** The UK FSA changed its advice in 2017 for Lion-marked eggs (search summaries only; the FSA page was not fetched), so for a UK user an FDA-based CRITICAL on a runny Lion egg may over-warn. Not resolved here; the card states the FDA's advice and names the FDA. |
+| Unpasteurised dairy | FDA, "Raw Milk Misconceptions and the Danger of Raw Milk Consumption" (modified 5 Mar 2024) | Raw milk can contain a variety of disease-causing pathogens; pasteurization effectively kills them without significant impact on nutritional quality. | **Confirmed for milk only.** Cheese is not matched, because the page makes no claim about it. |
+| Allergen check-the-label advice | NHS, "Food allergy" (nhs.uk; access year 2026, no publication year) | "You can manage a food allergy by checking food labels carefully ..." and "check food labels and restaurant menus carefully to make sure they do not contain the food you're allergic to". | **Confirmed.** This is the only sourced claim on the allergen card. The card's authority is the user's own flag, declared as `safetyAuthority: 'user-flag'`. |
+
+No hazard was dropped. Not checked at source: EFSA (no EFSA page was fetched; its podcast surfaced in search and is unused).
+Identity matching is narrow by design, so mixed dishes that contain rice, eggs or sprouts do not ask; that is a recorded
+false negative, not a claim of coverage.

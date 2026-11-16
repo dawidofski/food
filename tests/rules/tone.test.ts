@@ -18,7 +18,7 @@ function ownProse(rule: Rule): string {
 }
 
 const DISEASE =
-  /\b(cancer|heart disease|cardiovascular|diabetes|stroke|hypertension|high blood pressure|tooth decay|caries|obesity|death|mortality|weight gain|kidney|cholesterol)\b/i;
+  /\b(cancer|heart disease|cardiovascular|diabetes|stroke|hypertension|high blood pressure|tooth decay|caries|obesity|death|mortality|weight gain|kidney disease|kidney failure|kidney stones?|cholesterol)\b/i;
 /** Wording that says a link concerns habitual, long-term intake. `\busual\b` so "unusual" does not count. */
 const LONG_TERM = /\b(usual|long-term|over time|habitual|habitually|regular|regularly)\b/i;
 
@@ -33,6 +33,11 @@ const EXPECTED_STRENGTH: Record<string, 'strong' | 'moderate' | 'limited' | 'unc
   // "limited evidence"; sweet drink is 'limited' because WHO rates its drink-specific cohort evidence low.
   'processed-meat': 'strong', 'processed-meat-frequency': 'strong', 'red-meat-weekly': 'limited', alcohol: 'strong',
   'sweet-drink': 'limited', 'ultra-processed': 'limited', 'nutrient-density': 'limited',
+  // Task 13. Safety rules: 'strong' is the certainty of the hazard as the food-safety body states it, or, for the allergen
+  // card, the certainty that the user reacts (their own declaration). It is not an effect size, and safety rules are
+  // exempt from the MODERATE ceiling that applies to weak nutrition evidence.
+  'allergen-flagged': 'strong', 'food-safety-rice': 'strong', 'food-safety-kidney-beans': 'strong',
+  'food-safety-sprouts': 'strong', 'food-safety-eggs': 'strong', 'food-safety-raw-milk': 'strong',
 };
 
 /**
@@ -42,7 +47,7 @@ const EXPECTED_STRENGTH: Record<string, 'strong' | 'moderate' | 'limited' | 'unc
 const MAY_REACH_HIGH = new Set(['processed-meat']);
 
 test('the tone tests really run over the catalogue', () => {
-  expect(catalogue.length).toBeGreaterThanOrEqual(13);
+  expect(catalogue.length).toBeGreaterThanOrEqual(19);
   for (const r of catalogue) {
     expect(probes[r.id]?.length, `${r.id} has no probe for its portion note`).toBeGreaterThan(0);
     expect(EXPECTED_STRENGTH[r.id], `${r.id} has no pinned strength`).toBeDefined();
@@ -118,6 +123,9 @@ describe.each(catalogue)('$id', (rule) => {
       WHO: /\bWHO\b|World Health Organi[sz]ation/,
       SACN: /SACN|Scientific Advisory Committee on Nutrition/i,
       EFSA: /EFSA|European Food Safety Authority/i,
+      FSA: /FSA|Food Standards Agency/i,
+      FDA: /FDA|Food and Drug Administration/i,
+      NHS: /NHS|National Health Service/i,
     };
     const text = [rule.title, rule.concern, rule.cause, rule.evidence.summary, ...(rule.alternatives ?? []).flatMap((a) => [a.label, a.reason])].join('\n');
     const cited = [rule.evidence.citation, ...(rule.evidence.supportingCitations ?? []), ...(rule.alternatives ?? []).map((a) => a.citation)].map((c) => `${c.publisher} ${c.title}`).join('\n');
@@ -136,7 +144,8 @@ describe.each(catalogue)('$id', (rule) => {
   });
 
   test('a rule that compares one entry with a daily figure says plainly that no single-serving guideline exists', () => {
-    if (rule.scope !== 'entry') return;
+    // Safety rules compare nothing with a daily figure: they state a handling hazard or a user's own flag.
+    if (rule.scope !== 'entry' || rule.category === 'safety') return;
     expect(rule.concern).toMatch(/\b(no|not)\b[^.]*\b(single|one) (serving|entry|meal)/i);
   });
 
@@ -148,13 +157,17 @@ describe.each(catalogue)('$id', (rule) => {
   test('declared strength is the pinned one; weak evidence would be permitted but capped at MODERATE', () => {
     expect(rule.evidence.strength).toBe(EXPECTED_STRENGTH[rule.id]);
     expect(rule.evidence.body).toBeTruthy();
+    // Safety rules are exempt from the ceiling by design (engine.ts); they declare their authority instead.
+    if (rule.category === 'safety') return;
     if (rule.evidence.strength === 'limited' || rule.evidence.strength === 'uncertain') {
       for (const p of probes[rule.id] ?? []) expect(['INFO', 'MODERATE']).toContain(rule.level(p.ctx));
     }
   });
 
   test("a 'strong' rating is bounded in the card text: it names the outcome it covers and what is rated lower", () => {
-    if (rule.evidence.strength !== 'strong') return;
+    // The wording checks below are about nutrition outcomes and classifications; a safety rule's authority is pinned in
+    // safetyRules.test.ts (a food-safety citation, or the user's own flag).
+    if (rule.evidence.strength !== 'strong' || rule.category === 'safety') return;
     if (rule.id.startsWith('sodium')) {
       expect(rule.concern).toMatch(/strong rating is for blood pressure/i);
       expect(rule.concern).toMatch(/lower quality/i);
@@ -166,7 +179,8 @@ describe.each(catalogue)('$id', (rule) => {
   });
 
   test('no probe reaches HIGH unless the rule is on the pinned list: size of one day or entry does not escalate', () => {
-    if (MAY_REACH_HIGH.has(rule.id)) return;
+    // CRITICAL is the safety tier and is checked by its own authority tests; this guards nutrition escalation to HIGH.
+    if (MAY_REACH_HIGH.has(rule.id) || rule.category === 'safety') return;
     for (const p of probes[rule.id] ?? []) expect(['INFO', 'MODERATE']).toContain(rule.level(p.ctx));
   });
 });

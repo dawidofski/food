@@ -87,7 +87,8 @@ describe('catalogue', () => {
   // and they declare none on purpose. Any other rule must declare what it reads.
   const FLAG_ONLY = new Set(['processed-meat', 'processed-meat-frequency', 'red-meat-weekly', 'alcohol', 'sweet-drink', 'ultra-processed']);
   test('every nutrient rule declares its required nutrients and a nutrition category', () => {
-    for (const r of catalogue) {
+    // Safety rules (Task 13) read identity and answers, not nutrients, and are covered in safetyRules.test.ts.
+    for (const r of catalogue.filter((x) => x.category === 'nutrition')) {
       if (!FLAG_ONLY.has(r.id)) expect(r.requiresNutrients.length).toBeGreaterThan(0);
       expect(r.category).toBe('nutrition');
     }
@@ -96,7 +97,7 @@ describe('catalogue', () => {
     expect(new Set(catalogue.map((r) => r.id)).size).toBe(catalogue.length);
   });
   test('scopes are as designed', () => {
-    const scope = Object.fromEntries(catalogue.map((r) => [r.id, r.scope]));
+    const scope = Object.fromEntries(catalogue.filter((r) => r.category === 'nutrition').map((r) => [r.id, r.scope]));
     expect(scope).toEqual({
       'sodium-entry': 'entry', 'sodium-daily': 'daily', 'added-sugar-entry': 'entry',
       'added-sugar-daily': 'daily', 'saturated-fat-daily': 'daily', 'trans-fat': 'entry',

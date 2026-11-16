@@ -9,15 +9,20 @@ import { alcoholRule } from './alcohol';
 import { sweetDrinkRule } from './sweetDrink';
 import { ultraProcessedRule } from './ultraProcessed';
 import { nutrientDensityRule } from './nutrientDensity';
+import { allergenRule } from './allergen';
+import { foodSafetyRules } from './foodSafety';
 
 export {
   sodiumEntryRule, sodiumDailyRule, addedSugarEntryRule, addedSugarDailyRule, saturatedFatDailyRule, transFatRule,
   processedMeatRule, processedMeatFrequencyRule, redMeatWeeklyRule, alcoholRule, sweetDrinkRule, ultraProcessedRule,
-  nutrientDensityRule,
+  nutrientDensityRule, allergenRule, foodSafetyRules,
 };
 
 /** Declaration order is the tiebreak order for cards of equal level. */
+/** Safety rules lead: CRITICAL sorts first anyway, and declaration order breaks ties. */
 export const catalogue: Rule[] = [
+  allergenRule,
+  ...foodSafetyRules,
   processedMeatRule,
   alcoholRule,
   transFatRule,

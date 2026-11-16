@@ -36,6 +36,14 @@ export type Opts = {
   /** Entries already committed today, and how many of them are NOVA 4. Default 2 entries, none NOVA 4. */
   todayEntryCount?: number;
   todayNova4Entries?: number;
+  /** Resolved food identity of the pending entry. Absent = no identity known. */
+  foodName?: string;
+  foodAllergens?: string[];
+  foodSource?: 'dataset' | 'custom' | 'batch';
+  /** The user's flagged allergens (profile). Default none, which is the shipped default. */
+  flagged?: string[];
+  answers?: Record<string, boolean>;
+  rawText?: string;
 };
 
 /** Builds a context whose measured values are exactly the ones given. A nutrient not given is unknown, never zero. */
@@ -81,7 +89,10 @@ export function ctx(o: Opts = {}): Context {
   const refs = (o.refs ?? [{ grams: o.pendingGrams ?? 100, flags: o.classification }]).map((r, i) => ({
     source: 'dataset' as const, foodId: `probe-${i}`, grams: r.grams, classification: { ...flags, ...r.flags },
   }));
+  const hasFood = o.foodName !== undefined || o.foodAllergens !== undefined;
   return {
+    foods: hasFood ? [{ name: o.foodName ?? 'probe food', allergens: o.foodAllergens ?? [], source: o.foodSource ?? 'dataset' }] : [],
+    ...(o.rawText !== undefined ? { rawText: o.rawText } : {}),
     pending: {
       refs,
       nutrients: pendingN, coverage: pendingC, classification: merged, needsHelp: [], confidence: 1,
@@ -97,14 +108,14 @@ export function ctx(o: Opts = {}): Context {
       energyKcal: 2500, rmrKcal: 1900, proteinG: 100, proteinFloorG: 80, fibreG: 30, sodiumMg: 2000, satFatG: 28,
       addedSugarsG: 63, addedSugarsIdealG: 31, transFatG: 3, isGeneric: false,
     },
-    profile: ownerProfile,
+    profile: { ...ownerProfile, flaggedAllergens: o.flagged ?? [] },
     now: new Date(`2026-11-15T${String(o.hour ?? 12).padStart(2, '0')}:00:00`),
-    answers: {},
+    answers: o.answers ?? {},
   };
 }
 
 /** One context per rule that makes it fire, with the level it must return. Every rule must appear here. */
-export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' | 'HIGH' }[]> = {
+export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' | 'HIGH' | 'CRITICAL' }[]> = {
   'sodium-entry': [{ ctx: ctx({ pendingSodium: 2400 }), level: 'MODERATE' }],
   'sodium-daily': [
     { ctx: ctx({ todaySodium: 1800, pendingSodium: 400 }), level: 'MODERATE' },
@@ -136,4 +147,16 @@ export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' |
     { ctx: ctx({ classification: { novaGroup: 4 }, todayEntryCount: 3, todayNova4Entries: 2 }), level: 'INFO' },
   ],
   'nutrient-density': [{ ctx: ctx({ pendingEnergy: 600, pendingFibre: 0.5, pendingProtein: 2 }), level: 'INFO' }],
+  // Task 13. Each fires only on a resolved food identity plus (for hazards) an explicit yes.
+  'allergen-flagged': [
+    { ctx: ctx({ flagged: ['peanuts'], foodName: 'Peanut butter', foodAllergens: ['peanuts'] }), level: 'CRITICAL' },
+    { ctx: ctx({ flagged: ['sesame'], foodName: 'My tahini', foodAllergens: ['sesame'], foodSource: 'custom' }), level: 'CRITICAL' },
+  ],
+  'food-safety-rice': [{ ctx: ctx({ foodName: 'Rice, brown, cooked, no added fat', answers: { reheatedRice: true } }), level: 'CRITICAL' }],
+  'food-safety-kidney-beans': [
+    { ctx: ctx({ foodName: 'Kidney beans, from dried, no added fat', answers: { rawKidneyBeans: true } }), level: 'CRITICAL' },
+  ],
+  'food-safety-sprouts': [{ ctx: ctx({ foodName: 'Alfalfa sprouts, raw', answers: { rawSprouts: true } }), level: 'CRITICAL' }],
+  'food-safety-eggs': [{ ctx: ctx({ foodName: 'Egg, whole, cooked, fried', answers: { rawEggs: true } }), level: 'CRITICAL' }],
+  'food-safety-raw-milk': [{ ctx: ctx({ foodName: 'Milk, whole', answers: { rawMilk: true } }), level: 'CRITICAL' }],
 };
