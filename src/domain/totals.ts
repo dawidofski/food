@@ -1,6 +1,7 @@
 import { isKnownValue, sumNutrients } from '@/domain/nutrients';
 import { last7DayKeys, localDayKey } from '@/domain/dayBoundary';
 import type { DiaryEntry } from '@/types/diary';
+import type { ClassificationFlags } from '@/types/nutrients';
 import { NUTRIENT_KEYS, type Coverage, type NutrientKey, type NutrientSet } from '@/types/nutrients';
 
 export type DayTotals = {
@@ -12,6 +13,9 @@ export type DayTotals = {
    * Per nutrient: the share (0..1) of the day's energy contributed by entries that knew that key.
    * 0 when the day has no positive energy figure. A rule needing a trustworthy total (added sugar)
    * should stay silent when this is low rather than report an understated number.
+   * CAVEAT: entries with no energy figure are invisible to this ratio, so it can be 1 while
+   * `coverage[key]` is 'partial'. A rule MUST check BOTH this share AND `coverage[key]` before
+   * trusting a daily total; checking only one can fire off an understated number.
    */
   energyCoveredShare: Record<NutrientKey, number>;
   /**
@@ -33,14 +37,19 @@ export type WeekContext = {
   /** Grams over the week of items whose own classification is red meat. */
   redMeatGrams: number;
   /**
-   * Entries whose merged classification has alcohol. This counts drinks logged, NOT grams of
+   * Entries containing alcohol (merged classification): "two beers" in one entry is 1. This is NOT a
+   * drink count, and NOT grams of
    * ethanol or standard units: the dataset has no alcohol-gram nutrient, so a rule consuming this
    * must not claim to know units.
    */
   alcoholOccasions: number;
   /** Known vegetable cup-equivalents per day, aligned with `days`. May understate a partly-unknown day. */
   vegCupEqByDay: number[];
-  /** Days with no vegetable and a fully known record (empty days included). */
+  /**
+   * Days with no vegetable and a fully known record. An EMPTY day counts (correct arithmetic), so a
+   * fresh or lapsed diary reads 7. The consuming view MUST gate on having enough logged days before
+   * showing this, or it tells someone who simply has not logged that they ate no vegetables.
+   */
   daysWithoutVegetable: number;
   /**
    * Days with entries, no vegetable flag and incomplete FPED, so "no vegetable" cannot be proven.
@@ -52,6 +61,11 @@ export type WeekContext = {
 /** The wrong list can reach these pure functions, so they re-assert what the store promises. */
 function counts(e: DiaryEntry): boolean {
   return e.state === 'active' && e.userAction !== 'cancelled';
+}
+
+/** A row written before classification was snapshotted must degrade, not white-screen the diary: treat it as all-false. */
+function flagsOf(x: { classification?: ClassificationFlags }): Partial<ClassificationFlags> {
+  return x.classification ?? {};
 }
 
 function entriesOn(entries: DiaryEntry[], dayKey: string): DiaryEntry[] {
@@ -96,7 +110,7 @@ function buildDay(entries: DiaryEntry[], dayKey: string): DayTotals {
     energyCoveredShare,
     vegCupEq,
     vegCoverage,
-    hasVegetableFlag: day.some((e) => e.classification.vegetable),
+    hasVegetableFlag: day.some((e) => flagsOf(e).vegetable),
   };
 }
 
@@ -116,7 +130,7 @@ export function weekContext(entries: DiaryEntry[], on: Date): WeekContext {
   // Per item: a chicken-and-beef dish counts only the beef, not the whole entry.
   for (const e of week) {
     for (const it of e.items) {
-      if (it.classification.redMeat && isKnownValue(it.grams)) redMeatGrams += it.grams;
+      if (flagsOf(it).redMeat && isKnownValue(it.grams)) redMeatGrams += it.grams;
     }
   }
 
@@ -130,9 +144,9 @@ export function weekContext(entries: DiaryEntry[], on: Date): WeekContext {
 
   return {
     days,
-    processedMeatOccasions: week.filter((e) => e.classification.processedMeat).length,
+    processedMeatOccasions: week.filter((e) => flagsOf(e).processedMeat).length,
     redMeatGrams,
-    alcoholOccasions: week.filter((e) => e.classification.alcohol).length,
+    alcoholOccasions: week.filter((e) => flagsOf(e).alcohol).length,
     vegCupEqByDay: days.map((d) => d.vegCupEq),
     daysWithoutVegetable,
     daysVegetableUnknown,

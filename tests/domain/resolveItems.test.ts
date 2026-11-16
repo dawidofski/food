@@ -125,6 +125,19 @@ describe('resolveItems', () => {
     expect(r.refs[0]).toMatchObject({ source: 'dataset', foodId: 'oil', grams: 27, portionLabel: '1 tbsp' });
   });
 
+  test('fped is scaled by grams/100 per item, and absent when the food has none', () => {
+    const spinach: DatasetFood = {
+      id: 'spinach', name: 'Spinach, cooked', synonyms: [], per100g: { energyKcal: 23 },
+      portions: [{ label: '1 cup', grams: 180 }], classification: { ...FLAGS, vegetable: true }, allergens: [],
+      fped: { vegCupEq: 0.5, fruitCupEq: 0, wholeGrainOzEq: 0 },
+    };
+    const lookup = lookupOf([spinach, oliveOil]);
+    const r = resolveItems(parseEntry('200 g spinach').items, lookup);
+    expect(r.refs[0]!.fped).toEqual({ vegCupEq: 1, fruitCupEq: 0, wholeGrainOzEq: 0 });
+    const plain = resolveItems(parseEntry('2 tbsp olive oil').items, lookup);
+    expect(plain.refs[0]!.fped).toBeUndefined();
+  });
+
   test('each ref snapshots its own classification', () => {
     const r = resolveItems(parseEntry('200 g hot dog').items, fixtureLookup);
     expect(r.refs[0]!.classification.processedMeat).toBe(true);

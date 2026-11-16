@@ -158,6 +158,29 @@ describe('weekContext', () => {
     expect(weekContext([stirFry('2026-11-15')], on).redMeatGrams).toBe(100);
   });
 
+  test('a malformed row with no classification degrades instead of throwing', () => {
+    const bad = make('2026-11-15');
+    delete (bad as { classification?: unknown }).classification;
+    bad.items = [{ source: 'dataset', foodId: 'x', grams: 100 } as unknown as DiaryEntry['items'][number]];
+    const c = weekContext([bad, pmEntry('2026-11-15')], on);
+    expect(c.processedMeatOccasions).toBe(1);
+    expect(c.redMeatGrams).toBe(0);
+    expect(dayTotals([bad], '2026-11-15').hasVegetableFlag).toBe(false);
+  });
+
+  test('weekContext across the DST day keeps seven distinct days and buckets entries correctly', () => {
+    const dst = new Date('2026-10-27T12:00:00');
+    const c = weekContext([pmEntry('2026-10-24'), pmEntry('2026-10-25'), pmEntry('2026-10-26')], dst);
+    expect(c.days.map((d) => d.dayKey)).toEqual([
+      '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27',
+    ]);
+    expect(c.processedMeatOccasions).toBe(3);
+    expect(c.days[4]!.nutrients.energyKcal).toBe(100);
+    // 25-hour day: 01:30 after the change (+01:00) is still the 25th
+    const late = make('2026-10-25', { at: '2026-10-25T01:30:00+01:00' });
+    expect(dayTotals([late], '2026-10-25').nutrients.energyKcal).toBe(100);
+  });
+
   test('an empty diary gives zeroed counts and seven day keys', () => {
     const c = weekContext([], on);
     expect(c.days.map((d) => d.dayKey)).toHaveLength(7);
