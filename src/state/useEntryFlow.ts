@@ -1,6 +1,6 @@
 import { useHoldUpdates } from '@/state/updates';
 import { useCallback, useRef, useState } from 'react';
-import { addEntry, decrementBatchPortion, deleteEntry, entriesBetween, getProfile, reviseEntry } from '@/data/db';
+import { addEntry, countActiveEntries, decrementBatchPortion, deleteEntry, entriesBetween, getProfile, reviseEntry } from '@/data/db';
 import { batchHasCustomIngredient, batchWeightKnown, portionsFor, refreshBatches, withBatches } from '@/domain/batches';
 import { datasetLookup } from '@/data/datasetLookup';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
@@ -54,6 +54,8 @@ export type FlowDeps = {
     /** Optional so a caller that never corrects an entry need not supply them; the diary falls back to the real store. */
     reviseEntry?: typeof reviseEntry;
     deleteEntry?: typeof deleteEntry;
+    /** How many live entries exist, for the diary's backup reminder. Optional for the same reason. */
+    countActiveEntries?: typeof countActiveEntries;
   };
   /** The optional AI fallback for a phrase the local parser could not resolve. Absent means off. */
   ai?: AiDeps;
@@ -70,7 +72,7 @@ export const defaultDeps: FlowDeps = {
     await refreshBatches().catch(() => undefined);
   },
   isDataReady: () => datasetState() === 'ready',
-  store: { addEntry, entriesBetween, getProfile, reviseEntry, deleteEntry },
+  store: { addEntry, entriesBetween, getProfile, reviseEntry, deleteEntry, countActiveEntries },
   ai: {
     isEnabled: isAiEnabled,
     getKey: getApiKey,

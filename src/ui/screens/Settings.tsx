@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { loadDatasetMeta, type DatasetMeta } from '@/data/foodRepository';
 import { clearApiKey, getApiKey, isAiSwitchedOn, maskKey, setAiSwitch, setApiKey } from '@/state/aiSettings';
-import { BackupSettings, EraseSettings } from './DataSettings';
+import { BackupSettings, EraseSettings, StorageSettings } from './DataSettings';
 import ProfileSettings from './ProfileSettings';
 import ThemeSettings from './ThemeSettings';
 
@@ -20,6 +20,7 @@ export default function Settings({ onErased }: { onErased?: () => void }) {
       <ProfileSettings key={`profile-${version}`} />
       <AiSettings key={`ai-${version}`} />
       <BackupSettings onImported={refresh} />
+      <StorageSettings />
       <DataSourceSettings />
       <EraseSettings onErased={() => { refresh(); onErased?.(); }} />
     </main>

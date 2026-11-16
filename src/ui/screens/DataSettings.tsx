@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { eraseEverything } from '@/data/db';
-import { exportAll, importAll } from '@/data/exportImport';
-import { localDayKey } from '@/domain/dayBoundary';
+import { importAll } from '@/data/exportImport';
+import { getLastExportAt } from '@/state/backupReminder';
+import { downloadBackup } from '@/state/exportDownload';
+import { persistenceState, type PersistenceState } from '@/state/persistentStorage';
 
-/** Backup (export and import) and erase everything. The export is the person's only backup. */
+/** Backup (export and import), what this browser promises about keeping the data, and erase everything. */
 
 const btn = 'min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-4';
 const section = 'space-y-3 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3';
+
+const fmtDate = (d: Date): string => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
 export function BackupSettings({ onImported }: { onImported: () => void }) {
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
@@ -14,18 +18,15 @@ export function BackupSettings({ onImported }: { onImported: () => void }) {
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * Read at render rather than held in state, so the line is never stale: an export writes it, an erase removes
+   * it, and an import can bring one in. Each of those re-renders this section and the next read tells the truth.
+   */
+  const lastExport = getLastExportAt();
 
   const doExport = async () => {
     try {
-      const blob = await exportAll();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `food-diary-${localDayKey(new Date())}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      await downloadBackup();
       setMessage({ kind: 'ok', text: 'Backup file created. Keep it somewhere outside this browser.' });
     } catch (err) {
       setMessage({ kind: 'error', text: `The backup could not be created: ${err instanceof Error ? err.message : 'unknown error'}.` });
@@ -61,6 +62,13 @@ export function BackupSettings({ onImported }: { onImported: () => void }) {
         It does not include your DeepSeek key.
       </p>
       <button type="button" onClick={() => void doExport()} className={btn}>Export everything</button>
+      <p data-testid="last-copy" className="text-sm text-slate-700 dark:text-slate-300">
+        {lastExport === null
+          ? 'No copy has been made from this browser yet. '
+          : `A copy was last made on ${fmtDate(lastExport)}. `}
+        This records only that a file was built and handed to the browser: the app cannot tell whether it was saved,
+        where it went, or whether it is still there.
+      </p>
 
       <div className="space-y-2 border-t border-slate-300 dark:border-slate-700 pt-3">
         <label htmlFor="import-file" className="block text-sm font-medium">Import file</label>
@@ -101,6 +109,44 @@ export function BackupSettings({ onImported }: { onImported: () => void }) {
       {message && (message.kind === 'error'
         ? <p role="alert" className="text-sm text-red-800 dark:text-red-300">{message.text}</p>
         : <p role="status" className="text-sm">{message.text}</p>)}
+    </section>
+  );
+}
+
+/**
+ * What this browser says about keeping the diary. The three sentences are the three answers the Storage API can
+ * give and nothing more: granted, not granted, and "there is no API here to ask". A granted request is not a
+ * guarantee either — iOS Safari grants persistence and still clears an unvisited site after about a week — so the
+ * last line is true in all three cases and is the reason the Backup section exists.
+ */
+export function StorageSettings() {
+  const [state, setState] = useState<PersistenceState | 'asking'>('asking');
+  useEffect(() => {
+    let live = true;
+    void persistenceState().then((s) => {
+      if (live) setState(s);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const said: Record<PersistenceState, string> = {
+    granted: 'This browser has agreed to keep this app’s data unless you delete it.',
+    'not-granted': 'This browser has not promised to keep this app’s data, so it may remove it to free space.',
+    unknown: 'This browser does not say whether it will keep this app’s data.',
+  };
+
+  return (
+    <section aria-labelledby="storage-h" className={section}>
+      <h2 id="storage-h" className="text-lg font-semibold">How this browser keeps your diary</h2>
+      {state !== 'asking' && (
+        <p data-testid="storage-promise" className="text-sm">{said[state]}</p>
+      )}
+      <p className="text-sm">
+        Either way, clearing this browser&rsquo;s site data deletes the diary, and a phone browser may remove it
+        when the app goes unused for a while. An exported file is the only copy that outlives this browser.
+      </p>
     </section>
   );
 }

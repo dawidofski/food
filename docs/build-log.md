@@ -1725,3 +1725,144 @@ is about (already on the card as `horizon: 'habitual'`), not a verdict on the pe
 - `completeDayValue` is exported from `totals.ts` and duplicates the private `completeValue` in `trends.ts`. It was
   not folded into one function because `trends` already imports `totals` and the task scoped `trends.ts` to read-only;
   worth unifying later (the one direction that works is `trends` importing from `totals`).
+
+
+---
+
+merged into `docs/build-log.md`. Same convention: the entries that matter are marked **Ruling**.
+
+The design was settled before the work started (a nudge on the Diary at 20 entries and 30 days, dismissal for 7,
+`navigator.storage.persist()` asked once, Settings reporting what the API actually says). Nothing below redesigns
+it; these are the questions it did not answer.
+
+---
+
+## What the app is allowed to say
+
+- **Ruling: the app never says "backed up", "safe", or "protected", anywhere.** It does not know. It knows that it
+  built a file and handed it to the browser; the download may have been cancelled, saved into a folder that is
+  itself inside this browser's sandbox, or deleted five minutes later. Every stored fact is therefore named for
+  what it is — `fd.lastExportAt` is the moment a copy was *offered* — and the Settings line states the limit in
+  the same breath as the date: "This records only that a file was built and handed to the browser: the app cannot
+  tell whether it was saved, where it went, or whether it is still there." A test asserts the words *safe* and
+  *backed up* appear in neither the nudge nor that line, so a later edit cannot quietly promise more.
+- **Ruling: "persisted" is reported in three states, not two.** `navigator.storage.persisted()` can say yes, say
+  no, or not exist, and the third is not a synonym for the second. The type is `'granted' | 'not-granted' |
+  'unknown'` and the sentences are:
+  - granted — "This browser has agreed to keep this app's data unless you delete it."
+  - not granted — "This browser has not promised to keep this app's data, so it may remove it to free space."
+  - unknown — "This browser does not say whether it will keep this app's data."
+
+  Followed, in all three cases, by: "Either way, clearing this browser's site data deletes the diary, and a phone
+  browser may remove it when the app goes unused for a while. An exported file is the only copy that outlives this
+  browser." That last sentence is true even in the granted case — iOS Safari grants persistence and still clears
+  an unvisited site after about a week — and it is the reason the Backup section exists.
+- The nudge's wording, close to the one in the design and kept deliberately flat:
+
+  > **Make a copy of this diary**
+  > This diary is stored only in this browser. Clearing the browser's site data deletes it, and a phone browser
+  > may remove it on its own when the app goes unused for a while. A copy is the only way back.
+  > [Export a copy now] [Not now]
+
+  No streak, no day count, no "you haven't backed up in 47 days". A test asserts the panel contains no digits
+  followed by "days", so the guilt-metre cannot be added by accident later.
+
+## The decision to show it
+
+- **Ruling: blocked storage shows the nudge rather than hides it.** Every read of the two stamps is wrapped, and a
+  read that throws (private window, site data blocked) is treated as "never exported" — which makes the reminder
+  due. Being told twice costs a tap; being told never costs the diary. The same choice applies to an unparseable
+  stamp.
+- **Ruling: a stamp in the future silences rather than fires.** The plausible cause is a clock that moved, not a
+  forged timestamp, and showing the reminder to someone who exported this morning reads as a bug. The age is
+  clamped at zero. The cost, recorded honestly: a corrupted far-future value would silence the reminder
+  indefinitely — which is why Settings prints the actual date, where a nonsense value is visible.
+- The entry threshold counts rows with `state: 'active'` (`countActiveEntries`, new in `src/data/db.ts`), so a
+  tombstone or a superseded revision is not counted twice over. A *cancelled* entry does count: it was never
+  eaten, but it is still a stored row that the backup file carries, and the question here is "is there enough in
+  this database to be worth a copy", not "how much was eaten".
+- A diary whose entries cannot be counted shows no nudge at all. Reminding someone about data the app cannot see
+  would be guessing, and the Diary screen's own error line already says the diary could not be read.
+
+## Where it lives, and where it does not
+
+- The panel is rendered by `Diary`, directly under the day strip. It is **not** on the Log screen, and a test
+  renders `Log` with twenty entries seeded and asserts the panel is absent, so the rule is enforced rather than
+  merely intended.
+- **Ruling: `persist()` is asked for from the Diary screen, not at start-up.** Chrome decides from its own
+  heuristics and never prompts, but Firefox may show a permission prompt, and a prompt must not land on someone
+  part-way through logging an entry — the same reason `src/state/updates.ts` holds an app update while a warning
+  gate is open. The Diary is a resting screen.
+- The "already asked" flag (`fd.persistenceAskedAt`) is written **before** the call, so a rejected or dismissed
+  request is not re-asked on every visit. It is written only when a call is actually made, so a browser that gains
+  the API in a later version still gets asked once. `persist()`'s own answer is deliberately discarded: a granted
+  request is not a promise worth repeating to the owner, and Settings reads `persisted()` instead, which is the
+  browser's own current answer rather than a remembered one.
+
+## Structure
+
+- **Ruling: one export path, not two.** The nudge's button and the Settings button both call
+  `downloadBackup()` in the new `src/state/exportDownload.ts`, which builds the blob, hands it to the browser and
+  then records the timestamp. Two copies of that sequence would have drifted the moment one of them learned
+  something the other did not. The record is written only after the click has returned without throwing: an
+  export that failed must leave no trace, or the reminder would go quiet about a copy that was never made. There
+  is a test for exactly that, and the failing export leaves the panel on screen with the error.
+- **`eraseEverything` needed no new list.** It already enumerates localStorage by the `fd.` prefix rather than
+  from a list of known names, so the three new keys are swept the day they are written. The only requirement is
+  that every key goes through `lsKey`, which all three do; the comment in `eraseStores` now says so explicitly and
+  names them, and a test erases a seeded `fd.lastExportAt`, `fd.backupNudgeDismissedAt` and `fd.persistenceAskedAt`
+  along with the theme and the entries. A hardcoded list was considered and rejected: it is exactly the thing that
+  drifts.
+- The Settings "last copy" line is read at render rather than held in state, so an erase or an import cannot leave
+  a stale date on screen claiming a copy exists. `BackupSettings` deliberately did **not** get a `key` bump on the
+  Settings version counter: remounting it would have wiped the "Imported. N added" confirmation the person had
+  just been given.
+
+## Process notes
+
+- Test-first throughout. Both test files were written and run red (unresolved imports, then failing assertions)
+  before the modules existed. After the suite went green the decision function was mutated on purpose — threshold
+  to 1, dismissal check removed — to confirm three tests failed; they did. The entry threshold is written as the
+  literal `20` in the test rather than read from the exported constant, because a test that imports the number it
+  is checking cannot notice the number changing.
+- A pitfall worth recording for the next UI test in this repo: `await screen.findByTestId(...)` **inside**
+  `await act(async () => ...)` never settles — act holds back the very update the query is waiting for, and the
+  failure looks like a screen that rendered no data at all. The existing tests already find the element first and
+  click it inside `act`; the new ones now do the same, via a `press` helper.
+- `npm test` 49 files / 1101 tests green, `npx tsc --noEmit` clean, `npm run build` clean (run with another
+  agent's in-progress rules work in the tree; nothing in it failed).
+
+## Not done, and unsure
+
+- **Not verified in a browser.** The behaviour is covered by tests, but the panel has not been looked at on a
+  375 px screen in both themes the way Task 17 was. Colours are paired (`bg-slate-50 dark:bg-slate-900`,
+  `border-slate-400 dark:border-slate-500`, `bg-slate-900 dark:bg-slate-100` on the primary button) and both
+  buttons are `min-h-12`, but that is reasoning from the markup, not from looking.
+- `persist()` is asked for on every Diary visit until it has been asked once, and the flag is per-browser. If the
+  owner clears site data, the app asks again — correct, and worth knowing.
+- The reminder counts entries on every Diary mount with a full `getAll` on the entries store. At this diary's
+  scale that is nothing; at ten thousand entries it would be worth a count over a `state` index, which does not
+  exist today and would need a schema version.
+- The localStorage sweep in `eraseStores` still removes keys in one `try`, so a single key that refuses to be
+  removed stops the rest. Making each removal independent would be a small improvement and is out of this
+  feature's scope; recorded rather than done.
+
+## Review additions (controller)
+
+**Ruling: a stamp more than a day in the future is discarded, not clamped to "just now".** Hours of clock drift
+are ordinary and must not start the reminder nagging someone who exported this morning, so a small future stamp
+still silences it. But clamping an arbitrary future date to zero age would silence the reminder for as long as
+that date stays ahead — a corrupted or hand-edited value could switch the only warning about data loss off for
+years, in silence. Discarding it fails the other way: the reminder reappears, which costs a tap. Settings prints
+the stored date, so a nonsense value is visible there.
+
+**Ruling: a `food-diary` database that claims the current version but holds no object stores is deleted and
+rebuilt on open.** `upgrade` runs only when the stored version is BELOW `DB_VERSION`, so such a database opens
+"successfully" and then fails every read, permanently, with no way back from inside the app: the owner sees "The
+diary could not be read" for ever and the only cure is DevTools. It is reachable in the wild — an upgrade
+interrupted by a closed tab, eviction part-way through a write, or any other script on the origin opening
+`food-diary` without a version number. Both this session's controller and the implementer hit it by accident on
+the dev server, which is how it was found; neither could recover without the console. The repair is safe
+precisely because a database with no object stores has nowhere to keep a row, so there is nothing in it to lose,
+and the delete happens ONLY in that case. The healthy path is pinned by every test in `db.test.ts`, each of which
+writes through the same open and reads the row back.

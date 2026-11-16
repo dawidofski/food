@@ -1,4 +1,4 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
 import type { Profile } from '@/types/profile';
 
@@ -28,20 +28,45 @@ const PROFILE_KEY = lsKey('profile');
 
 let dbPromise: Promise<IDBPDatabase<FoodDiaryDB>> | null = null;
 
+const STORES = ['entries', 'customFoods', 'batches'] as const;
+
+function create(d: IDBPDatabase<FoodDiaryDB>): void {
+  const entries = d.createObjectStore('entries', { keyPath: 'id' });
+  // INVARIANT: `at` is always a canonical UTC ISO string (toISOString), so lexicographic
+  // index order is chronological order. Every write path goes through normaliseAt.
+  entries.createIndex('at', 'at');
+  d.createObjectStore('customFoods', { keyPath: 'id' });
+  d.createObjectStore('batches', { keyPath: 'id' });
+}
+
+function missingStores(d: IDBPDatabase<FoodDiaryDB>): string[] {
+  return STORES.filter((s) => !d.objectStoreNames.contains(s));
+}
+
+/**
+ * Opens the diary, repairing the one way this database can be left unusable.
+ *
+ * `upgrade` only runs when the stored version is below `DB_VERSION`. So a database that already claims version 1
+ * but holds no object stores — left behind by an interrupted upgrade, by eviction part-way through a write, or by
+ * any other code on this origin calling `indexedDB.open('food-diary')` without a version — opens "successfully"
+ * and then fails on every read, permanently, with no way back from inside the app. The owner would see "The diary
+ * could not be read" forever and the only cure would be DevTools.
+ *
+ * Repair is safe precisely because a database with no object stores cannot be holding anything: there is nowhere
+ * for a row to be. We delete only in that case, never when the stores are present, so no path here can discard
+ * data. If the deletion or the second open fails, the original failure stands and the caller reports it.
+ */
+async function open(): Promise<IDBPDatabase<FoodDiaryDB>> {
+  const first = await openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, { upgrade: (d, oldVersion) => { if (oldVersion < 1) create(d); } });
+  if (missingStores(first).length === 0) return first;
+  first.close();
+  await deleteDB(DB_NAME);
+  return openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, { upgrade: (d) => create(d) });
+}
+
 function db(): Promise<IDBPDatabase<FoodDiaryDB>> {
   if (!dbPromise) {
-    const opening = openDB<FoodDiaryDB>(DB_NAME, DB_VERSION, {
-      upgrade(d, oldVersion) {
-        if (oldVersion < 1) {
-          const entries = d.createObjectStore('entries', { keyPath: 'id' });
-          // INVARIANT: `at` is always a canonical UTC ISO string (toISOString), so lexicographic
-          // index order is chronological order. Every write path goes through normaliseAt.
-          entries.createIndex('at', 'at');
-          d.createObjectStore('customFoods', { keyPath: 'id' });
-          d.createObjectStore('batches', { keyPath: 'id' });
-        }
-      },
-    });
+    const opening = open();
     // A failed open must not be cached for the life of the page.
     opening.catch(() => {
       if (dbPromise === opening) dbPromise = null;
@@ -138,6 +163,16 @@ export async function entriesBetween(fromISO: string, toISO: string): Promise<Di
 /** Every row, tombstones and superseded revisions included. For export and the learning history. */
 export async function allEntriesIncludingTombstones(): Promise<DiaryEntry[]> {
   return (await db()).getAll('entries');
+}
+
+/**
+ * How many live rows the diary holds: `state: 'active'` only, so a tombstone or a superseded revision is not
+ * counted twice over. Used to decide whether there is enough here to be worth reminding anyone to copy it.
+ * A cancelled entry counts: it was never eaten, but it is still a stored row that a backup would carry.
+ */
+export async function countActiveEntries(): Promise<number> {
+  const rows = await (await db()).getAll('entries');
+  return rows.filter(e => e.state === 'active').length;
 }
 
 /**
@@ -295,6 +330,10 @@ async function eraseStores(): Promise<void> {
   let sweepError: unknown;
   let swept = true;
   try {
+    // Enumerated by prefix, never from a list of known names: every key this app writes goes through `lsKey`, so
+    // a setting added later (the theme, the export stamp, the backup reminder's dismissal, the persistence flag)
+    // is swept the day it is written and no list can drift out of date. A new key that skips `lsKey` would
+    // survive an erase, which is why `lsKey` is the only documented way to name one.
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);

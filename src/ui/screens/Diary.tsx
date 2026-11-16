@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { countActiveEntries } from '@/data/db';
 import { last7DayKeys, localDayRange } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
 import { dayTotals } from '@/domain/totals';
+import { requestPersistenceOnce } from '@/state/persistentStorage';
 import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
+import BackupNudge from '@/ui/components/BackupNudge';
 import CoverageNote from '@/ui/components/CoverageNote';
 import { fmtAmount } from '@/ui/components/NutrientBar';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
@@ -29,6 +32,15 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  /**
+   * Ask the browser once to keep this app's data. Here rather than at start-up because the diary is a resting
+   * screen: in the browsers that prompt for this, a prompt must not land on someone part-way through logging.
+   * It cannot throw and its answer is not acted on; Settings reports what the browser actually says.
+   */
+  useEffect(() => {
+    void requestPersistenceOnce(deps.now());
+  }, [deps]);
 
   useEffect(() => {
     let live = true;
@@ -81,6 +93,8 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
           </button>
         ))}
       </nav>
+
+      <BackupNudge now={deps.now} countEntries={deps.store.countActiveEntries ?? countActiveEntries} />
 
       {loadError && <p role="alert" className="text-sm text-slate-900 dark:text-slate-100">The diary could not be read, so nothing is shown. Nothing has been lost.</p>}
       {loaded && !loadError && totals.entryCount === 0 && <p className="text-base">Nothing logged on this day.</p>}
