@@ -389,9 +389,14 @@ describe('evaluate (additional invariants)', () => {
       expect(() => evaluate([weak(s, 'HIGH')], ctx())).toThrow(/evidence/i);
     });
 
-    test('limited evidence on a safety rule returning CRITICAL throws under test', () => {
+    test('a safety rule with limited evidence may still return CRITICAL: its severity is the hazard, not study strength', () => {
       const r = stub('weak-safety', () => 'CRITICAL', { category: 'safety', evidence: { ...infoRule.evidence, strength: 'limited' } });
-      expect(() => evaluate([r], ctx())).toThrow(/evidence/i);
+      expect(evaluate([r], ctx()).cards[0]!.level).toBe('CRITICAL');
+    });
+
+    test('a nutrition rule with limited evidence is still capped at MODERATE', () => {
+      expect(() => evaluate([weak('limited', 'HIGH')], ctx())).toThrow(/capped at MODERATE/);
+      expect(evaluate([weak('limited', 'MODERATE')], ctx()).cards[0]!.level).toBe('MODERATE');
     });
 
     test('strong and moderate evidence may reach HIGH', () => {

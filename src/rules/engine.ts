@@ -68,7 +68,15 @@ function evaluateRule(rule: Rule, ctx: Context): { level: Level; notes: string[]
   let violation: string | null = null;
   if (level === 'CRITICAL' && rule.category !== 'safety') {
     violation = `rule "${rule.id}" is a nutrition rule and declared CRITICAL; CRITICAL is reserved for safety rules`;
-  } else if (RANK[level] > RANK.MODERATE && (rule.evidence.strength === 'uncertain' || rule.evidence.strength === 'limited')) {
+  } else if (
+    // The ceiling applies to NUTRITION rules only. It stops a rule claiming more severity than its epidemiological
+    // evidence supports. A safety rule's severity does not come from effect size: a flagged allergen is CRITICAL
+    // because the user said they react to it, and a handling hazard because the risk is immediate. Applying the
+    // ceiling there would silently downgrade an allergen card, the one downgrade this app must never make.
+    // Exempt from the ceiling is not exempt from saying why: safety rules still declare their authority.
+    rule.category === 'nutrition' &&
+    RANK[level] > RANK.MODERATE &&
+    (rule.evidence.strength === 'uncertain' || rule.evidence.strength === 'limited')) {
     violation = `rule "${rule.id}" declared ${level} on ${rule.evidence.strength} evidence; ${rule.evidence.strength} evidence is capped at MODERATE`;
   }
   if (violation !== null) {
