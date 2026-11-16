@@ -36,6 +36,13 @@ export type DiaryEntry = {
   /** Snapshotted at commit time. Never recomputed from food ids, so a dataset rebuild cannot rewrite history. */
   nutrients: NutrientSet;
   coverage: Coverage;
+  /** Snapshotted at commit: the merged worst-case flags across the entry's items (mergeClassification). */
+  classification: ClassificationFlags;
+  /**
+   * Snapshotted at commit: FPED cup-equivalents summed across items, scaled by gram weight. Absent
+   * when no item had FPED data, which means unknown, never zero.
+   */
+  fped?: { vegCupEq: number; fruitCupEq: number; wholeGrainOzEq: number };
   warningsShown: { ruleId: string; level: Level }[];
   /** 'cancelled' entries are kept for the learning history but were never eaten: never counted in totals. */
   userAction: 'added' | 'addedAfterAlternatives' | 'cancelled';

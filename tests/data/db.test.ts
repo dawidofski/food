@@ -47,6 +47,7 @@ function entryFields(over: Partial<Omit<DiaryEntry, 'id'>> = {}): Omit<DiaryEntr
     items: [{ source: 'dataset', foodId: 'x', grams: 100 }],
     nutrients: { energyKcal: 250 },
     coverage: { energyKcal: 'known' },
+    classification: flags,
     warningsShown: [],
     userAction: 'added',
     state: 'active',
@@ -315,6 +316,14 @@ describe('review fixes: no NaN or Infinity in storage', () => {
     await expect(
       addEntry(entry({ id: 'g', items: [{ source: 'dataset', foodId: 'x', grams: NaN }] })),
     ).rejects.toThrow(RangeError);
+  });
+
+  test('addEntry and reviseEntry reject a non-finite fped figure', async () => {
+    const fped = { vegCupEq: NaN, fruitCupEq: 0, wholeGrainOzEq: 0 };
+    await expect(addEntry(entry({ id: 'f', fped }))).rejects.toThrow(RangeError);
+    await addEntry(entry({ id: 'g' }));
+    await expect(reviseEntry('g', entryFields({ fped }))).rejects.toThrow(RangeError);
+    expect((await getEntry('g'))!.state).toBe('active');
   });
 
   test('reviseEntry rejects NaN and leaves the original active', async () => {

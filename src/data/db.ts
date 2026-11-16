@@ -77,6 +77,7 @@ function assertFiniteValues(label: string, set: Record<string, number | undefine
 
 function assertEntryFinite(e: Omit<DiaryEntry, 'id'>): void {
   assertFiniteValues('nutrients', e.nutrients);
+  if (e.fped) assertFiniteValues('fped', e.fped);
   assertRefsFinite(e.items);
 }
 
