@@ -2,14 +2,14 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { eraseEverything, getBatch } from '@/data/db';
 import {
-  batchHasCustomIngredient, batchLookup, batchWeightKnown, buildBatch, deleteBatch, isCookedGrain, rebuildBatch,
+  batchHasCustomIngredient, batchToDatasetShape, batchLookup, batchWeightKnown, buildBatch, deleteBatch, isCookedGrain, rebuildBatch,
   refreshBatches, saveBatch, withBatches,
 } from '@/domain/batches';
 import type { FoodLookup } from '@/domain/foodLookup';
 import { parseEntry } from '@/domain/parseEntry';
 import { resolveItems } from '@/domain/resolveItems';
 import type { DatasetFood } from '@/types/food';
-import { bacon, chicken, lookupOf, oil, pasta, passata } from '../fixtures/batchFoods';
+import { bacon, chicken, lookupOf, mysterySauce, oil, pasta, passata } from '../fixtures/batchFoods';
 
 const withFped = (f: DatasetFood, fped: DatasetFood['fped']): DatasetFood => (fped ? { ...f, fped } : f);
 const Z = { vegCupEq: 0, fruitCupEq: 0, wholeGrainOzEq: 0 };
@@ -116,3 +116,33 @@ describe('isCookedGrain', () => {
 });
 
 void bacon;
+
+describe('a batch whose ingredients disagree about a nutrient', () => {
+  // Pasta knows sodium; mystery sauce records energy only. The batch total for sodium is a floor, not a total.
+  const mixed = lookupOf([pasta, mysterySauce]);
+  const mixedInput = { name: 'Sauced pasta', portionCount: 2, ingredientLines: ['200 g penne', '100 g mystery sauce'] };
+
+  test('the batch itself is partial for that nutrient', () => {
+    const { batch } = buildBatch(mixedInput, mixed);
+    expect(batch.coverage.sodiumMg).toBe('partial');
+    expect(batch.coverage.energyKcal).toBe('known');
+  });
+
+  test('a logged portion does not claim the floor as a known figure', async () => {
+    const { batch } = buildBatch(mixedInput, mixed);
+    await saveBatch(batch);
+    const r = resolveItems(parseEntry('a portion of sauced pasta').items, withBatches(mixed));
+    expect(r.refs[0]!.source).toBe('batch');
+    expect(r.coverage.sodiumMg).not.toBe('known');
+    expect(r.nutrients.sodiumMg).toBeUndefined();
+    expect(r.coverage.energyKcal).toBe('known');
+    expect(r.nutrients.energyKcal).toBeGreaterThan(0);
+  });
+
+  test('the adapter omits every nutrient whose batch coverage is not known', () => {
+    const { batch } = buildBatch(mixedInput, mixed);
+    const shape = batchToDatasetShape(batch);
+    expect(shape.per100g.sodiumMg).toBeUndefined();
+    expect(shape.per100g.energyKcal).toBeDefined();
+  });
+});

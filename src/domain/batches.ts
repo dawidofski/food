@@ -202,13 +202,17 @@ export function portionGrams(b: Batch): number {
 
 // ---- the provider: batches as a food you can log by name ----
 
-/** Adapts a batch to the dataset shape. One portion is the unit: the per-100g figures are the portion's own, rescaled. */
+/**
+ * Adapts a batch to the dataset shape. One portion is the unit: the per-100g figures are the portion's own, rescaled.
+ * A nutrient the batch only partly knows (ingredients disagree, or one is unresolved) is a floor, and DatasetFood has no
+ * way to carry that, so it is OMITTED: a portion then reads unknown for it, never a floor presented as a total.
+ */
 export function batchToDatasetShape(b: Batch): DatasetFood {
   const grams = portionGrams(b);
   const per100g: NutrientSet = {};
   for (const key of NUTRIENT_KEYS) {
     const v = b.nutrientsPerPortion[key];
-    if (isKnownValue(v)) per100g[key] = (v * 100) / grams;
+    if (b.coverage[key] === 'known' && isKnownValue(v)) per100g[key] = (v * 100) / grams;
   }
   const k = 100 / grams;
   const fped = b.fped
