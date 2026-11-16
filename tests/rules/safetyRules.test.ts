@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { evaluate } from '@/rules/engine';
 import { catalogue } from '@/rules/catalogue';
 import { citationProblems } from '@/rules/citations';
-import { allergenRule } from '@/rules/catalogue/allergen';
+import { allergenRule, unrecognisedAllergenFlags } from '@/rules/catalogue/allergen';
 import { foodSafetyRules, foodSafetyQuestionsFor, HAZARDS } from '@/rules/catalogue/foodSafety';
 import { ctx } from './catalogueContexts';
 
@@ -95,7 +95,7 @@ describe('food-handling hazards', () => {
   test('every listed hazard matches its own food, one question each, and an unrelated food matches none', () => {
     const names: Record<string, string> = {
       reheatedRice: 'Rice, brown, cooked, no added fat', rawKidneyBeans: 'Kidney beans, from dried, no added fat',
-      rawSprouts: 'Alfalfa sprouts, raw', rawMilk: 'Milk, whole',
+      rawMilk: 'Milk, whole',
     };
     expect(HAZARDS.map((h) => h.questionId).sort()).toEqual(Object.keys(names).sort());
     for (const h of HAZARDS) {
@@ -110,8 +110,19 @@ describe('food-handling hazards', () => {
     expect(evaluate(catalogue, c).questions).toEqual([]);
     expect(evaluate(catalogue, c).cards.filter((x) => x.level === 'CRITICAL')).toEqual([]);
   });
+  test('raw sprouts are deliberately not a hazard here either (population-dependent, like eggs)', () => {
+    expect(HAZARDS.map((h) => h.questionId)).not.toContain('rawSprouts');
+    const c = ctx({ foodName: 'Alfalfa sprouts, raw', answers: { rawSprouts: true } });
+    expect(evaluate(catalogue, c).questions).toEqual([]);
+    expect(evaluate(catalogue, c).cards.filter((x) => x.level === 'CRITICAL')).toEqual([]);
+  });
+  test('the rice question asks about room-temperature standing, not a rice cooker keep-warm setting', () => {
+    const q = foodSafetyQuestionsFor(ctx({ foodName: 'Rice, white, cooked' }))[0]!.question;
+    expect(q).toMatch(/room temperature/i);
+    expect(q).not.toMatch(/kept warm|keep.?warm/i);
+  });
   test('identity matching does not catch look-alikes', () => {
-    for (const n of ['Kidney', 'Brussels sprouts, raw', 'Rice milk', 'Rice cake', 'Eggnog', 'Egg omelet or scrambled egg, no added fat', 'Almond milk, NFS', 'Kidney beans, from canned, no added fat']) {
+    for (const n of ['Kidney', 'Kidney beans with meat', 'Kidney beans and brown rice', 'Kidney beans and white rice', 'Bean sprouts, cooked', 'Brussels sprouts, raw', 'Rice milk', 'Rice cake', 'Eggnog', 'Egg omelet or scrambled egg, no added fat', 'Almond milk, NFS', 'Kidney beans, from canned, no added fat']) {
       expect(foodSafetyQuestionsFor(ctx({ foodName: n })), n).toEqual([]);
     }
   });
@@ -129,6 +140,82 @@ describe('food-handling hazards', () => {
       expect(r.safetyAuthority).toBe('food-safety-body');
       expect(r.requiresNutrients).toEqual([]);
       expect(r.safetyPrompt).toBeDefined();
+    }
+  });
+});
+
+describe('allergen flags in the words people type', () => {
+  // The real dataset vocabulary (EU's 14 groups, scripts/classification.ts) against ordinary English.
+  const VOCAB = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soybeans', 'milk', 'nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'];
+  const fires = (flag: string, tag: string) => allergenRule.level(ctx({ flagged: [flag], foodAllergens: [tag] })) === 'CRITICAL';
+  test('every dataset tag is matched by its own name, case and plural aside', () => {
+    for (const t of VOCAB) {
+      expect(fires(t, t), t).toBe(true);
+      expect(fires(t.toUpperCase(), t), t).toBe(true);
+    }
+  });
+  test.each([
+    ['soy', 'soybeans'], ['soya', 'soybeans'], ['soybean', 'soybeans'], ['shellfish', 'crustaceans'], ['shellfish', 'molluscs'],
+    ['crustacean', 'crustaceans'], ['mollusc', 'molluscs'], ['mollusk', 'molluscs'], ['dairy', 'milk'], ["cow's milk", 'milk'],
+    ['wheat', 'gluten'], ['egg', 'eggs'], ['peanut', 'peanuts'], ['tree nuts', 'nuts'], ['tree nut', 'nuts'], ['almond', 'nuts'],
+    ['cashew', 'nuts'], ['sulfites', 'sulphites'], ['sulphite', 'sulphites'], ['seafood', 'fish'], ['seafood', 'crustaceans'],
+  ])('flag "%s" matches the dataset tag "%s"', (flag, tag) => {
+    expect(fires(flag, tag)).toBe(true);
+  });
+  test('a synonym does not match an unrelated tag', () => {
+    expect(fires('soy', 'milk')).toBe(false);
+    expect(fires('dairy', 'eggs')).toBe(false);
+    expect(fires('shellfish', 'fish')).toBe(false);
+  });
+  test('a flag that matches no known tag is reported, never silent', () => {
+    expect(unrecognisedAllergenFlags(['kiwi', 'soy', 'Peanut'])).toEqual(['kiwi']);
+    const r = evaluate([allergenRule], ctx({ flagged: ['kiwi'], foodName: 'Fruit salad' }));
+    expect(r.cards).toEqual([]);
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]!.category).toBe('safety');
+    expect(r.failures[0]!.message).toMatch(/kiwi/);
+  });
+  test('recognised flags raise no failure, and the shipped default raises none', () => {
+    expect(evaluate([allergenRule], ctx({ flagged: ['soy', 'dairy', 'shellfish', 'wheat'], foodName: 'Apple' })).failures).toEqual([]);
+    expect(evaluate([allergenRule], ctx({ foodName: 'Apple' })).failures).toEqual([]);
+  });
+  test('an unrecognised flag still matches a custom food tag set to the same word', () => {
+    expect(allergenRule.level(ctx({ flagged: ['kiwi'], foodName: 'My kiwi mix', foodAllergens: ['kiwi'], foodSource: 'custom' }))).toBe('CRITICAL');
+  });
+});
+
+describe('a pending hazard question never withholds an allergen warning', () => {
+  const mixed = () =>
+    ctx({ flagged: ['shellfish'], foodName: 'Rice, fried, with shrimp', foodAllergens: ['crustaceans'] });
+  test('the allergen CRITICAL card appears immediately while the rice question is still asked', () => {
+    const r = evaluate([allergenRule, ...foodSafetyRules], mixed());
+    expect(r.questions.map((q) => q.answerKey)).toEqual(['reheatedRice']);
+    expect(r.cards.map((c) => c.ruleId)).toEqual(['allergen-flagged']);
+    expect(r.cards[0]!.level).toBe('CRITICAL');
+  });
+  test('answering the question does not remove it, and answering no leaves only the allergen card', () => {
+    const r = evaluate(catalogue, { ...mixed(), answers: { reheatedRice: false } });
+    expect(r.questions).toEqual([]);
+    expect(r.cards.some((c) => c.ruleId === 'allergen-flagged')).toBe(true);
+  });
+  test('non-CRITICAL cards are still withheld while a question is pending', () => {
+    const r = evaluate(catalogue, mixed());
+    expect(r.cards.every((c) => c.level === 'CRITICAL')).toBe(true);
+  });
+  test('the rule with the pending question is not evaluated, so a stale level cannot leak', () => {
+    const r = evaluate(foodSafetyRules, ctx({ foodName: 'Rice, white, cooked' }));
+    expect(r.cards).toEqual([]);
+  });
+});
+
+describe('safety rules return only CRITICAL or null', () => {
+  test('across the probes and the non-firing contexts', () => {
+    const contexts = [
+      ctx({ foodName: 'Apple, raw' }), ctx({ foodName: 'Rice, white, cooked' }), ctx({ foodName: 'Rice, white, cooked', answers: { reheatedRice: true } }),
+      ctx({ flagged: ['milk'], foodAllergens: ['milk'] }), ctx({ flagged: ['milk'], foodAllergens: [] }), ctx(),
+    ];
+    for (const r of catalogue.filter((x) => x.category === 'safety')) {
+      for (const c of contexts) expect([null, 'CRITICAL'], r.id).toContain(r.level(c));
     }
   });
 });

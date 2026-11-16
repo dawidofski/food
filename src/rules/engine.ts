@@ -110,11 +110,21 @@ function merge(a: WarningCard, b: WarningCard): WarningCard {
 }
 
 export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; questions: SafetyQuestion[]; failures: RuleFailure[] } {
-  // Safety questions come first. Unanswered means no card, never a guess; the gate asks and re-evaluates.
+  // Safety questions come first. An unanswered question means that rule raises no card, never a guess; the gate asks and re-evaluates.
   const questions: SafetyQuestion[] = [];
   const failures: RuleFailure[] = [];
   const held = new Set<string>();
+  /** Rules whose question is still unanswered: not evaluated until it is. Every other rule is unaffected by it. */
+  const asking = new Set<string>();
   for (const r of rules) {
+    if (r.category === 'safety' && r.cannotCheck && ctx.pending.refs.length > 0) {
+      try {
+        const why = r.cannotCheck(ctx);
+        if (why !== null) failures.push({ ruleId: r.id, category: 'safety', message: why });
+      } catch (e) {
+        failures.push(describe(r, e));
+      }
+    }
     // Fail visibly, not open: a safety rule that needs food identity cannot run without it, and silence would read as
     // "checked, nothing found". Only a safety rule can ask for this; the rule is held and the caller shows the note.
     if (r.category === 'safety' && ctx.pending.refs.length > 0 && ctx.foods.length === 0) {
@@ -149,15 +159,14 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
     const answer = ctx.answers[p.answerKey];
     if (answer === undefined) {
       questions.push({ ruleId: r.id, question: p.question, answerKey: p.answerKey });
+      asking.add(r.id);
     } else if (answer === false) {
       held.add(r.id); // answered no: the hazard condition is absent, whatever the rule's own level() says
     }
   }
-  if (questions.length > 0) return { cards: [], questions, failures };
-
   const built: { card: WarningCard; order: number }[] = [];
   rules.forEach((rule, order) => {
-    if (held.has(rule.id)) return;
+    if (held.has(rule.id) || asking.has(rule.id)) return;
     const res = evaluateRule(rule, ctx);
     if (!res) return;
     if ('ruleId' in res) {
@@ -215,5 +224,9 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
   // More than three CRITICAL cards is possible and all but three are cut; safety rules are few and mutually
   // exclusive in practice, so no tiebreak beyond declaration order is applied.
   merged.sort((x, y) => RANK[y.card.level] - RANK[x.card.level] || x.order - y.order);
-  return { cards: merged.slice(0, MAX_CARDS).map((m) => m.card), questions: [], failures };
+  // While any question is pending, only CRITICAL cards show, and only from rules that are not themselves waiting on an
+  // answer. A question about rice must never swallow an allergen warning; everything below CRITICAL still waits, because
+  // the gate re-evaluates once the question is answered.
+  const shown = questions.length > 0 ? merged.filter((m) => m.card.level === 'CRITICAL') : merged;
+  return { cards: shown.slice(0, MAX_CARDS).map((m) => m.card), questions, failures };
 }

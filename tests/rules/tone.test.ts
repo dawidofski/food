@@ -17,8 +17,11 @@ function ownProse(rule: Rule): string {
   ].join('\n');
 }
 
+/** "kidney beans" is a food, named in the kidney-bean safety card. Neutralised for safety rules only, so nutrition prose still catches "kidney damage" or "kidney function". */
+const neutraliseFood = (rule: Rule, text: string) => (rule.category === 'safety' ? text.replace(/kidney beans?/gi, 'legume') : text);
+
 const DISEASE =
-  /\b(cancer|heart disease|cardiovascular|diabetes|stroke|hypertension|high blood pressure|tooth decay|caries|obesity|death|mortality|weight gain|kidney disease|kidney failure|kidney stones?|cholesterol)\b/i;
+  /\b(cancer|heart disease|cardiovascular|diabetes|stroke|hypertension|high blood pressure|tooth decay|caries|obesity|death|mortality|weight gain|kidney|cholesterol)\b/i;
 /** Wording that says a link concerns habitual, long-term intake. `\busual\b` so "unusual" does not count. */
 const LONG_TERM = /\b(usual|long-term|over time|habitual|habitually|regular|regularly)\b/i;
 
@@ -37,7 +40,7 @@ const EXPECTED_STRENGTH: Record<string, 'strong' | 'moderate' | 'limited' | 'unc
   // card, the certainty that the user reacts (their own declaration). It is not an effect size, and safety rules are
   // exempt from the MODERATE ceiling that applies to weak nutrition evidence.
   'allergen-flagged': 'strong', 'food-safety-rice': 'strong', 'food-safety-kidney-beans': 'strong',
-  'food-safety-sprouts': 'strong', 'food-safety-raw-milk': 'strong',
+  'food-safety-raw-milk': 'strong',
 };
 
 /**
@@ -47,7 +50,7 @@ const EXPECTED_STRENGTH: Record<string, 'strong' | 'moderate' | 'limited' | 'unc
 const MAY_REACH_HIGH = new Set(['processed-meat']);
 
 test('the tone tests really run over the catalogue', () => {
-  expect(catalogue.length).toBeGreaterThanOrEqual(18);
+  expect(catalogue.length).toBeGreaterThanOrEqual(17);
   for (const r of catalogue) {
     expect(probes[r.id]?.length, `${r.id} has no probe for its portion note`).toBeGreaterThan(0);
     expect(EXPECTED_STRENGTH[r.id], `${r.id} has no pinned strength`).toBeDefined();
@@ -65,7 +68,7 @@ describe.each(catalogue)('$id', (rule) => {
   });
 
   test('never attributes disease to one serving', () => {
-    const text = ownProse(rule);
+    const text = neutraliseFood(rule, ownProse(rule));
     expect(text).not.toMatch(/this (meal|serving|portion|entry|food) (causes|will cause|gives you|leads to|raises your risk)/i);
     // Wherever a disease is named, the sentence carries a hedge and does not speak of this entry or serving.
     for (const sentence of text.split(/(?<=[.?])\s+|\n+/)) {

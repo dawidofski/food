@@ -98,16 +98,21 @@ export type Rule = {
   /** The rule stays silent if any of these is not known in the pending entry. Absent means unknown, never zero. */
   requiresNutrients: NutrientKey[];
   /**
-   * SAFETY RULES ONLY. Where the card's authority comes from: a safety card is exempt from the evidence ceiling and must
-   * still say why it is CRITICAL. 'user-flag': the person told the app they react to it (definitional, not evidential).
-   * 'food-safety-body': a food-safety authority's published advice, which `evidence.citation` carries.
-   */
-  /**
    * SAFETY RULES ONLY. True when, for this context, the rule cannot do its job without `ctx.foods`. If the entry has
    * resolved items but `foods` is empty, the engine reports a failure instead of letting the rule go silent: a caller
    * that forgets to supply identity must not quietly disable every allergen and hazard check.
    */
   identityRequired?: (ctx: Context) => boolean;
+  /**
+   * SAFETY RULES ONLY. A reason this rule cannot fully check the entry (for example a flagged allergen it has no tag for),
+   * or null. The engine reports it as a `failures` entry whenever the entry has items, and still evaluates the rule.
+   */
+  cannotCheck?: (ctx: Context) => string | null;
+  /**
+   * SAFETY RULES ONLY. Where the card's authority comes from: a safety card is exempt from the evidence ceiling and must
+   * still say why it is CRITICAL. 'user-flag': the person told the app they react to it (definitional, not evidential).
+   * 'food-safety-body': a food-safety authority's published advice, which `evidence.citation` carries.
+   */
   safetyAuthority?: 'user-flag' | 'food-safety-body';
   /**
    * Which total the rule reads, REQUIRED so no default can mislead. 'entry' reads only the pending entry.

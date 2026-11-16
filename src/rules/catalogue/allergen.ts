@@ -44,22 +44,52 @@ const evidence: Evidence = {
 };
 
 /**
- * Tags use the EU group names, plural ("peanuts", "nuts"). People type "peanut" or "tree nuts". Fold case, plural and a
- * leading "tree " so that a flag the user meant is never missed. Folding errs toward matching: the cost of an extra card
- * for someone who flagged that allergen is small, and the cost of a missed one is the worst this app can produce.
+ * The dataset's tags are the EU's 14 groups under their own names (scripts/classification.ts EU_ALLERGENS): gluten,
+ * crustaceans, eggs, fish, peanuts, soybeans, milk, nuts, celery, mustard, sesame, sulphites, lupin, molluscs. People
+ * type the ordinary word for their own allergy: "soy", "shellfish", "dairy", "wheat". A flag that does not reach a tag is
+ * a missed allergen, the worst outcome this app can produce, so each ordinary word maps to the tag(s) it means, and a flag
+ * that maps to nothing is REPORTED as a failure (`cannotCheck`), never left silent.
+ *
+ * Mappings err toward matching: "wheat" maps to the gluten tag although a wheat allergy is not coeliac disease, because the
+ * dataset has no finer tag and an extra card for someone who flagged wheat costs far less than a missed one.
  */
-export function foldAllergen(s: string): string {
-  return s.trim().toLowerCase().replace(/^tree\s+/, '').replace(/s$/, '');
+const fold = (s: string): string => s.trim().toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ');
+/** Singular form of a tag or flag, so "peanut" and "peanuts" meet. */
+const singular = (s: string): string => s.replace(/s$/, '');
+
+/** Folded, singular tag -> itself; each synonym -> the folded, singular dataset tag(s) it means. */
+const CANONICAL = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soybeans', 'milk', 'nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'].map(singular);
+const SYNONYMS: Record<string, string[]> = {
+  soy: ['soybean'], soya: ['soybean'], shellfish: ['crustacean', 'mollusc'], mollusk: ['mollusc'],
+  dairy: ['milk'], "cow's milk": ['milk'], 'cows milk': ['milk'], lactose: ['milk'],
+  wheat: ['gluten'], barley: ['gluten'], rye: ['gluten'], oat: ['gluten'], 'cereals containing gluten': ['gluten'],
+  groundnut: ['peanut'], 'tree nut': ['nut'], almond: ['nut'], hazelnut: ['nut'], walnut: ['nut'], cashew: ['nut'],
+  pecan: ['nut'], pistachio: ['nut'], 'brazil nut': ['nut'], macadamia: ['nut'],
+  sulfite: ['sulphite'], seafood: ['fish', 'crustacean', 'mollusc'], finfish: ['fish'], 'sesame seed': ['sesame'],
+};
+
+/** The folded, singular dataset tags a typed flag stands for. Always includes the flag itself, so a custom tag still matches. */
+export function expandAllergenFlag(flag: string): string[] {
+  const key = singular(fold(flag));
+  return key === '' ? [] : [...new Set([key, ...(SYNONYMS[key] ?? [])])];
+}
+
+/** Flags that reach none of the dataset's tags and are not a known synonym. They can still match a custom food's own tag. */
+export function unrecognisedAllergenFlags(flagged: string[]): string[] {
+  return flagged
+    .filter((f) => f.trim() !== '')
+    .filter((f) => !expandAllergenFlag(f).some((t) => CANONICAL.includes(t)))
+    .map((f) => f.trim());
 }
 
 type Hit = { food: FoodIdentity; tags: string[] };
 
 function hits(ctx: Context): Hit[] {
-  const flagged = new Set((ctx.profile?.flaggedAllergens ?? []).map(foldAllergen).filter((f) => f !== ''));
+  const flagged = new Set((ctx.profile?.flaggedAllergens ?? []).flatMap(expandAllergenFlag));
   if (flagged.size === 0) return [];
   const out: Hit[] = [];
   for (const food of ctx.foods) {
-    const tags = food.allergens.filter((t) => flagged.has(foldAllergen(t)));
+    const tags = food.allergens.filter((t) => flagged.has(singular(fold(t))));
     if (tags.length > 0) out.push({ food, tags });
   }
   return out;
@@ -71,6 +101,12 @@ export const allergenRule: Rule = {
   category: 'safety',
   safetyAuthority: 'user-flag',
   // There is a check to fail only when the user flagged something; at the shipped default (empty list) there is nothing to run.
+  cannotCheck: (ctx) => {
+    const bad = unrecognisedAllergenFlags(ctx.profile?.flaggedAllergens ?? []);
+    return bad.length === 0
+      ? null
+      : `rule "allergen-flagged" could not check ${bad.map((b) => `"${b}"`).join(', ')}: ${bad.length === 1 ? 'it is' : 'they are'} not an allergen the app has tags for, so foods are not checked against ${bad.length === 1 ? 'it' : 'them'}. Check labels yourself.`;
+  },
   identityRequired: (ctx) => (ctx.profile?.flaggedAllergens ?? []).some((f) => f.trim() !== ''),
   scope: 'entry',
   // Reads food identity and the profile, not a nutrient: the coverage gate does not protect this rule.

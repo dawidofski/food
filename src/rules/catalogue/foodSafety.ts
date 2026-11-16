@@ -15,8 +15,19 @@ import { evaluate } from '../engine';
  * comparable to the UK's. A CRITICAL card, which cannot be collapsed, on a soft-boiled egg or homemade mayonnaise would
  * teach the user to dismiss the tier the allergen card depends on. The hazard is real for some people (pregnancy,
  * immunosuppression). The hook to re-add it is `Profile.conditions`: when such a condition is flagged, add a hazard
- * with the FDA egg-safety citation (see the verification log) and gate it on that condition. Rice, kidney beans, sprouts
+ * with the FDA egg-safety citation (see the verification log) and gate it on that condition. Rice, kidney beans
  * and raw milk are hazards regardless of jurisdiction and stay.
+ *
+ * RAW SPROUTS ARE ALSO NOT A HAZARD HERE, for the same reason. The FDA's advice to skip raw or lightly cooked sprouts is
+ * addressed to people more vulnerable to foodborne illness, and the card cannot say who that is. A healthy person logging bean
+ * sprouts on pho would answer yes honestly and get a red card that cannot be collapsed. Same hook: `Profile.conditions`;
+ * when pregnancy, immunosuppression or similar is flagged, re-add a sprouts hazard (FDA, "Selecting and Serving Produce
+ * Safely", see the verification log) gated on it.
+ *
+ * RICE QUESTION FATIGUE. The rice pattern matches 146 dataset foods, so the question appears on nearly every rice entry. It
+ * asks about the thing the FSA page is about (cooked rice standing at room temperature) and not a rice cooker's keep-warm
+ * setting, so for most entries the answer is an instant no. On this tier credibility depends on rarity; this is the most
+ * exposed surface in the catalogue and should be revisited if users find the question tiresome.
  *
  * Matching is deliberately narrow and anchored at the start of the name, so look-alikes ("Kidney", "Brussels sprouts",
  * "Rice milk", "Eggnog") do not ask. The cost is a false negative for foods the patterns do not name, such as a mixed dish
@@ -54,7 +65,7 @@ export const HAZARDS: Hazard[] = [
     title: 'Rice held warm or cooled slowly',
     foodMatch: /^(?:fried rice|rice)\b(?!\s+(?:cake|croquette|dessert|dressing|milk|noodles?|paper|pudding|krispie|cereal|flour))/i,
     questionId: 'reheatedRice',
-    question: 'Was this rice kept warm, or left to cool at room temperature, rather than chilled soon after it was cooked?',
+    question: 'Was this rice left at room temperature for more than an hour or two before it was chilled or reheated?',
     hazard:
       'The FSA says uncooked rice can contain spores of a bacterium called Bacillus cereus, that this bacteria can cause food poisoning, ' +
       'and that the spores can survive cooking. The longer cooked rice is left at room temperature, the more likely it is that the bacteria or toxins will make the rice a food-poisoning risk.',
@@ -75,9 +86,10 @@ export const HAZARDS: Hazard[] = [
   {
     id: 'food-safety-kidney-beans',
     title: 'Raw or undercooked kidney beans',
+    // Plain bean identities only ("Kidney beans, from dried ...", "Kidney beans, NFS"); "Kidney beans with meat" and "Kidney beans and rice" are cooked dishes and do not ask.
     // Dried-bean identities only. The FDA page says canned and properly cooked kidney beans are low in the lectin, so
     // canned entries do not ask; "fast food" entries are restaurant dishes the user cannot have boiled themselves.
-    foodMatch: /^kidney beans\b(?!.*\b(?:canned|fast food)\b)/i,
+    foodMatch: /^kidney beans(?:,|\s*$)(?!.*\b(?:canned|fast food)\b)/i,
     questionId: 'rawKidneyBeans',
     question: 'Were these kidney beans eaten raw, or without being soaked and then boiled?',
     hazard:
@@ -93,28 +105,6 @@ export const HAZARDS: Hazard[] = [
         'Phytohaemagglutinin (PHA) is a lectin found in raw or undercooked beans. In canned and properly cooked kidney beans, the low levels of PHA won’t affect you. ' +
         'But at high levels in raw beans, PHA can lead to nausea, severe vomiting, and diarrhea. ' +
         'Soaking the beans for a minimum of 5 hours and then boiling them in fresh water for at least 30 minutes will remove and destroy this toxin.',
-    },
-  },
-  {
-    id: 'food-safety-sprouts',
-    title: 'Raw or lightly cooked sprouts',
-    foodMatch: /^(?:alfalfa sprouts|bean sprouts|sprouts)\b/i,
-    questionId: 'rawSprouts',
-    question: 'Were these sprouts eaten raw or only lightly cooked?',
-    hazard:
-      'The FDA says sprouts served raw or lightly cooked may contain bacteria that can cause foodborne illness. ' +
-      'Sprouts grow from seeds under warm, humid conditions that suit bacteria, and if even a few disease-causing bacteria are on the seed they can grow to high levels during sprouting.',
-    action:
-      'The FDA advises people who are more vulnerable to foodborne illness to skip raw or lightly cooked sprouts of any kind.',
-    citation: {
-      title: 'Selecting and Serving Produce Safely',
-      publisher: fda,
-      year: 2024,
-      url: 'https://www.fda.gov/food/buy-store-serve-safe-food/selecting-and-serving-produce-safely',
-      conclusion:
-        'Sprouts (such as alfalfa or mung bean) that are served raw or lightly cooked may contain bacteria that can cause foodborne illness. ' +
-        'If just a few harmful bacteria are present in or on the seed, the bacteria can grow to high levels during sprouting, even if you are growing your own sprouts under sanitary conditions at home. ' +
-        'People who are more vulnerable to foodborne illness should avoid eating raw or lightly cooked sprouts of any kind (including onion, alfalfa, clover, radish, and mung bean sprouts).',
     },
   },
   {

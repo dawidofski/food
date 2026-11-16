@@ -156,6 +156,5 @@ export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' |
   'food-safety-kidney-beans': [
     { ctx: ctx({ foodName: 'Kidney beans, from dried, no added fat', answers: { rawKidneyBeans: true } }), level: 'CRITICAL' },
   ],
-  'food-safety-sprouts': [{ ctx: ctx({ foodName: 'Alfalfa sprouts, raw', answers: { rawSprouts: true } }), level: 'CRITICAL' }],
   'food-safety-raw-milk': [{ ctx: ctx({ foodName: 'Milk, whole', answers: { rawMilk: true } }), level: 'CRITICAL' }],
 };
