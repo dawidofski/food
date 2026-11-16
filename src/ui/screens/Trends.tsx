@@ -124,9 +124,9 @@ function Bars({ weeks, metric, label }: { weeks: TrendWeek[]; metric: Metric; la
             key={w.startKey}
             data-status={p.status}
             x={i * SLOT + SLOT / 2}
-            y={H - 6}
+            y={unknown ? H - 14 : H - 6}
             textAnchor="middle"
-            fontSize="14"
+            fontSize={unknown ? 20 : 14}
             className="fill-slate-600 dark:fill-slate-400"
           >
             {unknown ? '?' : '·'}
@@ -161,6 +161,12 @@ function MetricCard({ weeks, metric }: { weeks: TrendWeek[]; metric: Metric }) {
       <h2 id={id} className="text-lg font-semibold">{metric.title}</h2>
       <p className="text-sm">{headline(weeks, metric)}</p>
       <Bars weeks={weeks} metric={metric} label={`${metric.title} by week, ${first} to ${last}`} />
+      {weeks.some((w) => metric.point(w).status !== 'value') && (
+        <p className="text-xs text-slate-600 dark:text-slate-400">
+          {weeks.some((w) => metric.point(w).status === 'unknown') && <span className="block">? means we do not know: too much of this figure was missing. It is not a low week.</span>}
+          {weeks.some((w) => metric.point(w).status === 'thin') && <span className="block">A dot means too few days were logged that week. It is not a low week.</span>}
+        </p>
+      )}
       <details className="text-sm">
         <summary className="min-h-12 cursor-pointer py-3">Week by week</summary>
         <ol className="space-y-1 pb-2">
