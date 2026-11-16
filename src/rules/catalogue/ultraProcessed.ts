@@ -14,8 +14,8 @@ import { weekCount } from './shared';
  * The trigger is the APP'S OWN CHOICE, not a published figure, and the card says so: MORE THAN HALF of the day's entries,
  * this one included, with at least THREE entries so that one logged snack cannot trigger it. It also requires the pending
  * entry to be NOVA 4 itself, so the card does not repeat on every later entry of the day. The card discloses that it counts
- * entries, not energy, and that much of the research measures ultra-processed intake as a share of energy, so the count is an
- * indicator and not a measurement of what that research measured. Flattening (anti-goal A4): the card also says the category is
+ * entries, not energy or amount, so it marks a daily pattern rather than measuring one, and that the triggering share is the
+ * app's own choice rather than a published figure. Flattening (anti-goal A4): the card also says the category is
  * broad.
  *
  * Verified against SACN's April 2025 rapid evidence update (read at source: consistent associations, evidence almost
@@ -72,8 +72,7 @@ export const ultraProcessedRule: Rule = {
   evidence,
   concern:
     'With this entry, most of what you have logged today is in NOVA group 4, the ultra-processed category. ' +
-    'This card counts entries, not energy. Much of the research measures ultra-processed intake as a share of energy, ' +
-    'so this count is an indicator and not a measurement of what that research measured. ' +
+    'This card counts entries, not energy or amount, so it marks a daily pattern rather than measuring one. ' +
     'The category is broad: it covers foods of very different makeup, and the evidence does not separate them, so the ' +
     'group alone says little about any one entry. ' +
     'Studies that observe people link higher usual consumption of ultra-processed food with adverse health outcomes, ' +

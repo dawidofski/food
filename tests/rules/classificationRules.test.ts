@@ -49,7 +49,10 @@ describe('processed meat', () => {
     expect(a.citation.publisher).toMatch(/WCRF|World Cancer Research Fund/);
     expect(a.citation.conclusion).toMatch(/alternatives to ham/i);
     expect(a.citation.conclusion).toMatch(/tinned tuna/i);
-    expect(a.label).toMatch(/ham|sandwich/i);
+    // Offered as WCRF's own example, not as advice tailored to this entry: the reason, not the label, carries the framing.
+    expect(a.reason).toMatch(/WCRF/);
+    expect(a.reason).toMatch(/own example/i);
+    expect(a.reason).toMatch(/sandwich/i);
     expect(citationProblems(a.citation)).toEqual([]);
   });
 });
@@ -182,10 +185,11 @@ describe('ultra-processed', () => {
     c.today.nova4EntryCount = Number.NaN;
     expect(ultraProcessedRule.level(c)).toBeNull();
   });
-  test('discloses that it counts entries, not energy, and that the research measures a share of energy', () => {
+  test('discloses that it counts entries rather than measuring an amount', () => {
     expect(ultraProcessedRule.concern).toMatch(/counts entries, not energy/i);
-    expect(ultraProcessedRule.concern).toMatch(/share of energy/i);
-    expect(ultraProcessedRule.concern).toMatch(/indicator and not a measurement/i);
+    expect(ultraProcessedRule.concern).toMatch(/marks a daily pattern rather than measuring one/i);
+    // It must NOT characterise the research literature: nobody on this project read those studies at source.
+    expect(ultraProcessedRule.concern).not.toMatch(/much of the research/i);
   });
   test("labels the share and the three-entry floor as the app's own choice", () => {
     expect(ultraProcessedRule.concern).toMatch(/app's own choice[^.]*not a published figure/i);

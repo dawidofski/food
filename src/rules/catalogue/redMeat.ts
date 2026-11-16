@@ -12,8 +12,8 @@ import { pendingGramsOf, weekCount, whole } from './shared';
  * the association is mainly colorectal. IARC's own word for the human evidence is "limited", and the card follows it. The
  * IARC statements are sourced by a supporting citation (IARC), and WCRF's citation supports the weekly amount that fires
  * the card; a tone test requires a citation from every organisation the prose names.
- * The WCRF citation year and title are descriptive: the page is undated, and its real title contains a word the tone
- * tests prohibit, so the title names the section instead.
+ * The WCRF page is undated, so `year` is the year it was accessed, not a publication year. Its real title is used: the
+ * tone tests no longer filter a quoted source's words through rules written for the app's own voice.
  * Counts the pending entry's red-meat items too, per item, so a mixed dish contributes only its red meat. Silent unless the
  * pending entry has red meat, so it does not repeat on every entry of the week.
  * Reads flags and the week's grams, not nutrients, so it declares none and the coverage gate does not protect it.
@@ -24,9 +24,10 @@ const THRESHOLDS = {
 };
 
 const citation: Citation = {
-  title: 'WCRF prevention recommendations: red meat',
+  title: 'Limit red meat and avoid processed meat',
   publisher: 'World Cancer Research Fund (WCRF)',
-  year: 2018,
+  /** Access year: the page carries no publication date. */
+  year: 2026,
   url: 'https://www.wcrf.org/preventing-cancer/our-cancer-prevention-recommendations/limit-red-meat-and-avoid-processed-meat/',
   conclusion: 'We recommend limiting the amount of red meat we eat to 3 portions a week (350–500g or 12–18oz cooked weight).',
 };

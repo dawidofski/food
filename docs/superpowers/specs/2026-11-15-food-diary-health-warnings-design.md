@@ -797,3 +797,29 @@ Classification rules, after review (same task):
   says "Swap beef mince for turkey or vegetarian mince", a red-meat swap, not added here. The alternatives test now accepts the
   source's own words "swap", "alternatives to" and "instead of" as well as "replace", because WCRF does not use "replace".
   The plan's other swaps (sardines, turkey breast, sodium figures) remain unsourced and unused.
+
+### Classification rules, round 2 (2026-11-16)
+
+Applied directly by the controller, because a usage limit stopped the implementing agent mid-round. Four corrections,
+all about keeping a claim and its source together:
+
+- **Tone tests no longer filter quoted sources.** The prohibitions (no "avoid", no "should not", no shaming) govern the
+  app's own voice: `title`, `concern`, `cause`, `evidence.summary`, alternative `reason` and `portionNote`. A
+  `citation.title` and `citation.conclusion` are the source's own words, so they are excluded from those checks. The
+  test had forced a descriptive substitute for WCRF's real page title, which contains "avoid" — making us paraphrase a
+  source to satisfy a rule about our own prose. An invented title is less truthful than the real one.
+- **The red-meat citation now carries WCRF's real title**, "Limit red meat and avoid processed meat", matching the page
+  actually read and already cited by the processed-meat alternative.
+- **WCRF's `year` is an access year, not a publication year** (2026). The page is undated; an inferred publication year
+  presented as fact is a small untruth in a field whose whole job is traceability.
+- **The ultra-processed card no longer characterises the research literature.** It had said "much of the research
+  measures ultra-processed intake as a share of energy" — a sentence that came from the controller's description of the
+  evidence base, not from any source anyone on this project read. The card now says only what the app can stand behind:
+  it counts entries, not energy or amount, so it marks a daily pattern rather than measuring one. A test asserts the
+  removed claim does not return.
+- **The processed-meat alternative is framed as WCRF's own example** rather than as advice tailored to the entry, so a
+  sandwich suggestion no longer reads as a recommendation about a hot dog.
+
+Still recorded as unread at source: IARC Volume 114 and the IARC alcohol monograph (press releases N.240 and N.371 were
+read instead, and the 50 g / 18% figure comes from the former); the WHO sugars guideline, read from a PDF copy after
+WHO's own server returned 403.

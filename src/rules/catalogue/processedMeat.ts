@@ -93,8 +93,10 @@ export const processedMeatRule: Rule = {
     'flavour or preservation, such as ham, sausages and hot dogs.',
   alternatives: [
     {
-      label: 'In sandwiches: chicken, hard-boiled egg, tinned tuna, low-fat houmous or low-fat cream cheese',
-      reason: 'WCRF suggests these as alternatives to ham in sandwiches.',
+      label: 'Chicken, hard-boiled egg, tinned tuna, low-fat houmous or low-fat cream cheese',
+      reason:
+        'WCRF gives these as its own example of alternatives to processed meat — it names them for ham in ' +
+        'sandwiches, and they are listed here as that example rather than as advice tailored to this entry.',
       citation: wcrfAlternative,
     },
   ],

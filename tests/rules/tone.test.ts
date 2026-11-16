@@ -4,19 +4,17 @@ import { citationProblems } from '@/rules/citations';
 import type { Rule } from '@/rules/types';
 import { probes } from './catalogueContexts';
 
-/** Every string a person could read on a card for this rule, including its portion note in each probe context. */
-function allProse(rule: Rule): string {
-  const parts = [
+/**
+ * Prose the app writes itself. Citation titles and conclusions are the SOURCE's own words, quoted, so they are excluded
+ * from every phrasing check: WCRF's real page title contains "avoid", and filtering a source through rules written for
+ * our voice would force us to paraphrase it. An invented title is less truthful than the real one.
+ */
+function ownProse(rule: Rule): string {
+  return [
     rule.title, rule.concern, rule.cause, rule.evidence.summary,
-    rule.evidence.citation.title, rule.evidence.citation.conclusion,
     ...(rule.alternatives ?? []).flatMap((a) => [a.label, a.reason]),
     ...(probes[rule.id] ?? []).map((p) => rule.portionNote(p.ctx)),
-  ];
-  return parts.join('\n');
-}
-/** Prose the app writes itself. The citation's conclusion is the source's own words and is excluded from phrasing checks. */
-function ownProse(rule: Rule): string {
-  return allProse(rule).replace(rule.evidence.citation.conclusion, '');
+  ].join('\n');
 }
 
 const DISEASE =
@@ -53,7 +51,8 @@ test('the tone tests really run over the catalogue', () => {
 
 describe.each(catalogue)('$id', (rule) => {
   test('no exclamation marks or shaming phrasing', () => {
-    const text = allProse(rule);
+    // ownProse, not allProse: these prohibitions govern the app's own voice, never a quoted source's words.
+    const text = ownProse(rule);
     expect(text).not.toMatch(/!/);
     expect(text).not.toMatch(
       /you should not|you must not|you shouldn't|you mustn't|bad choice|unhealthy habit|junk|guilty|cheat|\bbad\b|\bsin\b|\bnever\b|\bdon't\b|\bavoid\b|\bstop\b|\bquit\b|dangerous|harmful|toxic|excessive|unsafe/i,
