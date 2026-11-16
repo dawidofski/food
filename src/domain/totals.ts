@@ -29,6 +29,8 @@ export type DayTotals = {
   vegCoverage: 'known' | 'partial' | 'unknown';
   /** True when any entry's classification says it contained a vegetable. */
   hasVegetableFlag: boolean;
+  /** Counted entries that day whose merged classification is NOVA group 4. Entries, not energy: no per-entry energy share is kept. */
+  nova4EntryCount: number;
 };
 
 export type WeekContext = {
@@ -114,6 +116,7 @@ function buildDay(entries: DiaryEntry[], dayKey: string): DayTotals {
     vegCupEq,
     vegCoverage,
     hasVegetableFlag: day.some((e) => flagsOf(e).vegetable),
+    nova4EntryCount: day.filter((e) => flagsOf(e).novaGroup === 4).length,
   };
 }
 

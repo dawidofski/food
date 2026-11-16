@@ -47,7 +47,7 @@ function ctx(o: Opts = {}): Context {
   if (o.addedSugarDayCoverage) todayC.addedSugarsG = o.addedSugarDayCoverage;
   const today: DayTotals = {
     dayKey: '2026-11-15', entryCount: o.emptyDay ? 0 : 2, nutrients: todayN, coverage: todayC, energyCoveredShare: share,
-    vegCupEq: 0, vegCoverage: 'known', hasVegetableFlag: false,
+    vegCupEq: 0, vegCoverage: 'known', hasVegetableFlag: false, nova4EntryCount: 0,
   };
   const food = o.food ?? 'plain';
   return {

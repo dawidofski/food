@@ -30,6 +30,11 @@ export type Evidence = {
   /** Plain-language statement of what is actually shown. */
   summary: string;
   citation: Citation;
+  /**
+   * Further sources for a card that makes more than one sourced claim. `citation` supports the claim that fires the
+   * card; each claim the prose attributes to another body (a classification, say) is owed that body's own citation here.
+   */
+  supportingCitations?: Citation[];
   /** True forces hedged phrasing downstream: never "causes". */
   isAssociational: boolean;
 };

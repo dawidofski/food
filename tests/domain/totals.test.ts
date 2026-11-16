@@ -100,6 +100,21 @@ describe('dayTotals', () => {
   });
 });
 
+describe('nova4EntryCount', () => {
+  const nova4 = (day: string) => make(day, { classification: { ...none, novaGroup: 4 } });
+  test('counts entries whose merged classification is NOVA 4, one per entry', () => {
+    const t = dayTotals([nova4('2026-11-15'), nova4('2026-11-15'), make('2026-11-15'), nova4('2026-11-14')], '2026-11-15');
+    expect(t.entryCount).toBe(3);
+    expect(t.nova4EntryCount).toBe(2);
+  });
+  test('an empty day and a row with no classification both read zero, never NaN', () => {
+    expect(dayTotals([], '2026-11-15').nova4EntryCount).toBe(0);
+    const bad = make('2026-11-15');
+    delete (bad as { classification?: unknown }).classification;
+    expect(dayTotals([bad], '2026-11-15').nova4EntryCount).toBe(0);
+  });
+});
+
 describe('weekContext', () => {
   test('counts processed meat occasions, not grams', () => {
     const c = weekContext([pmEntry('2026-11-10'), pmEntry('2026-11-13'), pmEntry('2026-11-15')], on);

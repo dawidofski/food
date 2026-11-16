@@ -161,7 +161,13 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
         title: rule.title,
         concern: rule.concern,
         cause: rule.cause,
-        evidence: { ...rule.evidence, citation: { ...rule.evidence.citation } },
+        evidence: {
+          ...rule.evidence,
+          citation: { ...rule.evidence.citation },
+          ...(rule.evidence.supportingCitations
+            ? { supportingCitations: rule.evidence.supportingCitations.map((c) => ({ ...c })) }
+            : {}),
+        },
         horizon: rule.horizon,
         portionNote,
         alternatives: (rule.alternatives ?? []).map((x) => ({ ...x, citation: { ...x.citation } })),

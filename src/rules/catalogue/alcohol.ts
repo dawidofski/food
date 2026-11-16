@@ -5,7 +5,8 @@ import { weekCount } from './shared';
  * Verified against WHO/Europe's 4 January 2023 statement: alcohol is an IARC Group 1 carcinogen, "there is no safe
  * amount that does not affect health", it "causes at least seven types of cancer", "the risk of developing cancer
  * increases substantially as alcohol consumption increases", and current evidence "cannot indicate the existence of a
- * threshold". The IARC monograph text itself was not read; the Group 1 classification is taken from the WHO statement.
+ * threshold". The IARC monograph text itself was not read; the Group 1 classification is cited to IARC's own press
+ * release N. 371 (8 October 2025, read from the PDF) as a supporting citation.
  *
  * The plan's "escalates with the weekly total" is dropped. There is no established threshold to escalate at, and the only
  * count available is entries that contain alcohol, not drinks and not units (the dataset has no alcohol-gram nutrient),
@@ -26,6 +27,17 @@ const citation: Citation = {
     'Alcohol causes at least seven types of cancer, including the most common cancer types.',
 };
 
+/** The Group 1 classification is IARC's claim, so IARC is cited for it. Read from IARC's own press release. */
+const iarcCitation: Citation = {
+  title: 'Alcohol: a major preventable cause of cancer (IARC Evidence Summary Brief No. 6), press release N. 371',
+  publisher: 'International Agency for Research on Cancer (IARC), WHO',
+  year: 2025,
+  url: 'https://www.iarc.who.int/wp-content/uploads/2025/10/pr371_E.pdf',
+  conclusion:
+    'In 1988, the IARC Monographs programme classified alcoholic beverages as carcinogenic to humans (Group 1). ' +
+    'Even low levels of drinking increase cancer risk.',
+};
+
 const evidence: Evidence = {
   strength: 'strong',
   body: 'WHO',
@@ -33,6 +45,7 @@ const evidence: Evidence = {
     'WHO states that alcohol causes at least seven types of cancer; the link concerns regular drinking over time, and ' +
     'the risk rises as consumption rises. WHO also states that current evidence cannot indicate a threshold.',
   citation,
+  supportingCitations: [iarcCitation],
   isAssociational: false,
 };
 

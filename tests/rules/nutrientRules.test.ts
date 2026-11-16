@@ -102,7 +102,7 @@ describe('catalogue', () => {
       'added-sugar-daily': 'daily', 'saturated-fat-daily': 'daily', 'trans-fat': 'entry',
       // Weekly rules read the week and not one entry; 'daily' is the aggregate scope, so the usual-intake tone test applies.
       'processed-meat': 'entry', 'processed-meat-frequency': 'daily', 'red-meat-weekly': 'daily', alcohol: 'entry',
-      'sweet-drink': 'entry', 'ultra-processed': 'entry', 'nutrient-density': 'entry',
+      'sweet-drink': 'entry', 'ultra-processed': 'daily', 'nutrient-density': 'entry',
     });
   });
   test.each(catalogue)('$id citation has no problems', (rule) => {

@@ -10,8 +10,8 @@ import { pendingGramsOf, weekCount, whole } from './shared';
  * Strength 'limited', not the plan's 'moderate': IARC (press release N. 240, Volume 114) classified red meat Group 2A
  * "based on limited evidence that the consumption of red meat causes cancer in humans and strong mechanistic evidence";
  * the association is mainly colorectal. IARC's own word for the human evidence is "limited", and the card follows it. The
- * IARC statements are named in the summary; the Evidence type carries one citation, and it is WCRF's, because the figure
- * that fires the card is WCRF's.
+ * IARC statements are sourced by a supporting citation (IARC), and WCRF's citation supports the weekly amount that fires
+ * the card; a tone test requires a citation from every organisation the prose names.
  * The WCRF citation year and title are descriptive: the page is undated, and its real title contains a word the tone
  * tests prohibit, so the title names the section instead.
  * Counts the pending entry's red-meat items too, per item, so a mixed dish contributes only its red meat. Silent unless the
@@ -31,6 +31,18 @@ const citation: Citation = {
   conclusion: 'We recommend limiting the amount of red meat we eat to 3 portions a week (350–500g or 12–18oz cooked weight).',
 };
 
+/** The classification the card names is IARC's claim, so IARC is cited for it; WCRF's citation supports the weekly amount. */
+const iarcCitation: Citation = {
+  title: 'IARC Monographs evaluate consumption of red meat and processed meat (Press release N. 240, Volume 114)',
+  publisher: 'International Agency for Research on Cancer (IARC), WHO',
+  year: 2015,
+  url: 'https://www.iarc.who.int/wp-content/uploads/2018/07/pr240_E.pdf',
+  conclusion:
+    'A Working Group of 22 experts from 10 countries classified the consumption of red meat as probably carcinogenic ' +
+    'to humans (Group 2A), based on limited evidence that the consumption of red meat causes cancer in humans and ' +
+    'strong mechanistic evidence supporting a carcinogenic effect.',
+};
+
 const evidence: Evidence = {
   strength: 'limited',
   body: 'WCRF',
@@ -39,6 +51,7 @@ const evidence: Evidence = {
     'strong mechanistic evidence. The studies found an association mainly with colorectal cancer. WCRF recommends limiting red ' +
     'meat to three portions a week.',
   citation,
+  supportingCitations: [iarcCitation],
   isAssociational: true,
 };
 

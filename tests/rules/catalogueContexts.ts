@@ -33,6 +33,9 @@ export type Opts = {
   weekProcessedMeatOccasions?: number;
   weekRedMeatGrams?: number;
   weekAlcoholOccasions?: number;
+  /** Entries already committed today, and how many of them are NOVA 4. Default 2 entries, none NOVA 4. */
+  todayEntryCount?: number;
+  todayNova4Entries?: number;
 };
 
 /** Builds a context whose measured values are exactly the ones given. A nutrient not given is unknown, never zero. */
@@ -70,7 +73,8 @@ export function ctx(o: Opts = {}): Context {
     todayC[k] = o.emptyDay ? 'unknown' : 'known';
   }
   const today: DayTotals = {
-    dayKey: '2026-11-15', entryCount: o.emptyDay ? 0 : 2, nutrients: todayN, coverage: todayC, energyCoveredShare: share,
+    dayKey: '2026-11-15', entryCount: o.emptyDay ? 0 : (o.todayEntryCount ?? 2),
+    nova4EntryCount: o.emptyDay ? 0 : (o.todayNova4Entries ?? 0), nutrients: todayN, coverage: todayC, energyCoveredShare: share,
     vegCupEq: 0, vegCoverage: 'known', hasVegetableFlag: false,
   };
   const merged: ClassificationFlags = { ...flags, ...o.classification };
@@ -128,6 +132,8 @@ export const probes: Record<string, { ctx: Context; level: 'INFO' | 'MODERATE' |
     { ctx: ctx({ classification: { alcohol: true }, weekAlcoholOccasions: 9 }), level: 'MODERATE' },
   ],
   'sweet-drink': [{ ctx: ctx({ classification: { sweetDrink: true }, pendingGrams: 330 }), level: 'INFO' }],
-  'ultra-processed': [{ ctx: ctx({ classification: { novaGroup: 4 } }), level: 'INFO' }],
+  'ultra-processed': [
+    { ctx: ctx({ classification: { novaGroup: 4 }, todayEntryCount: 3, todayNova4Entries: 2 }), level: 'INFO' },
+  ],
   'nutrient-density': [{ ctx: ctx({ pendingEnergy: 600, pendingFibre: 0.5, pendingProtein: 2 }), level: 'INFO' }],
 };

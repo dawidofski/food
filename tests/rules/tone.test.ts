@@ -101,12 +101,38 @@ describe.each(catalogue)('$id', (rule) => {
       expect(a.citation, `alternative "${a.label}" has no citation`).toBeDefined();
       if (!a.citation) continue;
       expect(citationProblems(a.citation)).toEqual([]);
-      expect(a.citation.conclusion).toMatch(/replac/i);
+      // The source's own replacement wording: "replace", or the "swap" and "alternatives to" that WCRF uses.
+      expect(a.citation.conclusion).toMatch(/replac|swap|alternatives to|instead of/i);
       // The reason may name no outcome or mechanism that its own citation does not state.
       const OUTCOME = /\b(LDL|cholesterol|blood pressure|heart|cardiovascular|mortality|death|stroke|diabetes|weight|caries|lowers?|lowered|reduc\w+)\b/gi;
       for (const m of a.reason.match(OUTCOME) ?? []) {
         expect(a.citation.conclusion.toLowerCase(), `reason claims "${m}" that its citation does not support`).toContain(m.toLowerCase());
       }
+    }
+  });
+
+  test('if the prose names an organisation, the rule carries a citation from that organisation', () => {
+    // Catches a claim shown under another body's source: naming IARC while citing only WCRF, for example.
+    const ORGS: Record<string, RegExp> = {
+      IARC: /IARC|International Agency for Research on Cancer/i,
+      WCRF: /WCRF|World Cancer Research Fund/i,
+      WHO: /\bWHO\b|World Health Organi[sz]ation/,
+      SACN: /SACN|Scientific Advisory Committee on Nutrition/i,
+      EFSA: /EFSA|European Food Safety Authority/i,
+    };
+    const text = [rule.title, rule.concern, rule.cause, rule.evidence.summary, ...(rule.alternatives ?? []).flatMap((a) => [a.label, a.reason])].join('\n');
+    const cited = [rule.evidence.citation, ...(rule.evidence.supportingCitations ?? []), ...(rule.alternatives ?? []).map((a) => a.citation)].map((c) => `${c.publisher} ${c.title}`).join('\n');
+    for (const [name, re] of Object.entries(ORGS)) {
+      if (!new RegExp(String.raw`\b${name}\b`).test(text)) continue;
+      expect(cited, `prose names ${name} but no citation is from it`).toMatch(re);
+    }
+  });
+
+  test('every supporting citation is complete and carries a substantive conclusion', () => {
+    for (const c of rule.evidence.supportingCitations ?? []) {
+      expect(citationProblems(c)).toEqual([]);
+      expect(c.conclusion.trim().split(/\s+/).length).toBeGreaterThanOrEqual(8);
+      expect(c.conclusion).not.toMatch(/https?:\/\//);
     }
   });
 

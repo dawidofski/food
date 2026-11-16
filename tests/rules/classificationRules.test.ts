@@ -42,8 +42,15 @@ describe('processed meat', () => {
     expect(processedMeatRule.portionNote(c)).toMatch(/60 g/);
     expect(processedMeatRule.portionNote(c)).not.toMatch(/260 g/);
   });
-  test('has no alternatives: no source supports a specific swap', () => {
-    expect(processedMeatRule.alternatives).toBeUndefined();
+  test("offers WCRF's own sandwich alternatives to ham, with that citation and nothing it does not say", () => {
+    const alts = processedMeatRule.alternatives ?? [];
+    expect(alts).toHaveLength(1);
+    const a = alts[0]!;
+    expect(a.citation.publisher).toMatch(/WCRF|World Cancer Research Fund/);
+    expect(a.citation.conclusion).toMatch(/alternatives to ham/i);
+    expect(a.citation.conclusion).toMatch(/tinned tuna/i);
+    expect(a.label).toMatch(/ham|sandwich/i);
+    expect(citationProblems(a.citation)).toEqual([]);
   });
 });
 
@@ -81,9 +88,26 @@ describe('red meat weekly', () => {
     expect(redMeatWeeklyRule.evidence.citation.publisher).toMatch(/World Cancer Research Fund/);
     expect(redMeatWeeklyRule.evidence.citation.conclusion).toMatch(/350.500/);
   });
+  test('carries IARC as a supporting citation for the classification it names, and WCRF for the amount', () => {
+    const sup = redMeatWeeklyRule.evidence.supportingCitations ?? [];
+    expect(sup).toHaveLength(1);
+    expect(sup[0]?.publisher).toMatch(/IARC|International Agency/);
+    expect(sup[0]?.conclusion).toMatch(/Group 2A/);
+    expect(citationProblems(sup[0]!)).toEqual([]);
+    expect(redMeatWeeklyRule.evidence.citation.publisher).toMatch(/WCRF|World Cancer Research Fund/);
+  });
   test('says the diary weight may not be cooked weight', () => {
     expect(redMeatWeeklyRule.concern).toMatch(/cooked/i);
     expect(redMeatWeeklyRule.concern).toMatch(/raw/i);
+  });
+});
+
+describe('engine copies supporting citations', () => {
+  test('a card cannot mutate the rule or share its supporting citation objects', () => {
+    const out = evaluate([redMeatWeeklyRule], ctx({ classification: { redMeat: true }, pendingGrams: 150, weekRedMeatGrams: 450 }));
+    const card = out.cards[0]!;
+    expect(card.evidence.supportingCitations).toEqual(redMeatWeeklyRule.evidence.supportingCitations);
+    expect(card.evidence.supportingCitations?.[0]).not.toBe(redMeatWeeklyRule.evidence.supportingCitations?.[0]);
   });
 });
 
@@ -102,6 +126,13 @@ describe('alcohol', () => {
     expect(n).not.toMatch(/\bunits?\b|\bglass|\bpint|\bml\b/i);
     expect(n).toMatch(/4 /); // 3 earlier entries plus this one
   });
+  test('carries IARC as a supporting citation for the Group 1 classification it names', () => {
+    const sup = alcoholRule.evidence.supportingCitations ?? [];
+    expect(sup).toHaveLength(1);
+    expect(sup[0]?.publisher).toMatch(/IARC|International Agency/);
+    expect(sup[0]?.conclusion).toMatch(/Group 1/);
+    expect(citationProblems(sup[0]!)).toEqual([]);
+  });
 });
 
 describe('sweet drink', () => {
@@ -117,24 +148,59 @@ describe('sweet drink', () => {
 });
 
 describe('ultra-processed', () => {
+  const nova = { novaGroup: 4 as const };
   test('declares limited, associational evidence and says so on the card', () => {
     expect(ultraProcessedRule.evidence.strength).toBe('limited');
     expect(ultraProcessedRule.evidence.isAssociational).toBe(true);
     expect(prose(ultraProcessedRule)).toMatch(/observational/i);
     expect(prose(ultraProcessedRule)).toMatch(/no threshold is established/i);
   });
-  test('is qualitative: fires INFO on NOVA 4 and is silent on NOVA 1 to 3 (no flattening of processed food)', () => {
-    expect(ultraProcessedRule.level(ctx({ classification: { novaGroup: 4 } }))).toBe('INFO');
-    expect(ultraProcessedRule.level(ctx({ classification: { novaGroup: 3 } }))).toBeNull();
-    expect(ultraProcessedRule.level(ctx({ classification: { novaGroup: 2 } }))).toBeNull();
-    expect(ultraProcessedRule.level(ctx())).toBeNull();
+  test('is a daily rule on the share of the day\'s ENTRIES that are NOVA 4, not a flag on every NOVA 4 item', () => {
+    expect(ultraProcessedRule.scope).toBe('daily');
+    // 2 of 3 earlier entries plus this one: 3 of 4.
+    expect(ultraProcessedRule.level(ctx({ classification: nova, todayEntryCount: 3, todayNova4Entries: 2 }))).toBe('INFO');
+    // One NOVA 4 entry on a quiet day does nothing.
+    expect(ultraProcessedRule.level(ctx({ classification: nova }))).toBeNull();
+    expect(ultraProcessedRule.level(ctx({ classification: nova, todayEntryCount: 1, todayNova4Entries: 0 }))).toBeNull();
+  });
+  test('needs at least three entries, this one included, so one snack cannot trigger it', () => {
+    expect(ultraProcessedRule.level(ctx({ classification: nova, todayEntryCount: 1, todayNova4Entries: 1 }))).toBeNull(); // 2 of 2
+    expect(ultraProcessedRule.level(ctx({ classification: nova, todayEntryCount: 2, todayNova4Entries: 2 }))).toBe('INFO'); // 3 of 3
+  });
+  test('fires only on MORE than half: exactly half is silent', () => {
+    expect(ultraProcessedRule.level(ctx({ classification: nova, todayEntryCount: 3, todayNova4Entries: 1 }))).toBeNull(); // 2 of 4
+    expect(ultraProcessedRule.level(ctx({ classification: nova, todayEntryCount: 5, todayNova4Entries: 2 }))).toBeNull(); // 3 of 6
+    expect(ultraProcessedRule.level(ctx({ classification: nova, todayEntryCount: 4, todayNova4Entries: 3 }))).toBe('INFO'); // 4 of 5
+  });
+  test('silent unless the pending entry is itself NOVA 4, however the day went', () => {
+    expect(ultraProcessedRule.level(ctx({ classification: { novaGroup: 3 }, todayEntryCount: 5, todayNova4Entries: 5 }))).toBeNull();
+    expect(ultraProcessedRule.level(ctx({ todayEntryCount: 5, todayNova4Entries: 5 }))).toBeNull();
+  });
+  test('an empty or unreadable day is silence, not a share', () => {
+    expect(ultraProcessedRule.level(ctx({ classification: nova, emptyDay: true }))).toBeNull();
+    const c = ctx({ classification: nova, todayEntryCount: 3, todayNova4Entries: 3 });
+    c.today.nova4EntryCount = Number.NaN;
+    expect(ultraProcessedRule.level(c)).toBeNull();
+  });
+  test('discloses that it counts entries, not energy, and that the research measures a share of energy', () => {
+    expect(ultraProcessedRule.concern).toMatch(/counts entries, not energy/i);
+    expect(ultraProcessedRule.concern).toMatch(/share of energy/i);
+    expect(ultraProcessedRule.concern).toMatch(/indicator and not a measurement/i);
+  });
+  test("labels the share and the three-entry floor as the app's own choice", () => {
+    expect(ultraProcessedRule.concern).toMatch(/app's own choice[^.]*not a published figure/i);
+  });
+  test('portion note states the counts including this entry, and is free of NaN', () => {
+    const n = ultraProcessedRule.portionNote(ctx({ classification: nova, todayEntryCount: 3, todayNova4Entries: 2 }));
+    expect(n).toMatch(/3 of 4/);
+    expect(n).not.toMatch(/NaN|Infinity|undefined/);
   });
   test('states the category is broad and it is unclear whether processing or nutrients explain the link', () => {
     expect(ultraProcessedRule.concern).toMatch(/broad/i);
     expect(ultraProcessedRule.concern).toMatch(/unclear whether/i);
   });
   test('stays at INFO through the engine (evidence ceiling)', () => {
-    const out = evaluate([ultraProcessedRule], ctx({ classification: { novaGroup: 4 } }));
+    const out = evaluate([ultraProcessedRule], ctx({ classification: nova, todayEntryCount: 3, todayNova4Entries: 2 }));
     expect(out.cards.map((c) => c.level)).toEqual(['INFO']);
   });
 });

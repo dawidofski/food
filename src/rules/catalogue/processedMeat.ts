@@ -14,7 +14,11 @@ import { pendingGramsOf, weekCount, whole } from './shared';
  *
  * The weekly frequency rule below is INFO only. No source gives a number of occasions per week; three is the app's own
  * point for showing a count, and the card says so. It stays silent unless the pending entry itself has processed meat.
- * No alternatives: neither IARC nor WCRF names a replacement food, so any swap would be a taste, not evidence.
+ * One alternative, from WCRF's recommendation page (read at source): "Use alternatives to ham in your sandwiches. Try
+ * chicken, hard-boiled eggs, tinned tuna (in spring water), low-fat houmous or low-fat cream cheese." It is offered as WCRF
+ * words it, for sandwiches, and the reason claims no outcome. The same page says "Swap beef mince for turkey or
+ * vegetarian mince"; that is a red-meat swap and is not used here. WCRF's cancer-prevention recommendations page names no
+ * replacement foods, so nothing broader is claimed.
  * Both rules read classification flags, not nutrients, so they declare no required nutrients and the coverage gate does
  * not protect them. That is deliberate: there is no nutrient value to be unknown.
  */
@@ -34,6 +38,16 @@ const citation: Citation = {
     'Processed meat was classified as carcinogenic to humans (Group 1), based on sufficient evidence in humans that the ' +
     'consumption of processed meat causes colorectal cancer. The experts concluded that each 50 gram portion of ' +
     'processed meat eaten daily increases the risk of colorectal cancer by 18%.',
+};
+
+const wcrfAlternative: Citation = {
+  title: 'Limit red meat and avoid processed meat',
+  publisher: 'World Cancer Research Fund (WCRF)',
+  year: 2018,
+  url: 'https://www.wcrf.org/preventing-cancer/our-cancer-prevention-recommendations/limit-red-meat-and-avoid-processed-meat/',
+  conclusion:
+    'Use alternatives to ham in your sandwiches. Try chicken, hard-boiled eggs, tinned tuna (in spring water), ' +
+    'low-fat houmous or low-fat cream cheese.',
 };
 
 const evidence: Evidence = {
@@ -77,6 +91,13 @@ export const processedMeatRule: Rule = {
   cause:
     'Processed meat is meat transformed through salting, curing, fermentation, smoking or other processes to improve ' +
     'flavour or preservation, such as ham, sausages and hot dogs.',
+  alternatives: [
+    {
+      label: 'In sandwiches: chicken, hard-boiled egg, tinned tuna, low-fat houmous or low-fat cream cheese',
+      reason: 'WCRF suggests these as alternatives to ham in sandwiches.',
+      citation: wcrfAlternative,
+    },
+  ],
   level: (ctx) => (ctx.pending.classification.processedMeat ? 'HIGH' : null),
   portionNote: (ctx) => {
     const g = pendingGramsOf(ctx, 'processedMeat');
