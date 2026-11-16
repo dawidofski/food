@@ -57,6 +57,11 @@ function newId(): string {
 
 // ---- validation helpers ----
 
+/**
+ * Canonicalises any Date-parseable string to UTC ISO. WARNING: a string with no offset or Z
+ * (e.g. '2026-11-15T13:00:00') parses as LOCAL time and so shifts silently. Callers building day
+ * boundaries must pass `toISOString()` output or 'Z'-suffixed strings.
+ */
 function normaliseAt(at: string): string {
   const t = new Date(at).getTime();
   if (!Number.isFinite(t)) throw new RangeError(`Invalid datetime: ${at}`);
@@ -72,8 +77,23 @@ function assertFiniteValues(label: string, set: Record<string, number | undefine
 
 function assertEntryFinite(e: Omit<DiaryEntry, 'id'>): void {
   assertFiniteValues('nutrients', e.nutrients);
-  for (const it of e.items) {
-    if (!Number.isFinite(it.grams)) throw new RangeError(`item ${it.foodId} grams is not finite`);
+  assertRefsFinite(e.items);
+}
+
+function assertFiniteNumber(label: string, v: number): void {
+  if (!Number.isFinite(v)) throw new RangeError(`${label} is not finite`);
+}
+
+function assertRefsFinite(refs: { foodId: string; grams: number }[]): void {
+  for (const r of refs) assertFiniteNumber(`ref ${r.foodId} grams`, r.grams);
+}
+
+/** Aborts without letting an InvalidStateError (already auto-aborted) mask the real cause. */
+function safeAbort(tx: { abort(): void }): void {
+  try {
+    tx.abort();
+  } catch {
+    /* the transaction had already finished or aborted */
   }
 }
 
@@ -129,7 +149,7 @@ export async function reviseEntry(originalId: string, next: Omit<DiaryEntry, 'id
   const done = tx.done.catch(() => undefined);
   const original = await tx.store.get(originalId);
   if (!original || original.state !== 'active') {
-    tx.abort();
+    safeAbort(tx);
     await done;
     throw new Error(
       original
@@ -143,7 +163,7 @@ export async function reviseEntry(originalId: string, next: Omit<DiaryEntry, 'id
     await tx.store.put(revised);
     await tx.store.put({ ...original, state: 'superseded', supersededBy: revised.id });
   } catch (err) {
-    tx.abort();
+    safeAbort(tx);
     await done;
     throw err;
   }
@@ -152,20 +172,24 @@ export async function reviseEntry(originalId: string, next: Omit<DiaryEntry, 'id
 }
 
 /**
- * Tombstones an `active` row: it survives with `state: 'deleted'`. Any other row (missing,
- * already deleted, or superseded) is a silent no-op; in particular a superseded row keeps its
+ * Tombstones an `active` row: it survives with `state: 'deleted'`, and the result is `true`. Any
+ * other row (missing, already deleted, or superseded) is a no-op that returns `false`; in particular a superseded row keeps its
  * "replaced by a revision" fact and `supersededBy` link rather than being relabelled deleted.
  */
-export async function deleteEntry(id: string): Promise<void> {
+export async function deleteEntry(id: string): Promise<boolean> {
   const tx = (await db()).transaction('entries', 'readwrite');
   const row = await tx.store.get(id);
-  if (row && row.state === 'active') await tx.store.put({ ...row, state: 'deleted' });
+  const live = row !== undefined && row.state === 'active';
+  if (live) await tx.store.put({ ...row, state: 'deleted' });
   await tx.done;
+  return live;
 }
 
 // ---- custom foods ----
 
 export async function putCustomFood(f: CustomFood): Promise<void> {
+  assertFiniteValues('nutrientsPer100g', f.nutrientsPer100g);
+  assertFiniteNumber('referencePortion.grams', f.referencePortion.grams);
   await (await db()).put('customFoods', f);
 }
 
@@ -184,6 +208,8 @@ export async function putBatch(b: Batch): Promise<void> {
   if (!Number.isFinite(b.portionsRemaining) || !Number.isFinite(b.portionCount)) {
     throw new RangeError('batch portion counts must be finite');
   }
+  if (b.totalCookedGrams !== undefined) assertFiniteNumber('totalCookedGrams', b.totalCookedGrams);
+  for (const ing of b.ingredients) assertRefsFinite(ing.refs);
   await (await db()).put('batches', b);
 }
 
@@ -228,12 +254,16 @@ export async function putProfile(p: Profile): Promise<void> {
  * midway never leaves the personal data behind while the entries are already gone.
  */
 export async function eraseEverything(): Promise<void> {
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k?.startsWith(LS_PREFIX)) keys.push(k);
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(LS_PREFIX)) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch {
+    // Storage disabled or blocked: still wipe IndexedDB rather than wipe nothing.
   }
-  keys.forEach(k => localStorage.removeItem(k));
 
   const d = await db();
   const tx = d.transaction(['entries', 'customFoods', 'batches'], 'readwrite');

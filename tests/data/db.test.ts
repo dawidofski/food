@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   allBatches,
   allCustomFoods,
@@ -153,7 +153,7 @@ describe('beyond the brief', () => {
   });
 
   test('deleteEntry on a missing id neither throws nor creates a row', async () => {
-    await expect(deleteEntry('ghost')).resolves.toBeUndefined();
+    await expect(deleteEntry('ghost')).resolves.toBe(false);
     expect(await allEntriesIncludingTombstones()).toEqual([]);
   });
 
@@ -352,5 +352,90 @@ describe('review fixes: erase', () => {
     expect(await getProfile()).toBeNull();
     expect(localStorage.getItem('other.app')).toBe('keep');
     localStorage.removeItem('other.app');
+  });
+});
+
+describe('round 3: custom foods, batch fields, delete result, erase, abort', () => {
+  const customFood = (over: Partial<CustomFood> = {}): CustomFood => ({
+    id: 'cf',
+    name: 'x',
+    nutrientsPer100g: { energyKcal: 100 },
+    classification: flags,
+    allergens: [],
+    referencePortion: { label: '1 serving', grams: 50 },
+    synonyms: [],
+    ...over,
+  });
+
+  test.each([NaN, Infinity, -Infinity])('putCustomFood rejects %s in nutrientsPer100g', async bad => {
+    await expect(putCustomFood(customFood({ nutrientsPer100g: { proteinG: bad } }))).rejects.toThrow();
+    expect(await getCustomFood('cf')).toBeUndefined();
+  });
+
+  test.each([NaN, Infinity])('putCustomFood rejects %s referencePortion grams', async bad => {
+    await expect(putCustomFood(customFood({ referencePortion: { label: 'x', grams: bad } }))).rejects.toThrow();
+    expect(await getCustomFood('cf')).toBeUndefined();
+  });
+
+  test('putCustomFood keeps an absent key absent and a real 0 as 0', async () => {
+    await putCustomFood(customFood({ nutrientsPer100g: { energyKcal: 0 } }));
+    expect((await getCustomFood('cf'))!.nutrientsPer100g).toStrictEqual({ energyKcal: 0 });
+  });
+
+  test.each([NaN, Infinity])('putBatch rejects %s totalCookedGrams', async bad => {
+    await expect(putBatch(batch({ id: 'b', totalCookedGrams: bad }))).rejects.toThrow();
+    expect(await getBatch('b')).toBeUndefined();
+  });
+
+  test.each([NaN, Infinity])('putBatch rejects %s in ingredient ref grams', async bad => {
+    const ingredients = [{ text: 'rice', refs: [{ source: 'dataset' as const, foodId: 'r', grams: bad }] }];
+    await expect(putBatch(batch({ id: 'b', ingredients }))).rejects.toThrow();
+    expect(await getBatch('b')).toBeUndefined();
+  });
+
+  test('putBatch accepts an absent totalCookedGrams and finite ref grams', async () => {
+    const ingredients = [{ text: 'rice', refs: [{ source: 'dataset' as const, foodId: 'r', grams: 80 }] }];
+    await putBatch(batch({ id: 'ok', ingredients }));
+    expect((await getBatch('ok'))!.ingredients).toStrictEqual(ingredients);
+  });
+
+  test('deleteEntry returns true only when it tombstoned an active row', async () => {
+    await addEntry(entry({ id: 'a' }));
+    expect(await deleteEntry('a')).toBe(true);
+    expect(await deleteEntry('a')).toBe(false);
+    expect(await deleteEntry('ghost')).toBe(false);
+    await addEntry(entry({ id: 's' }));
+    await reviseEntry('s', entryFields());
+    expect(await deleteEntry('s')).toBe(false);
+  });
+
+  test('eraseEverything still clears IndexedDB when the localStorage sweep throws', async () => {
+    await addEntry(entry({ id: 'a' }));
+    await putCustomFood(customFood());
+    localStorage.setItem(`${LS_PREFIX}settings`, '{}');
+    const spy = vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+    try {
+      await expect(eraseEverything()).resolves.toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await allEntriesIncludingTombstones()).toEqual([]);
+    expect(await allCustomFoods()).toEqual([]);
+  });
+
+  test('a failing put surfaces the original error, not an abort InvalidStateError', async () => {
+    await addEntry(entry({ id: 'a' }));
+    const unclonable = (() => 1) as unknown as string;
+    const next = entryFields({ items: [{ source: 'dataset', foodId: 'x', grams: 1, portionLabel: unclonable }] });
+    const err = await reviseEntry('a', next).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    expect(err).not.toBeNull();
+    expect(err!.name).not.toBe('InvalidStateError');
+    expect((await getEntry('a'))!.state).toBe('active');
+    expect(await allEntriesIncludingTombstones()).toHaveLength(1);
   });
 });
