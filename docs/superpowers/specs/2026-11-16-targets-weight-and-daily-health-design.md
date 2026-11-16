@@ -192,12 +192,14 @@ The rules read `ctx.targets` directly, and several targets are derived as a shar
 nutrient-density denominators too — warnings firing at different points because someone set a goal. The resolution
 is not to freeze them, but to follow each guideline's own basis:
 
-- **Expressed by its source as a share of energy intake** — saturated fat, added sugars, fibre: these follow the
-  energy target the person is actually eating to. WHO's figure is 10% of total energy *intake*, not 10% of
-  expenditure, so on a 2,100 kcal target the ceiling is 52 g, and that is the guideline applied correctly rather
-  than the app moving the goalposts. A tighter intake genuinely does carry a tighter absolute allowance.
-- **Expressed by its source as an absolute amount** — sodium (2,000 mg/day), trans fat, the micronutrient
-  reference intakes: unchanged by the goal. These never move.
+- **Expressed by its source as a share of energy intake** — saturated fat, added sugars, **trans fat** and fibre:
+  these follow the energy target the person is actually eating to. WHO's figure is 10% of total energy *intake*,
+  not 10% of expenditure, so on a 2,100 kcal target the ceiling is 52 g, and that is the guideline applied
+  correctly rather than the app moving the goalposts. A tighter intake genuinely does carry a tighter absolute
+  allowance. (Trans fat belongs here, not below: `targets.ts` already derives it as 1% of energy, matching how its
+  source states it. An earlier draft of this document listed it as absolute, which was simply wrong.)
+- **Expressed by its source as an absolute amount** — sodium (2,000 mg/day) and the micronutrient reference
+  intakes: unchanged by the goal. These never move.
 - **Protein** is per kg of body weight, so the goal moves it only through §6's rule (2.0 g/kg while losing).
 
 `Targets` therefore stays a single structure and is **not** split into a rule-facing and a display-facing view:
@@ -396,3 +398,76 @@ worse here than one that explains its limit.
 5. Diary rebuild: meals, the day's figures, the composer, icon nav.
 6. Weight page.
 7. Weekly copy and reminder.
+
+---
+
+# Addendum — further uses of the optional DeepSeek fallback
+
+Added 2026-11-16 at the owner's request, after the main design was approved. Has its own plan.
+
+## The line this addendum does not cross
+
+`src/ai/deepseek.ts` already states it: "the model resolves LANGUAGE, the dataset resolves NUTRITION." The model
+gets one unresolved phrase, returns a plain-English description, and the app searches its own database with it. It
+is never shown the dataset, never names a dataset entry, and is never asked for a nutrient value. The response is
+validated to an exact shape and treated as hostile; every failure returns an empty list and never throws.
+
+**Every use below keeps that line.** The model may supply *structure* (what components a dish has, what a list of
+ingredients contains) and *language* (what a foreign word means). It may not supply nutrition, may not pick a
+food, and may not generate a health claim. One use — reading a label photo — comes nearer the line than the rest
+and is fenced accordingly (§A4).
+
+Also unchanged: the whole path stays optional and off until a key is entered and the switch turned on, and the
+privacy disclosure in Settings must be updated to match whatever is actually sent, before any of it ships.
+
+## A0. The model name is probably wrong already
+
+`DEEPSEEK_MODEL = 'deepseek-chat'`. DeepSeek's own Models & Pricing page (read 2026-11-16) lists exactly two
+models, `deepseek-flash` (DeepSeek-V4.1-Flash-1017) and `deepseek-v4-pro`, and `deepseek-chat` is not among them.
+Legacy names are noted as still accepted for the retired Flash builds; `deepseek-chat` is not one of the names
+that note covers. Verify against a live key and move to `deepseek-flash`, which is also the cheaper model and the
+only one of the two with vision. Do this first: every other item here depends on the call working.
+
+## A1. Composite dishes — the largest real gap
+
+"chicken tikka masala with rice and naan" resolves badly, because the parser matches a phrase to a single food.
+The model decomposes a dish into components with rough proportions; the app looks each component up in its own
+database; the person adjusts the amounts and confirms. The model supplies the *list*, never a number that reaches
+the diary — the proportions are a starting point the person edits, and must be presented as such.
+
+## A2. Spanish — verify before building
+
+The owner shops in Spain and the dataset is US survey foods. The existing prompt already asks the model to
+describe an unrecognised word in plain English, so Spanish food words may already work end to end. **Test this
+before writing anything.** What probably does need work is upstream of the fallback: Spanish quantity words
+("una loncha", "un puñado", "medio") that the local parser mishandles before the phrase ever reaches the model.
+That is a parser fix, not an AI feature, and must not be built as one.
+
+## A3. Meal-prep ingredient lists
+
+The feature the owner asked for at the very start, finished. "I made a lasagna with 500 g beef, 400 g pasta, two
+jars of sauce" is a list; turning free text into a structured list is the same operation as A1 and uses the same
+validated shape. It feeds the existing batch builder, which already divides a total into portions.
+
+## A4. Reading a nutrition label from a photo
+
+The most useful for Spanish supermarket own-brands, which are exactly what Open Food Facts covers worst, and the
+only item here where the model reads numbers. Fences, all required:
+
+- It fills in the **custom food form**, every field editable, and nothing is saved until the person confirms. This
+  is the same standing as a figure typed from a packet, and it carries the existing self-reported badge.
+- A field the model did not read is left **blank, not zero**. The central invariant does not bend for a photo.
+- The photo is sent to a third party. The disclosure must say so plainly, and this must be its own switch, not
+  covered by the existing one.
+- Requires `deepseek-flash`; `deepseek-v4-pro` has no vision. Depends on A0.
+
+## Rejected, with reasons
+
+- **Explaining or paraphrasing a warning.** Every card carries a verbatim conclusion from WHO, IARC or EFSA,
+  stored offline. A paraphrase is how an app ends up stating something no source said. The discipline is the
+  product.
+- **Generated alternatives.** The rules already carry sourced ones, under the standing rule that an alternative
+  with no citation is a taste, not evidence. A generated one is a taste.
+- **Weekly summaries of the diary.** Settings currently promises that "your diary, your profile, your targets and
+  your totals are never sent". A summary breaks that promise. Not rejected on principle — it is the owner's data
+  — but it would need its own switch and its own disclosure, and is out of scope here.
