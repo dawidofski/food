@@ -20,7 +20,7 @@ export type Alternative = {
   label: string;
   reason: string;
   /** The source's own replacement advice. An alternative with no citation is a taste, not evidence. */
-  citation?: Citation;
+  citation: Citation;
 };
 
 export type Evidence = {

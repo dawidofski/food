@@ -708,3 +708,17 @@ Rules fixed after review (same task):
 - **No daily trans-fat rule.** Trans fat is checked per entry only. A day's excess spread over several entries, none of
   which exceeds the whole-day figure alone, stays silent. A daily rule would also need trans-fat day coverage, which USDA
   data often lacks.
+
+Second review round:
+
+- **Sodium evidence rating, read at source.** The ratings were read directly in the text of WHO's "Guideline: Sodium
+  intake for adults and children" (2012), fetched as a PDF and extracted: "The evidence regarding the relationship
+  between sodium intake and blood pressure was of high quality, whereas the evidence regarding sodium intake and
+  all-cause mortality, cardiovascular disease, stroke and coronary heart disease was of lower quality." The two
+  sodium cards now state this in their concern text: the strong rating is for blood pressure, and the mortality,
+  cardiovascular, stroke and coronary evidence is rated lower quality. A test requires every 'strong' rule to say so.
+- **Alternatives claim only what their citation says.** The saturated-fat alternative no longer mentions LDL
+  cholesterol: its citation supports the replacement advice, not the mechanism. A test rejects any outcome or
+  mechanism word in an alternative's reason that its own citation does not contain.
+- **`Alternative.citation` is required** in the type, so an alternative without a source no longer compiles. The engine
+  copies it per card, so a card cannot mutate the catalogue's citation.

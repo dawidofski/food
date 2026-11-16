@@ -164,7 +164,7 @@ export function evaluate(rules: Rule[], ctx: Context): { cards: WarningCard[]; q
         evidence: { ...rule.evidence, citation: { ...rule.evidence.citation } },
         horizon: rule.horizon,
         portionNote,
-        alternatives: (rule.alternatives ?? []).map((x) => ({ ...x })),
+        alternatives: (rule.alternatives ?? []).map((x) => ({ ...x, citation: { ...x.citation } })),
         ...(rule.nutrientKey ? { nutrientKey: rule.nutrientKey } : {}),
         ...(res.notes.length ? { dataNote: res.notes.join(' ') } : {}),
       },

@@ -92,6 +92,11 @@ describe.each(catalogue)('$id', (rule) => {
       if (!a.citation) continue;
       expect(citationProblems(a.citation)).toEqual([]);
       expect(a.citation.conclusion).toMatch(/replac/i);
+      // The reason may name no outcome or mechanism that its own citation does not state.
+      const OUTCOME = /\b(LDL|cholesterol|blood pressure|heart|cardiovascular|mortality|death|stroke|diabetes|weight|caries|lowers?|lowered|reduc\w+)\b/gi;
+      for (const m of a.reason.match(OUTCOME) ?? []) {
+        expect(a.citation.conclusion.toLowerCase(), `reason claims "${m}" that its citation does not support`).toContain(m.toLowerCase());
+      }
     }
   });
 
@@ -111,6 +116,13 @@ describe.each(catalogue)('$id', (rule) => {
     if (rule.evidence.strength === 'limited' || rule.evidence.strength === 'uncertain') {
       for (const p of probes[rule.id] ?? []) expect(['INFO', 'MODERATE']).toContain(rule.level(p.ctx));
     }
+  });
+
+  test("a 'strong' rating is bounded in the card text: it names the outcome it covers and what is rated lower", () => {
+    if (rule.evidence.strength !== 'strong') return;
+    expect(rule.concern).toMatch(/strong rating is for blood pressure/i);
+    expect(rule.concern).toMatch(/lower quality/i);
+    expect(rule.concern).toMatch(/mortality[^.]*cardiovascular[^.]*stroke[^.]*coronary/i);
   });
 
   test('no probe reaches HIGH: size of one day or entry does not escalate, frequency would', () => {

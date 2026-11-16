@@ -39,7 +39,9 @@ export const sodiumEntryRule: Rule = {
   evidence,
   concern:
     'This entry alone has more sodium than the whole-day figure WHO recommends for adults. WHO sets no limit for a ' +
-    'single serving, so this card marks the circumstance and is not a threshold.',
+    'single serving, so this card marks the circumstance and is not a threshold. ' +
+    "WHO's strong rating is for blood pressure over time. WHO rates the evidence for mortality, cardiovascular disease, " +
+    'stroke and coronary heart disease as lower quality, and that evidence concerns usual intake.',
   cause: 'Sodium comes mostly from salt and from salted or processed ingredients.',
   level: (ctx) => {
     const sodium = pending(ctx, 'sodiumMg');
@@ -66,7 +68,9 @@ export const sodiumDailyRule: Rule = {
   evidence,
   concern:
     "With this entry, today's logged sodium is above the figure WHO recommends for average daily intake. The " +
-    'figure describes usual intake over time, so one day above it is not by itself a problem.',
+    'figure describes usual intake over time, so one day above it is not by itself a problem. ' +
+    "WHO's strong rating is for blood pressure over time. WHO rates the evidence for mortality, cardiovascular disease, " +
+    'stroke and coronary heart disease as lower quality, and that evidence concerns usual intake.',
   cause: 'Sodium comes mostly from salt and from salted or processed ingredients.',
   level: (ctx): Level | null => {
     const total = projectedDay(ctx, 'sodiumMg');

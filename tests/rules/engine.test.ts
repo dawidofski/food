@@ -272,15 +272,18 @@ describe('evaluate (additional invariants)', () => {
   });
 
   test('a card does not alias the catalogue: mutating it leaves the rule untouched', () => {
-    const rule = stub('alias', () => 'INFO', { alternatives: [{ label: 'a', reason: 'r' }] });
+    const cite = { title: 'at', publisher: 'p', year: 2020, url: 'https://example.org', conclusion: 'a replacement conclusion' };
+    const rule = stub('alias', () => 'INFO', { alternatives: [{ label: 'a', reason: 'r', citation: cite }] });
     const card = evaluate([rule], ctx()).cards[0]!;
     card.evidence.summary = 'changed';
     card.evidence.citation.title = 'changed';
     card.alternatives[0]!.label = 'changed';
-    card.alternatives.push({ label: 'x', reason: 'y' });
+    card.alternatives[0]!.citation.title = 'changed';
+    card.alternatives.push({ label: 'x', reason: 'y', citation: cite });
     expect(rule.evidence.summary).toBe('summary');
     expect(rule.evidence.citation.title).toBe('t');
-    expect(rule.alternatives).toEqual([{ label: 'a', reason: 'r' }]);
+    expect(rule.alternatives).toEqual([{ label: 'a', reason: 'r', citation: cite }]);
+    expect(cite.title).toBe('at');
   });
 
   test('a day with entries but no nutrient data is not an empty day: a daily rule stays silent', () => {

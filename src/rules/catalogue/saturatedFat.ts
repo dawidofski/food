@@ -42,7 +42,7 @@ export const saturatedFatDailyRule: Rule = {
   alternatives: [
     {
       label: 'Polyunsaturated fat in place of saturated fat',
-      reason: 'WHO strongly recommends replacing saturated fat with polyunsaturated fat, which lowered LDL cholesterol in trials.',
+      reason: 'WHO strongly recommends replacing saturated fat with polyunsaturated fat.',
       citation: {
         title: citation.title, publisher: citation.publisher, year: citation.year, url: citation.url,
         conclusion:
