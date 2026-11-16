@@ -48,15 +48,10 @@ function median(xs: number[]): number {
   return s.length % 2 === 1 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 }
 
-/**
- * A day's figure is usable only when every counted entry knew it and it covers the day's energy: the Missing view's rule.
- * Stricter on one point: `dayTotals` sees only whether a key is PRESENT, so an entry whose own coverage says 'partial'
- * (one item of a mixed dish had no figure) would pass as known. Such a day is a floor, not a typical day.
- */
-function completeValue(d: DayTotals, dayEntries: DiaryEntry[], key: NutrientKey): number | undefined {
+/** A day's figure is usable only when every counted entry knew it and it covers the day's energy: the Missing view's rule. */
+function completeValue(d: DayTotals, key: NutrientKey): number | undefined {
   const v = d.nutrients[key];
   if (!isKnownValue(v) || d.coverage[key] !== 'known' || d.energyCoveredShare[key] < 0.999) return undefined;
-  if (dayEntries.some((e) => e.coverage[key] === 'partial')) return undefined;
   return v;
 }
 
@@ -90,7 +85,7 @@ export function weeklyTrends(entries: DiaryEntry[], now: Date, weeks = 12): Tren
         metrics[key] = THIN;
         continue;
       }
-      const vals = logged.map((d) => completeValue(d, byDay.get(d.dayKey) ?? [], key)).filter((v): v is number => v !== undefined);
+      const vals = logged.map((d) => completeValue(d, key)).filter((v): v is number => v !== undefined);
       metrics[key] = vals.length >= MIN_LOGGED_DAYS ? { status: 'value', value: median(vals), days: vals.length } : { status: 'unknown' };
     }
 

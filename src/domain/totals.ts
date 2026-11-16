@@ -79,6 +79,11 @@ function entriesOn(entries: DiaryEntry[], dayKey: string): DiaryEntry[] {
 function buildDay(entries: DiaryEntry[], dayKey: string): DayTotals {
   const day = entriesOn(entries, dayKey);
   const { total, coverage } = sumNutrients(day.map((e) => e.nutrients));
+  // sumNutrients sees only values, so it cannot tell that an entry's figure is itself a floor (some of its items had no
+  // figure). An entry whose own coverage says 'partial' makes the day's figure partial, never known.
+  for (const key of NUTRIENT_KEYS) {
+    if (coverage[key] === 'known' && day.some((e) => e.coverage?.[key] === 'partial')) coverage[key] = 'partial';
+  }
 
   let energy = 0;
   for (const e of day) {
@@ -91,7 +96,7 @@ function buildDay(entries: DiaryEntry[], dayKey: string): DayTotals {
     if (energy > 0) {
       for (const e of day) {
         const k = e.nutrients.energyKcal;
-        if (isKnownValue(k) && k > 0 && isKnownValue(e.nutrients[key])) covered += k;
+        if (isKnownValue(k) && k > 0 && isKnownValue(e.nutrients[key]) && e.coverage?.[key] !== 'partial') covered += k;
       }
     }
     energyCoveredShare[key] = energy > 0 ? covered / energy : 0;
