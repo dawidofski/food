@@ -378,4 +378,17 @@ describe('the screens and the warning engine agree about the energy figure', () 
     expect(onMissing).toBe(line.textContent);
     expect(onMissing).toMatch(/5 of the last 7 days/);
   });
+
+  // Finding 5's clause is in the shared wording module, so it must be byte-identical on both screens like the rest of it.
+  test('the two screens say the same thing while the burn is still being collected', async () => {
+    await putProfile(ownerProfile);
+    await seedBurn(3000, 2);
+    render(<Missing />);
+    const onMissing = (await screen.findByTestId('energy-source')).textContent;
+    expect(onMissing).toContain('once 4 of the last 7 days, ending yesterday, carry a figure; 2 do so far.');
+    cleanup();
+    render(<ProfileSettings />);
+    const line = await screen.findByText(/^Energy:/);
+    expect(onMissing).toBe(line.textContent);
+  });
 });

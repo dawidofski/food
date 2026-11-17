@@ -27,9 +27,13 @@ export function reportedWindowKeys(on: Date): string[] {
 }
 
 export type ReportedExpenditure = {
-  /** Whole kcal: the mean of the usable days. This is the only figure that may be handed to `computeTargets`. */
-  kcal: number;
-  /** How many of the window's days carried a usable figure, so a screen can say what the mean was taken over. */
+  /**
+   * Whole kcal: the mean of the usable days, and the only figure that may be handed to `computeTargets`. ABSENT, never
+   * zero, when fewer than `MIN_LOGGED_DAYS` of the window's days carry a figure: the formula is used then, and `days`
+   * still says how many have arrived, so a screen can say how far off the switch-over is.
+   */
+  kcal?: number;
+  /** How many of the window's days carried a usable figure, whether or not that reached the minimum. */
   days: number;
 };
 
@@ -38,7 +42,9 @@ export type ReportedExpenditure = {
  * kcal, with the number of days it was taken over. Today is left out because the day is not over and its figure would be a partial.
  *
  * A day with no burn figure is absent, not zero: it is skipped, never averaged in (a day with only steps would otherwise
- * lower the energy target). Undefined when fewer than `MIN_LOGGED_DAYS` days carry a usable figure, so the formula is used.
+ * lower the energy target). Below `MIN_LOGGED_DAYS` usable days there is no `kcal` at all, so the formula is used; the
+ * day count is still reported, because a feature that silently collects for three days reads as broken. Undefined only
+ * when `on` is not a real date, which is a programming error rather than a state of the data.
  */
 export function reportedExpenditureOver(days: HealthDay[], on: Date): ReportedExpenditure | undefined {
   if (!Number.isFinite(on.getTime())) return undefined;
@@ -48,7 +54,7 @@ export function reportedExpenditureOver(days: HealthDay[], on: Date): ReportedEx
     const v = usableBurn(d);
     if (v !== undefined && window.has(d.date)) byDate.set(d.date, v);
   }
-  if (byDate.size < MIN_LOGGED_DAYS) return undefined;
+  if (byDate.size < MIN_LOGGED_DAYS) return { days: byDate.size };
   let sum = 0;
   for (const v of byDate.values()) sum += v;
   return { kcal: Math.round(sum / byDate.size), days: byDate.size };

@@ -277,7 +277,8 @@ describe('where the energy figure came from', () => {
     expect(line).toHaveTextContent(/Mifflin-St Jeor equation, multiplied by your activity level/i);
     expect(line).toHaveTextContent(/light, a factor of 1\.375/);
     expect(line).toHaveTextContent(/this app's own working figure/i);
-    expect(line).not.toHaveTextContent(/reported/i);
+    // The burn is not the figure yet. It is named only as the thing still being collected (see the gate tests below).
+    expect(line).not.toHaveTextContent(/your own reported energy burn, averaged over/i);
   });
 
   test('a stored figure no day produces never becomes the energy figure or the sentence', async () => {
@@ -285,7 +286,57 @@ describe('where the energy figure came from', () => {
     await open();
     const line = await screen.findByText(/^Energy:/);
     expect(line).toHaveTextContent(/multiplied by your activity level/i);
-    expect(line).not.toHaveTextContent(/reported/i);
+    expect(line).not.toHaveTextContent(/reported/i); // not even counted towards the gate
+  });
+
+  // Finding 4, spec section 8.1: the sentence must also say the targets depend on the expenditure figure being right.
+  test.each([
+    ['a reported burn', 5, /your own reported energy burn/],
+    ['the formula', 0, /multiplied by your activity level/],
+  ])('with %s the sentence says the targets assume that figure is right', async (_n, count, names) => {
+    if (count > 0) await seedBurn(3000, count);
+    await open();
+    const line = await screen.findByText(/^Energy:/);
+    expect(line.textContent).toMatch(names);
+    expect(line.textContent).toMatch(/These targets assume that figure is right\./);
+  });
+
+  test('the general-adult sentence says it too, because those targets rest on a figure as well', async () => {
+    await open({ ...ownerProfile, weightLog: [] });
+    const line = await screen.findByText(/^Energy:/);
+    expect(line.textContent).toMatch(/These targets assume that figure is right\./);
+  });
+
+  test('a typed energy figure is not second-guessed back at the person', async () => {
+    await open({ ...ownerProfile, overrides: { energyKcal: 2500 } });
+    const line = await screen.findByText(/^Energy:/);
+    expect(line.textContent).not.toMatch(/assume that figure is right/);
+  });
+
+  // Finding 5: the gate was invisible, so three days of dutiful typing looked like a broken feature.
+  test.each([[1, '1 does so far'], [2, '2 do so far'], [3, '3 do so far']])(
+    'with %i reported day(s) the sentence says how many of the needed days are present',
+    async (count, tail) => {
+      await seedBurn(3000, count);
+      await open();
+      const line = await screen.findByText(/^Energy:/);
+      expect(line.textContent).toMatch(/multiplied by your activity level/);
+      expect(line.textContent).toContain(`Your own reported energy burn replaces the activity level once 4 of the last 7 days, ending yesterday, carry a figure; ${tail}.`);
+    },
+  );
+
+  test('with no reported day there is no such clause, because nothing has been collected', async () => {
+    await open();
+    const line = await screen.findByText(/^Energy:/);
+    expect(line.textContent).not.toMatch(/replaces the activity level once/);
+  });
+
+  test('once the gate opens the clause is gone and the burn is the figure', async () => {
+    await seedBurn(3000, 4);
+    await open();
+    const line = await screen.findByText(/^Energy:/);
+    expect(line.textContent).toMatch(/averaged over 4 of the last 7 days/);
+    expect(line.textContent).not.toMatch(/replaces the activity level once/);
   });
 
   test('a typed energy figure is described as the person\'s own, even with a reported burn', async () => {
