@@ -339,11 +339,43 @@ describe('the screens and the warning engine agree about the energy figure', () 
       await seedEntry();
       render(<Missing />);
       const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
-      expect(note).toMatch(/The fibre rule is this app.s own working figure, not a published recommendation\./);
       expect(note).not.toMatch(/goal offset/i);
-      expect(note).not.toMatch(/activity factor/i);
+      // Nothing in the note claims anything was added to, or worked out from, the energy target: the person set it.
+      expect(note).not.toMatch(/energy target/i);
       // The energy sentence and the note now give one account: the figure is the person's own, and nothing moved it.
       expect((screen.getByTestId('energy-source')).textContent).toBe('Energy: your own figure, not calculated by the app.');
+    });
+
+    /**
+     * `computeTargets` overlays `energyKcal` alone, so the four share-derived limits on this screen still rest on the
+     * activity factor. Dropping the credit would leave four figures on screen with no source at all; crediting it for
+     * the energy target would be false. Both halves are pinned here.
+     */
+    test('a typed energy figure still credits the activity factor, attached to the limits it produced', async () => {
+      await putProfile({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 }, overrides: { energyKcal: 2000 } });
+      await seedEntry();
+      render(<Missing />);
+      const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
+      // Credited, and said of the four figures that actually depend on it.
+      expect(note).toContain(
+        'The saturated fat, added sugars, trans fat and fibre limits were worked out from the energy the app calculated rather than from your own figure, a resting energy multiplied by an activity factor.',
+      );
+      expect(note).toMatch(/The activity factor and the fibre rule are this app.s own working figures, not a published recommendation\./);
+      // Never as the source of the energy target: that phrase appears nowhere in the note on this path, and the sentence
+      // above the note says the energy figure is the person's own.
+      expect(note).not.toMatch(/energy target/i);
+      expect((screen.getByTestId('energy-source')).textContent).toBe('Energy: your own figure, not calculated by the app.');
+    });
+
+    test('a typed energy figure with a reported burn credits no activity factor, because none was used', async () => {
+      await putProfile({ ...ownerProfile, overrides: { energyKcal: 2000 } });
+      await seedBurn(3000, 5);
+      await seedEntry();
+      render(<Missing />);
+      const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
+      expect(note).not.toMatch(/activity factor/i);
+      expect(note).not.toMatch(/saturated fat, added sugars, trans fat and fibre limits/i);
+      expect(note).toMatch(/The fibre rule is this app.s own working figure, not a published recommendation\./);
     });
 
     test('a reported burn does not credit an activity factor, which it replaced', async () => {

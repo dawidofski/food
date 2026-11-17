@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { entriesBetween, getProfile, putProfile } from '@/data/db';
 import { loadReportedEnergy } from '@/data/reportedEnergy';
 import type { healthDaysBetween } from '@/data/healthDays';
-import { energySourceSentence } from '@/domain/energySource';
+import { energySourceSentence, sharedLimitsFactorClause } from '@/domain/energySource';
 import type { ReportedExpenditure } from '@/domain/expenditure';
 import { last7DayKeys, localDayKey, localDayRange } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
@@ -75,14 +75,18 @@ const plural = (n: number, one: string, many: string): string => `${n} ${n === 1
  * The footnote that says which of the figures behind the bars are this app's own working figures.
  *
  * It keys on what PRODUCED those figures — `basis.energy` and `basis.expenditure`, the same pair `energySource.ts` reads —
- * and not on whether the profile is generic. An activity factor is named only when the energy sentence above it names one:
- * a reported burn replaces the factor outright, and a typed energy figure is not multiplied by anything. A goal offset is
- * named only where one can reach the energy target: never on the generic basis, and never under a typed energy figure,
- * which `computeTargets` overlays while deleting `goalCapped`, so the goal moves the target by nothing at all.
+ * and not on whether the profile is generic. The activity factor is credited whenever the formula produced an expenditure
+ * figure, which is still true under a typed energy figure: `computeTargets` overlays `energyKcal` alone, so the four
+ * share-derived limits on this screen keep the values the factor produced. Where the energy sentence above does not name
+ * the factor, `sharedLimitsFactorClause` says which figures it stands behind, so the credit is never orphaned and never
+ * reads as the source of the energy target. A reported burn replaced the factor outright, so nothing credits it then.
+ *
+ * A goal offset is named only where one can reach the energy target: never on the generic basis, and never under a typed
+ * energy figure, which `computeTargets` overlays while deleting `goalCapped`, so the goal moves the target by nothing.
  */
 function ownTargetsNote(basis: Targets['basis'], isGeneric: boolean): string {
   const typed = basis.energy === 'custom';
-  const usesFactor = !typed && basis.expenditure === 'formula';
+  const usesFactor = basis.expenditure === 'formula';
   const usesGoal = !typed && !isGeneric;
   const own = [...(usesFactor ? ['the activity factor'] : []), ...(usesGoal ? ['the goal offset'] : []), 'the fibre rule'];
   const credit =
@@ -90,7 +94,8 @@ function ownTargetsNote(basis: Targets['basis'], isGeneric: boolean): string {
       ? `${own[0]!} is this app’s own working figure`
       : `${own.slice(0, -1).join(', ')} and ${own[own.length - 1]!} are this app’s own working figures`;
   const lead = usesGoal ? 'Any goal offset is added to the energy target; the' : 'The';
-  return `${lead} fibre target is 14 g per 1,000 kcal, at least 30 g. ${credit[0]!.toUpperCase()}${credit.slice(1)}, not a published recommendation.`;
+  const limits = sharedLimitsFactorClause(basis);
+  return `${lead} fibre target is 14 g per 1,000 kcal, at least 30 g.${limits === undefined ? '' : ` ${limits}`} ${credit[0]!.toUpperCase()}${credit.slice(1)}, not a published recommendation.`;
 }
 
 function dayLabel(key: string): string {

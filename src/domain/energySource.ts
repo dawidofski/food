@@ -57,3 +57,27 @@ export function energySourceSentence(
       : '';
   return `Energy: resting energy from ${resting}, multiplied by your activity level${factor}. ${ASSUMES_FIGURE}${collecting}`;
 }
+
+/**
+ * Where the four share-derived limits came from when the person typed their own energy figure, and nothing else on the
+ * screen accounts for them.
+ *
+ * `computeTargets` overlays only the keys the person typed, so with `overrides.energyKcal` set the saturated fat, added
+ * sugars, trans fat and fibre limits keep the values `derive` computed — a resting rate times the activity factor,
+ * goal-adjusted. The activity factor therefore still stands behind four figures on screen, and an unlabelled threshold
+ * is not shown (invariant 2). The energy sentence above says the energy figure is the person's own, so the credit must
+ * be attached to the limits and never to energy.
+ *
+ * Undefined where there is nothing to say: a calculated energy target already names the factor in its own sentence, and
+ * a reported burn means no activity factor was used at all.
+ *
+ * It deliberately does NOT call the limits a share of the displayed energy target, because they are not: they are a
+ * share of the figure the person's own replaced. That mismatch is pre-existing, changes nutrition targets, and is
+ * recorded for its own decision rather than fixed in a wording pass.
+ */
+export function sharedLimitsFactorClause(basis: Targets['basis']): string | undefined {
+  if (basis.energy !== 'custom' || basis.expenditure !== 'formula') return undefined;
+  // Not "your resting energy": on the general-adult basis it is a stand-in figure and attributing it to the person would
+  // be the untruth this branch has been careful to avoid.
+  return 'The saturated fat, added sugars, trans fat and fibre limits were worked out from the energy the app calculated rather than from your own figure, a resting energy multiplied by an activity factor.';
+}
