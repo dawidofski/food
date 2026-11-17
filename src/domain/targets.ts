@@ -116,6 +116,21 @@ export function currentWeightKg(p: Profile): number | undefined {
   return best?.kg;
 }
 
+/**
+ * The range of body-fat percentage the app will use to switch to lean-mass resting metabolism. These two bounds are the
+ * app's own choice and not a published figure: they are wide enough to admit lean athletes and people with obesity, and
+ * narrow enough to reject a typo or a unit slip (0, a negative, 95, 150). Outside this range, or when the value is not a
+ * finite number, the percentage is ignored and the resting rate stays on Mifflin-St Jeor. Zero is a value, and an
+ * implausible one, not "none stated".
+ */
+const BODY_FAT_PCT_PLAUSIBLE = { min: 3, max: 60 } as const;
+
+function usableBodyFatPct(pct: number | undefined): number | undefined {
+  return typeof pct === 'number' && Number.isFinite(pct) && pct >= BODY_FAT_PCT_PLAUSIBLE.min && pct <= BODY_FAT_PCT_PLAUSIBLE.max
+    ? pct
+    : undefined;
+}
+
 function derive(
   heightCm: number,
   weightKg: number,
@@ -124,8 +139,14 @@ function derive(
   activity: ActivityLevel,
   isGeneric: boolean,
   goal?: Goal,
+  bodyFatPct?: number,
 ): Targets {
-  const rmr = 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
+  // Katch-McArdle: 370 + 21.6 x lean kg, when a plausible body-fat percentage is known; otherwise Mifflin-St Jeor.
+  const bf = usableBodyFatPct(bodyFatPct);
+  const rmr =
+    bf !== undefined
+      ? 370 + 21.6 * (weightKg * (1 - bf / 100))
+      : 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
   const energy = Math.round(rmr * ACTIVITY_FACTORS[activity]);
   // The generic basis's 'light' activity level is a convenience for the energy formula, not a claim that anyone exercises.
   // The ISSN range is stated for exercising individuals, so for a person the app knows nothing about, protein takes
@@ -150,7 +171,7 @@ function derive(
     transFatG: Math.round((0.01 * energy) / 9),
     micronutrients: microsFor(sex),
     isGeneric,
-    basis: { protein: exercises ? 'issn-range' : 'efsa-pri', energy: 'mifflin', expenditure: 'formula' },
+    basis: { protein: exercises ? 'issn-range' : 'efsa-pri', energy: bf !== undefined ? 'katch-mcardle' : 'mifflin', expenditure: 'formula' },
   };
 }
 
@@ -170,7 +191,7 @@ export function computeTargets(p: Profile | null, on: Date): Targets {
     age >= 0 &&
     sex !== undefined && Object.hasOwn(SEX_CONSTANT, sex) &&
     activityLevel !== undefined && Object.hasOwn(ACTIVITY_FACTORS, activityLevel)
-      ? derive(heightCm, weight, age, sex, activityLevel, false, p.goal)
+      ? derive(heightCm, weight, age, sex, activityLevel, false, p.goal, p.bodyFatPct)
       : undefined;
   // Belt and braces: any non-finite derived target falls back to generic.
   const base =

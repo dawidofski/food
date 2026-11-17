@@ -234,4 +234,40 @@ describe('targets', () => {
       expect(t.basis).toEqual({ protein: 'issn-range', energy: 'mifflin', expenditure: 'formula' });
     });
   });
+
+  describe('resting metabolism from body composition', () => {
+    test('a usable body-fat percentage switches the resting rate to Katch-McArdle', () => {
+      // 370 + 21.6 x lean kg. 80 kg at 25% fat = 60 kg lean -> 370 + 1296 = 1666.
+      const t = computeTargets(profileAt(80, 'light', undefined, { bodyFatPct: 25 }), ON);
+      expect(t.rmrKcal).toBe(1666);
+      expect(t.basis.energy).toBe('katch-mcardle');
+    });
+
+    test.each([0, -5, 2.9, 60.1, 95, 100, Number.NaN, Number.POSITIVE_INFINITY])(
+      'an implausible body-fat percentage (%s) is ignored, not used',
+      (bad) => {
+        const t = computeTargets(profileAt(80, 'light', undefined, { bodyFatPct: bad }), ON);
+        expect(t.basis.energy).toBe('mifflin');
+        expect(t.rmrKcal).toBe(computeTargets(profileAt(80, 'light'), ON).rmrKcal);
+      },
+    );
+
+    test.each([3, 60])('the bounds themselves (%s) are accepted', (ok) => {
+      expect(computeTargets(profileAt(80, 'light', undefined, { bodyFatPct: ok }), ON).basis.energy).toBe('katch-mcardle');
+    });
+
+    test('an override still marks energy custom when Katch-McArdle was used underneath', () => {
+      const t = computeTargets(
+        profileAt(80, 'light', undefined, { bodyFatPct: 25, overrides: { energyKcal: 2000 } }),
+        ON,
+      );
+      expect(t.basis.energy).toBe('custom');
+      expect(t.energyKcal).toBe(2000);
+    });
+
+    test('energy, and the figures derived from it, follow the new resting rate', () => {
+      const t = computeTargets(profileAt(80, 'light', undefined, { bodyFatPct: 25 }), ON);
+      expect(t.energyKcal).toBe(Math.round(1666 * 1.375));
+    });
+  });
 });
