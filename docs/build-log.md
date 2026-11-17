@@ -2119,3 +2119,80 @@ now `holdsNothing` (zero stores); a partial database throws and the diary report
 which is recoverable, where a wrong delete is not. Pinned by `tests/data/dbNeverDeletesData.test.ts`, which
 plants a diary with an entry and all stores but `offProducts` and asserts the entry survives; verified red by
 mutating the guard to `if (false)`.
+
+
+---
+
+# Honest targets — the plan of 16 Nov 2026, executed 17 Nov
+
+Eight tasks, sixteen commits plus one fix wave, each task reviewed by a fresh agent that did not write it, then
+one whole-branch review. 1,277 tests pass; `tsc` and the build are clean. What follows is every decision taken
+during execution that the code alone does not explain.
+
+## Why the plan existed
+
+`NutrientBar` labelled every nutrient `target N unit`, sodium included, so the app told its only user to reach
+2,000 mg of salt a day. The protein target was `1.2 × weightKg` with an `0.8` floor — two numbers with no source,
+sitting beside carefully-cited EFSA micronutrient references, and already listed in this log under known limits.
+
+## Rulings made before any code was written
+
+Five conflicts were found by scanning the plan against itself before Task 1:
+
+- **`TARGET_DIRECTION` is keyed by `NutrientKey` only.** `proteinFloorG` and `addedSugarsIdealG` are fields of
+  `Targets`, not nutrients; putting them in the map would invent nutrients that do not exist. They are second
+  marks on their bars instead.
+- **Task 4 defines the whole `basis` shape and fills only what is its own.** `basis.expenditure` is `'formula'`
+  for this entire plan; `'reported'` and `'observed'` arrive with the daily health data and the weight page.
+- **A goal with no rate moves protein but not energy.** Protein depends on `goal.kind` alone. An energy offset
+  needs a rate, and inventing a default deficit would put someone in a deficit they never asked for.
+- **A test written in the plan as a comment is a description of the assertion, not permission to omit it.** Eight
+  such bodies across three tasks; every one became a real assertion.
+- `profileAt` is a test helper the Task 4 implementer writes; Tasks 5 and 6 reuse it.
+
+## Rulings made during execution
+
+- **Malformed `bodyFatPct` or `goal` in a backup THROWS; it is not dropped.** The brief said drop, by false
+  analogy. `exportImport.ts` documents its own contract — "throws on the first problem; writes nothing" — and
+  every other profile field honours it. Dropping fails in the way this project refuses above all others: restore
+  a backup, get no error, find the goal silently gone. The implementer raised this against its brief and was
+  right.
+- **Import validates shape, not plausibility.** A `bodyFatPct` of 150 is stored and rejected at the point of use,
+  where the fallback to Mifflin–St Jeor is visible and correctable. A value discarded at the boundary is a value
+  the person can never see or fix.
+- **A generic profile gets EFSA's 0.83 g/kg, not the ISSN range.** The generic basis sets `activityLevel: 'light'`
+  as a convenience for the *energy* formula; it is not a claim that the person exercises, and the ISSN range is
+  stated for exercising individuals. Gated on `isGeneric`, deliberately not by changing the generic activity
+  level, so energy and protein stay uncoupled.
+- **`basis` gains `'custom'`, set per field when an override applies to that field.** Without it the app would
+  print "EFSA" beside a number the person typed themselves.
+- **`aria-valuemax` is the bar's own scale, with `aria-valuetext` carrying the reading.** Past a ceiling,
+  `valuenow` exceeded `valuemax`, so assistive technology could clamp to "100%" and hide the overage — in exactly
+  the state a ceiling exists to report. A partial total says "at least", never an exact number the app lacks.
+- **`computeTargets` reports WHICH limit capped a goal** (`'max-rate' | 'floor' | 'both'`), replacing a boolean.
+  The screen had inferred the reason from `energyKcal <= rmrKcal`, which is false when the rate cap bites and the
+  result lands exactly on the resting rate. A rounded output cannot carry a reason.
+- **Duplicated arithmetic is a defect, twice.** `targets.ts` recomputed what `dailyKcalForRate` already did, and
+  the body-fat bounds existed in two modules. Both are now single sources.
+- **"EFSA minimum for adults" became "EFSA reference intake for adults".** A Population Reference Intake is the
+  average requirement plus a margin covering ~97.5% of adults, not a threshold below which intake is inadequate —
+  and the bar contradicted the same screen's own note.
+- **A vacuous test was replaced structurally, not with better data.** The guard for "a ceiling can never appear in
+  the weekly gap list" seeded sodium at 5,000 mg — *above* the limit — while the gap rule flags what is *low*, so
+  it asserted the absence of something its data could never produce. It now asserts `directionOf(key) === 'floor'`
+  for every key in `MICRO_ORDER`, which fails the instant a ceiling is added, whatever is seeded.
+
+## Consequence recorded, not changed
+
+Raising protein 1.2 → 1.7 g/kg and lowering energy under a deficit moved two of `nutrient-density`'s denominators
+against each other. An 80 kg light-activity person's 600 kcal entry with 35 g protein and 6 g fibre was silent
+before and now shows an INFO card under a 0.5 kg/week goal — because the protein target got *better*. The rule is
+unchanged (rewriting the warning engine is a stated non-goal); the shift is pinned by a test so it cannot drift
+unnoticed, and it is the owner's call whether the extra card is noise.
+
+## Known gap, parked
+
+Someone with a lose/gain **rate** and a typed `energyKcal` override has tightened share limits but sees only
+"Your own energy figure replaces anything your goal would have set" — the sentence explaining the moved limits is
+gated on the energy basis not being custom. Every number shown is correct; what is missing is the explanation.
+The fix is a one-line gate change plus a variant sentence.
