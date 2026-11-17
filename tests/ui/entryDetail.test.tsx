@@ -176,4 +176,20 @@ describe('correcting figures from the entry screen', () => {
     await openForm(await seed());
     expect(screen.getByText(/emptying a field makes that figure unknown/i)).toBeInTheDocument();
   });
+
+  test('after half-typed text is cleared, the field reads as emptied and the save is accepted', async () => {
+    const e = await seed();
+    await openForm(e);
+    let bad = true;
+    Object.defineProperty(field(/sodium/i), 'validity', { configurable: true, get: () => ({ badInput: bad }) });
+    type(/sodium/i, '');
+    await save();
+    expect(screen.getByRole('alert')).toHaveTextContent(/not a number yet/i);
+    bad = false; // the person clears the field: the DOM flips with no React change event
+    await save();
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /add anyway/i })); });
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const revision = (await allEntriesIncludingTombstones()).find((r) => r.id !== e.id)!;
+    expect('sodiumMg' in revision.nutrients).toBe(false);
+  });
 });

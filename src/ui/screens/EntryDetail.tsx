@@ -73,7 +73,6 @@ export default function EntryDetail({
   const [failed, setFailed] = useState<string | null>(null);
   const initialFigures = (): Partial<Record<NutrientKey, string>> => Object.fromEntries(SHOWN.map((k) => [k, fieldText(entry, k)]));
   const [figures, setFigures] = useState(initialFigures);
-  const [badInput, setBadInput] = useState<Partial<Record<NutrientKey, boolean>>>({});
   const [figureError, setFigureError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,14 +95,15 @@ export default function EntryDetail({
     void flow.submit(text, { revises: { id: entry.id, at: entry.at } });
   };
 
-  const onSaveFigures = (e: FormEvent) => {
+  const onSaveFigures = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     // Only fields that changed are sent: an untouched field changes nothing, and a figure not shown here is never mentioned.
     const correction: Correction = {};
     for (const k of SHOWN) {
       const text = (figures[k] ?? '').trim();
       // Unparseable text (such as "1e") reads as '' in a number input: that is not an emptied field, so it must not clear a figure.
-      if (badInput[k]) {
+      // Read from the DOM now, never cached: a flag mirrored into state goes stale when the DOM changes without a React event.
+      if ((e.currentTarget.elements.namedItem(`fig-${k}`) as HTMLInputElement | null)?.validity.badInput) {
         setFigureError(`${NUTRIENT_LABEL[k].name[0]!.toUpperCase()}${NUTRIENT_LABEL[k].name.slice(1)} is not a number yet. Nothing has been changed.`);
         return;
       }
@@ -213,11 +213,7 @@ export default function EntryDetail({
                 inputMode="decimal"
                 step="any"
                 value={figures[k] ?? ''}
-                onChange={(e) => {
-                  const bad = e.currentTarget.validity.badInput;
-                  setBadInput((b) => ({ ...b, [k]: bad }));
-                  setFigures((f) => ({ ...f, [k]: e.target.value }));
-                }}
+                onChange={(e) => setFigures((f) => ({ ...f, [k]: e.target.value }))}
                 className={fieldClass}
               />
             </div>
@@ -232,7 +228,7 @@ export default function EntryDetail({
             <button
               type="button"
               className={`${btn} flex-1`}
-              onClick={() => { flow.edit(); setFigures(initialFigures()); setBadInput({}); setFigureError(null); setMode('view'); }}
+              onClick={() => { flow.edit(); setFigures(initialFigures()); setFigureError(null); setMode('view'); }}
             >
               Discard
             </button>
