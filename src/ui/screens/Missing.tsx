@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { entriesBetween, getProfile, putProfile } from '@/data/db';
 import { loadReportedEnergy } from '@/data/reportedEnergy';
 import type { healthDaysBetween } from '@/data/healthDays';
-import { energySourceSentence } from '@/domain/energySource';
 import type { ReportedExpenditure } from '@/domain/expenditure';
 import { last7DayKeys, localDayKey, localDayRange } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
@@ -11,9 +10,10 @@ import { computeTargets, MICRO_KIND } from '@/domain/targets';
 import { weekContext, type DayTotals } from '@/domain/totals';
 import type { DiaryEntry } from '@/types/diary';
 import type { NutrientKey } from '@/types/nutrients';
-import type { Profile, Targets } from '@/types/profile';
+import type { Profile } from '@/types/profile';
 import { NUTRIENT_LABEL } from '@/ui/components/CoverageNote';
-import NutrientBar, { fmtAmount } from '@/ui/components/NutrientBar';
+import DayFigures from '@/ui/components/DayFigures';
+import { fmtAmount } from '@/ui/components/NutrientBar';
 
 /**
  * The "what's missing" view (design section 11). Opportunities, never failures: every line is a fact about what was
@@ -39,64 +39,12 @@ export const defaultMissingDeps: MissingDeps = {
   store: { entriesBetween, getProfile, putProfile },
 };
 
-/** A second tick is drawn only when it sits clearly apart from the main one: at least 5% of the main figure below it. A typed override can land a gram away. */
-const clearOf = (second: number, main: number): boolean => main - second >= main * 0.05;
-
-type SecondMark = { value: number; label: string };
-
-/**
- * `second` is a lower figure drawn on the same bar. Protein's is EFSA's floor beneath the target; added sugars' is WHO's
- * stricter conditional figure beneath the limit. It is left out when it would sit on the main mark.
- */
-const TODAY_BARS: { key: NutrientKey; target: (t: Targets) => number; second?: (t: Targets) => SecondMark | undefined }[] = [
-  { key: 'energyKcal', target: (t) => t.energyKcal },
-  {
-    key: 'proteinG',
-    target: (t) => t.proteinG,
-    second: (t) => (clearOf(t.proteinFloorG, t.proteinG) ? { value: t.proteinFloorG, label: 'EFSA reference intake for adults, 0.83 g per kg' } : undefined),
-  },
-  { key: 'fibreG', target: (t) => t.fibreG },
-  { key: 'sodiumMg', target: (t) => t.sodiumMg },
-  { key: 'satFatG', target: (t) => t.satFatG },
-  {
-    key: 'addedSugarsG',
-    target: (t) => t.addedSugarsG,
-    second: (t) => (clearOf(t.addedSugarsIdealG, t.addedSugarsG) ? { value: t.addedSugarsIdealG, label: "WHO's stricter, conditional advice, 5% of energy" } : undefined),
-  },
-];
-
 export const MICRO_ORDER: NutrientKey[] = [
   'calciumMg', 'ironMg', 'magnesiumMg', 'zincMg', 'vitaminCMg', 'vitaminDUg', 'vitaminB12Ug', 'folateUg', 'potassiumMg',
 ];
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
-/**
- * The footnote that says which of the figures behind the bars are this app's own working figures.
- *
- * It keys on what PRODUCED those figures — `basis.energy` and `basis.expenditure`, the same pair `energySource.ts` reads —
- * and not on whether the profile is generic. Each item is credited only where it reached a figure on this screen, so the
- * credit is never orphaned:
- *
- * - the activity factor, where the formula produced the expenditure figure AND the person did not type an energy target.
- *   A reported burn replaced the factor outright. A typed figure replaced its product: since amendment A3 the five
- *   share-derived limits are shares of the typed figure, so nothing left on this screen came through the factor.
- * - the goal offset, only where one can reach the energy target: never on the generic basis, and never under a typed
- *   energy figure, which `computeTargets` overlays while deleting `goalCapped`, so the goal moves the target by nothing.
- * - the fibre rule, always: it applies to whichever energy target is in force.
- */
-function ownTargetsNote(basis: Targets['basis'], isGeneric: boolean): string {
-  const typed = basis.energy === 'custom';
-  const usesFactor = !typed && basis.expenditure === 'formula';
-  const usesGoal = !typed && !isGeneric;
-  const own = [...(usesFactor ? ['the activity factor'] : []), ...(usesGoal ? ['the goal offset'] : []), 'the fibre rule'];
-  const credit =
-    own.length === 1
-      ? `${own[0]!} is this app’s own working figure`
-      : `${own.slice(0, -1).join(', ')} and ${own[own.length - 1]!} are this app’s own working figures`;
-  const lead = usesGoal ? 'Any goal offset is added to the energy target; the' : 'The';
-  return `${lead} fibre target is 14 g per 1,000 kcal, at least 30 g. ${credit[0]!.toUpperCase()}${credit.slice(1)}, not a published recommendation.`;
-}
 
 function dayLabel(key: string): string {
   const [y, m, d] = key.split('-').map(Number);
@@ -292,33 +240,13 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
 
       <section aria-labelledby="today-h" className="space-y-3">
         <h2 id="today-h" className="text-lg font-semibold">Today</h2>
-        {today.entryCount === 0 ? (
-          <p className="text-base">Nothing logged today yet.</p>
-        ) : (
-          TODAY_BARS.map(({ key, target, second }) => {
-            const secondMark = second?.(targets);
-            return (
-            <NutrientBar
-              key={key}
-              nutrient={key}
-              value={today.nutrients[key]}
-              coverage={today.coverage[key]}
-              energyCoveredShare={today.energyCoveredShare[key]}
-              target={target(targets)}
-              {...(secondMark ? { secondMark } : {})}
-            />
-            );
-          })
-        )}
-        {targets.isGeneric && <p className="text-xs text-slate-600 dark:text-slate-400">Targets use general adult guidelines until your profile is set up.</p>}
-        <p data-testid="energy-source" className="text-xs text-slate-600 dark:text-slate-400">{energySourceSentence(targets.basis, profile?.activityLevel, reported?.days, targets.isGeneric)}</p>
-        <p data-testid="own-targets-note" className="text-xs text-slate-600 dark:text-slate-400">
-          {ownTargetsNote(targets.basis, targets.isGeneric)} WHO advises at least 25 g
-          of fibre a day. Protein comes from two sources: EFSA&rsquo;s reference intake of 0.83 g
-          per kg of body weight, and for people who exercise, the International Society of Sports Nutrition&rsquo;s range of 1.4 to 2.0 g
-          per kg, within which this app uses the middle, 1.7 g, and the top, 2.0 g, when your goal is to lose weight. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any
-          target in Settings.
-        </p>
+        <DayFigures
+          totals={today}
+          targets={targets}
+          {...(profile?.activityLevel ? { activityLevel: profile.activityLevel } : {})}
+          {...(reported?.days !== undefined ? { reportedDays: reported.days } : {})}
+          emptyText="Nothing logged today yet."
+        />
       </section>
 
       <section aria-labelledby="week-h" className="space-y-3">
