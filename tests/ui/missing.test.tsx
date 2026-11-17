@@ -313,11 +313,11 @@ describe('the screens and the warning engine agree about the energy figure', () 
     expect(await targetSeenByRules()).toBe(reported);
 
     render(<Missing />);
-    const bar = await screen.findByTestId('own-targets-note');
-    expect(bar).toBeInTheDocument();
-    // The energy row is drawn against the same figure the rules received.
-    const energyRow = (await screen.findAllByText(new RegExp(`${reported.toLocaleString('en')}|${reported}`)))[0];
-    expect(energyRow).toBeDefined();
+    // The energy bar's own mark, not the figure appearing somewhere on the page: it is the thing drawn against.
+    const bar = await screen.findByTestId('bar-energyKcal');
+    const formula = computeTargets(ownerProfile, new Date()).energyKcal;
+    expect(within(bar).getByText(`goal ${reported.toLocaleString('en-US')} kcal`)).toBeInTheDocument();
+    expect(within(bar).queryByText(`goal ${formula.toLocaleString('en-US')} kcal`)).toBeNull();
   });
 
   test('with too few reported days the rules fall back to the formula figure', async () => {

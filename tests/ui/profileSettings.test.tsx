@@ -244,7 +244,11 @@ describe('weight goal', () => {
     expect(box.textContent).toMatch(/general adult guidelines, not figures worked out for you/i);
     expect(box.textContent).toMatch(/goal cannot move your energy target until a weight is logged/i);
     expect(box.textContent).toMatch(/Energy: resting energy for a general adult from the Mifflin-St Jeor equation, multiplied by a light activity factor of 1\.375 \(this app.s own working figure/);
-    expect(box.textContent).not.toMatch(/EFSA|ISSN|Katch|off your maintenance|0 kcal|shares of your energy/i);
+    // Finding 10b: the personal sentence must not leak onto this path. "Mifflin" cannot tell the two apart, as both
+    // name it, so the negative is on the clause only the personal sentence has.
+    expect(box.textContent).not.toMatch(/multiplied by your activity level/);
+    // Was a literal backspace byte, not \b, so this alternative could never match anything. Pre-existing; found here.
+    expect(box.textContent).not.toMatch(/EFSA|ISSN|Katch|off your maintenance|\b0 kcal|shares of your energy/i);
   });
 
   test('a typed figure is still labelled as theirs when targets are general', async () => {

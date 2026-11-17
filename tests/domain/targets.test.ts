@@ -447,6 +447,28 @@ describe('targets', () => {
       expect(t.basis.energy).toBe('custom');
     });
 
+    /**
+     * Finding 10c. Spec 8.1.1's rule is that the share figures follow the GOAL-ADJUSTED energy. It was pinned under a
+     * reported burn with no goal, and under a goal with no share assertion, but never both at once — so a build that
+     * took the shares from the unadjusted reported figure, or from the formula maintenance, passed. Every figure here is
+     * arithmetic, not a direction, and they are asserted in one state rather than across three tests.
+     */
+    test('a reported burn, a goal offset and the share figures all compose in one state', () => {
+      const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), ON, 2600);
+      expect(t.basis).toEqual({ protein: 'issn-range', energy: 'mifflin', expenditure: 'reported' });
+      expect(t.rmrKcal).toBe(1755); // 10x80 + 6.25x180 - 5x35 + 5, untouched by the reported figure
+      expect(t.energyKcal).toBe(2050); // 2600 reported - 550 offset, clear of the 1755 floor
+      expect(t.goalCapped).toBeUndefined();
+      // Shares of 2,050 and not of 2,600 (which would give 29, 65 and 29) or of the formula's 2,413 (27, 60 and 34).
+      expect(t.satFatG).toBe(23);
+      expect(t.addedSugarsG).toBe(51);
+      expect(t.addedSugarsIdealG).toBe(26);
+      expect(t.transFatG).toBe(2);
+      expect(t.fibreG).toBe(30); // 14 g per 1,000 kcal would be 29: the floor holds
+      expect(t.proteinG).toBe(160); // 2.0 g/kg, from the goal's kind; the burn and the offset move it by nothing
+      expect(t.sodiumMg).toBe(2000);
+    });
+
     test('a non-positive or non-finite figure is not used', () => {
       const p = profileAt(80, 'light');
       for (const bad of [0, -1, NaN, Infinity]) expect(computeTargets(p, ON, bad)).toEqual(computeTargets(p, ON));
