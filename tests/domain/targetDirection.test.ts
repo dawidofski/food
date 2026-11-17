@@ -29,3 +29,11 @@ test('every directed nutrient has an explicit direction, with no default', () =>
   expect(Object.keys(TARGET_DIRECTION).length).toBeGreaterThanOrEqual(14);
   expect(Object.keys(TARGET_DIRECTION).sort()).toEqual([...NUTRIENT_KEYS].sort());
 });
+
+// A judgement beyond the plan, pinned: the app holds no reference figure for these, so giving them a
+// direction would invent a target.
+test('fat, carbohydrate and total sugars have no direction because the app holds no reference for them', () => {
+  for (const k of ['fatG', 'carbG', 'sugarsG'] as const) {
+    expect(directionOf(k)).toBe('none');
+  }
+});
