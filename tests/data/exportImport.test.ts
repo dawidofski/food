@@ -207,6 +207,51 @@ describe('export and import', () => {
     });
   });
 
+  // Review Focus 4.
+  test('corrected figures and the record of which keys were corrected both survive a round trip', async () => {
+    await addEntry(entry('c1', {
+      nutrients: { energyKcal: 612, proteinG: 31 },
+      coverage: { energyKcal: 'known', proteinG: 'known' },
+      correctedKeys: ['energyKcal', 'proteinG'],
+    }));
+    const blob = await exportAll();
+    await eraseEverything();
+    await importAll(file(blob), 'replace');
+    const back = (await allEntriesIncludingTombstones()).find((e) => e.id === 'c1');
+    expect(back?.nutrients).toEqual({ energyKcal: 612, proteinG: 31 });
+    expect(back?.coverage).toEqual({ energyKcal: 'known', proteinG: 'known' });
+    expect(back?.correctedKeys).toEqual(['energyKcal', 'proteinG']);
+  });
+
+  test.each([
+    ['a string', 'energyKcal'],
+    ['null', null],
+    ['an object', { energyKcal: true }],
+    ['a list holding an unknown key', ['energyKcal', 'caloriez']],
+    ['a list holding a non-text item', ['energyKcal', 5]],
+    ['a list holding null', [null]],
+  ])('a correctedKeys that is %s rejects the file, leaving the store unchanged', async (_n, bad) => {
+    await seedEverything();
+    for (const mode of ['replace', 'merge'] as const) {
+      const g = JSON.parse(await (await exportAll()).text());
+      g.entries.push({ ...entry('bad'), correctedKeys: bad });
+      const before = await snapshot();
+      await expect(importAll(file(JSON.stringify(g)), mode)).rejects.toThrow(/corrected/);
+      expect(await snapshot()).toEqual(before);
+    }
+  });
+
+  test('an entry with no correctedKeys imports with the field absent, not an empty array', async () => {
+    await addEntry(entry('plain'));
+    const blob = await exportAll();
+    await eraseEverything();
+    await importAll(file(blob), 'replace');
+    const back = (await allEntriesIncludingTombstones()).find((e) => e.id === 'plain');
+    expect(back).toBeDefined();
+    expect(back?.correctedKeys).toBeUndefined();
+    expect('correctedKeys' in (back ?? {})).toBe(false);
+  });
+
   test('replace with a file that has no profile removes the local one', async () => {
     await putProfile(ownerProfile);
     const parsed = JSON.parse(await (await exportAll()).text());
