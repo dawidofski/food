@@ -8,7 +8,7 @@ const WINDOW_DAYS = 7;
 /**
  * The app's own choice and not a published figure: a whole-day burn above this is not a real day, so it is left out of the
  * average rather than pulling someone's energy target up. It is deliberately well above the form's "check for an extra
- * digit" flag (10,000), which only asks for a second look and lets the person keep a figure; this one is for a figure no
+ * digit" flag (`BURN_IMPLAUSIBLY_HIGH_KCAL`, guarded by a test), which only asks for a second look and lets the person keep a figure; this one is for a figure no
  * day produces, such as a hand-edited backup, which skips the form.
  */
 export const REPORTED_BURN_CEILING_KCAL = 20000;

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { REPORTED_BURN_CEILING_KCAL, reportedExpenditure } from '@/domain/expenditure';
 import { MIN_LOGGED_DAYS } from '@/domain/trends';
+import { BURN_IMPLAUSIBLY_HIGH_KCAL } from '@/ui/components/DayHealthForm';
 import type { HealthDay } from '@/types/health';
 
 // Local noon on 17 November 2026; yesterday is the 16th and the window is 10 to 16 November.
@@ -66,4 +67,11 @@ describe('reportedExpenditure', () => {
     const days = [10, 11, 12, 13].map((d) => day(`2026-11-${d}`, REPORTED_BURN_CEILING_KCAL));
     expect(reportedExpenditure(days, ON)).toBe(REPORTED_BURN_CEILING_KCAL);
   });
+});
+
+// The domain must not import from ui/, so the order of the two thresholds is enforced here. The form flags a figure above
+// its threshold but lets the person keep it; if the ceiling here fell to or below that threshold, a figure the form invited
+// them to keep would be silently dropped from their energy target.
+test('the domain ceiling stays above the form flag, so a kept figure is never silently dropped', () => {
+  expect(REPORTED_BURN_CEILING_KCAL).toBeGreaterThan(BURN_IMPLAUSIBLY_HIGH_KCAL);
 });
