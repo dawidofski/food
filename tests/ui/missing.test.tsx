@@ -171,3 +171,72 @@ describe('the energy and fibre targets are labelled as the app\'s own', () => {
     expect(note.textContent).not.toMatch(/1\.2 g/);
   });
 });
+
+describe('a ceiling is never framed as a target, and a floor below the target is shown', () => {
+  const fullDay = {
+    nutrients: { energyKcal: 500, proteinG: 20, fibreG: 5, sodiumMg: 800, satFatG: 5, addedSugarsG: 10 },
+    coverage: { energyKcal: 'known', proteinG: 'known', fibreG: 'known', sodiumMg: 'known', satFatG: 'known', addedSugarsG: 'known' },
+  } as const;
+
+  test('no ceiling on the screen is described as a target', async () => {
+    await putProfile({ ...ownerProfile, activityLevel: 'moderate' });
+    await seedEntry({ nutrients: { ...fullDay.nutrients }, coverage: { ...fullDay.coverage } });
+    render(<Missing />);
+    for (const key of ['sodiumMg', 'satFatG', 'addedSugarsG'] as const) {
+      const bar = await screen.findByTestId(`bar-${key}`);
+      expect(bar.textContent).toMatch(/limit \d/i);
+      expect(bar.textContent).not.toMatch(/target/i);
+      expect(bar.getAttribute('aria-label') ?? '').not.toMatch(/target/i);
+      expect(within(bar).getByRole('progressbar').getAttribute('aria-label')).not.toMatch(/target/i);
+      expect(within(bar).getByRole('progressbar').getAttribute('aria-valuetext')).not.toMatch(/target/i);
+    }
+  });
+
+  test('protein shows the EFSA floor as a second mark below its target, labelled as a floor', async () => {
+    await putProfile({ ...ownerProfile, activityLevel: 'moderate' }); // 80 kg: target 1.7 g/kg = 136 g, floor 0.83 g/kg = 66 g
+    await seedEntry({ nutrients: { ...fullDay.nutrients }, coverage: { ...fullDay.coverage } });
+    render(<Missing />);
+    const bar = await screen.findByTestId('bar-proteinG');
+    expect(bar.querySelector('[data-mark="second"]')).not.toBeNull();
+    expect(bar.textContent).toMatch(/EFSA minimum for adults, 0\.83 g per kg: 66 g/);
+    expect(bar.textContent).toMatch(/target 136 g/);
+  });
+
+  test('added sugars shows WHO\'s stricter conditional figure as a second mark, not as another limit', async () => {
+    await putProfile({ ...ownerProfile, activityLevel: 'moderate' });
+    await seedEntry({ nutrients: { ...fullDay.nutrients }, coverage: { ...fullDay.coverage } });
+    render(<Missing />);
+    const bar = await screen.findByTestId('bar-addedSugarsG');
+    expect(bar.querySelector('[data-mark="second"]')).not.toBeNull();
+    expect(bar.textContent).toMatch(/WHO's stricter, conditional advice, 5% of energy: \d+ g/);
+    expect(bar.textContent).toMatch(/limit \d+ g/);
+    expect(bar.textContent).not.toMatch(/target/i);
+  });
+
+  test('no second mark is drawn when the floor equals the target (a person who does not exercise)', async () => {
+    await putProfile({ ...ownerProfile, activityLevel: 'sedentary' });
+    await seedEntry({ nutrients: { ...fullDay.nutrients }, coverage: { ...fullDay.coverage } });
+    render(<Missing />);
+    const bar = await screen.findByTestId('bar-proteinG');
+    expect(bar.querySelector('[data-mark="second"]')).toBeNull();
+  });
+
+  test('characterisation: the weekly gap list names floors only, never a ceiling', async () => {
+    await putProfile(ownerProfile);
+    for (let i = 0; i < 5; i++) {
+      await seedEntry({
+        at: daysAgo(i),
+        nutrients: { energyKcal: 500, sodiumMg: 5000, satFatG: 60, addedSugarsG: 200, calciumMg: 100, ironMg: 1 },
+        coverage: { energyKcal: 'known', sodiumMg: 'known', satFatG: 'known', addedSugarsG: 'known', calciumMg: 'known', ironMg: 'known' },
+      });
+    }
+    render(<Missing />);
+    await screen.findByTestId('gap-calciumMg');
+    const gapsSection = screen.getByRole('heading', { name: /worth a look/i }).closest('section')!;
+    expect(gapsSection.querySelectorAll('[data-testid^="gap-"]').length).toBeGreaterThan(0);
+    expect(within(gapsSection).queryByTestId('gap-sodiumMg')).toBeNull();
+    expect(within(gapsSection).queryByTestId('gap-satFatG')).toBeNull();
+    expect(within(gapsSection).queryByTestId('gap-addedSugarsG')).toBeNull();
+    expect(gapsSection.textContent).not.toMatch(/sodium|saturated fat|added sugar/i);
+  });
+});

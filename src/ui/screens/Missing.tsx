@@ -33,13 +33,28 @@ export const defaultMissingDeps: MissingDeps = {
   store: { entriesBetween, getProfile, putProfile },
 };
 
-const TODAY_BARS: { key: NutrientKey; target: (t: Targets) => number }[] = [
+type SecondMark = { value: number; label: string };
+
+/**
+ * `second` is a lower figure drawn on the same bar. Protein's is EFSA's floor beneath the target; added sugars' is WHO's
+ * stricter conditional figure beneath the limit. It is left out when it would sit on the main mark (a floor equal to the
+ * target says nothing new).
+ */
+const TODAY_BARS: { key: NutrientKey; target: (t: Targets) => number; second?: (t: Targets) => SecondMark | undefined }[] = [
   { key: 'energyKcal', target: (t) => t.energyKcal },
-  { key: 'proteinG', target: (t) => t.proteinG },
+  {
+    key: 'proteinG',
+    target: (t) => t.proteinG,
+    second: (t) => (t.proteinFloorG < t.proteinG ? { value: t.proteinFloorG, label: 'EFSA minimum for adults, 0.83 g per kg' } : undefined),
+  },
   { key: 'fibreG', target: (t) => t.fibreG },
   { key: 'sodiumMg', target: (t) => t.sodiumMg },
   { key: 'satFatG', target: (t) => t.satFatG },
-  { key: 'addedSugarsG', target: (t) => t.addedSugarsG },
+  {
+    key: 'addedSugarsG',
+    target: (t) => t.addedSugarsG,
+    second: (t) => (t.addedSugarsIdealG < t.addedSugarsG ? { value: t.addedSugarsIdealG, label: "WHO's stricter, conditional advice, 5% of energy" } : undefined),
+  },
 ];
 
 const MICRO_ORDER: NutrientKey[] = [
@@ -244,7 +259,9 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
         {today.entryCount === 0 ? (
           <p className="text-base">Nothing logged today yet.</p>
         ) : (
-          TODAY_BARS.map(({ key, target }) => (
+          TODAY_BARS.map(({ key, target, second }) => {
+            const secondMark = second?.(targets);
+            return (
             <NutrientBar
               key={key}
               nutrient={key}
@@ -252,8 +269,10 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
               coverage={today.coverage[key]}
               energyCoveredShare={today.energyCoveredShare[key]}
               target={target(targets)}
+              {...(secondMark ? { secondMark } : {})}
             />
-          ))
+            );
+          })
         )}
         {targets.isGeneric && <p className="text-xs text-slate-600 dark:text-slate-400">Targets use general adult guidelines until your profile is set up.</p>}
         <p data-testid="own-targets-note" className="text-xs text-slate-600 dark:text-slate-400">
