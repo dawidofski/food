@@ -117,9 +117,11 @@ function db(): Promise<IDBPDatabase<FoodDiaryDB>> {
   return dbPromise;
 }
 
-/** The open connection, for stores kept in their own modules. */
-export function diaryDb(): Promise<IDBPDatabase<FoodDiaryDB>> {
-  return db();
+/** Closes the cached connection (and forgets it). For tests that must delete or re-plant the database. */
+export async function closeDiaryDb(): Promise<void> {
+  const p = dbPromise;
+  dbPromise = null;
+  if (p) (await p.catch(() => null))?.close();
 }
 
 function newId(): string {
@@ -354,6 +356,58 @@ export async function allOffProducts(): Promise<OffProduct[]> {
 
 export async function deleteOffProduct(barcode: string): Promise<void> {
   await (await db()).delete('offProducts', barcode);
+}
+
+// ---- daily health figures (typed in from Samsung Health) ----
+
+/**
+ * One row per local day, keyed by `date`, beside the diary and not inside it: a day can have sleep recorded and no
+ * food logged at all. Absent means unknown, so a figure that was not given is never stored as 0.
+ */
+const HEALTH_FIGURES = ['sleepScore', 'steps', 'energyBurnedKcal'] as const;
+
+/** Throws on anything that is not a real figure in range, and on any key it does not know. */
+function validatedHealthDay(d: HealthDay): HealthDay {
+  if (typeof d.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) {
+    throw new RangeError(`healthDay.date is not a day key: ${String(d.date)}`);
+  }
+  // A misspelt key must not fall through to an all-absent record, which would delete the day.
+  for (const k of Object.keys(d)) {
+    if (k !== 'date' && !(HEALTH_FIGURES as readonly string[]).includes(k)) {
+      throw new RangeError(`healthDay has an unknown key: ${k}`);
+    }
+  }
+  const row: HealthDay = { date: d.date };
+  for (const k of HEALTH_FIGURES) {
+    const v = d[k];
+    if (v === undefined) continue;
+    if (typeof v !== 'number' || !Number.isFinite(v)) throw new RangeError(`healthDay.${k} is not finite`);
+    if (v < 0) throw new RangeError(`healthDay.${k} is below 0`);
+    if (k === 'sleepScore' && v > 100) throw new RangeError('healthDay.sleepScore is above 100');
+    row[k] = v;
+  }
+  return row;
+}
+
+/** Validates and writes. A record with every figure absent deletes the row rather than storing an empty one. */
+export async function putHealthDay(d: HealthDay): Promise<void> {
+  const row = validatedHealthDay(d);
+  const d3 = await db();
+  if (HEALTH_FIGURES.every((k) => row[k] === undefined)) {
+    await d3.delete('healthDays', row.date);
+    return;
+  }
+  await d3.put('healthDays', row);
+}
+
+export async function getHealthDay(dayKey: string): Promise<HealthDay | undefined> {
+  return (await db()).get('healthDays', dayKey);
+}
+
+/** Inclusive, oldest first. Day keys are zero-padded, so key order is date order. */
+export async function healthDaysBetween(fromDayKey: string, toDayKey: string): Promise<HealthDay[]> {
+  if (fromDayKey > toDayKey) return [];
+  return (await db()).getAll('healthDays', IDBKeyRange.bound(fromDayKey, toDayKey));
 }
 
 // ---- profile (localStorage) ----

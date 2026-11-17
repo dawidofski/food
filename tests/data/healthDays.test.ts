@@ -13,9 +13,17 @@ function deleteDb(): Promise<void> {
   });
 }
 
+function storeNames(): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('food-diary');
+    req.onsuccess = () => { const n = [...req.result.objectStoreNames]; req.result.close(); resolve(n); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 beforeEach(async () => {
   // Close the previous test's cached connection, or the delete blocks.
-  try { (await dbm?.diaryDb())?.close(); } catch { /* none open */ }
+  await dbm?.closeDiaryDb();
   vi.resetModules();
   await deleteDb();
   h = await import('@/data/healthDays');
@@ -99,7 +107,7 @@ test('a health day saves on a date with no food entries, and both survive', asyn
 describe('upgrading', () => {
   test('an existing database with entries gains the store without losing them', async () => {
     // Plant a version-2 database as the previous release left it: four stores, no healthDays, one entry.
-    (await dbm.diaryDb()).close();
+    await dbm.closeDiaryDb();
     vi.resetModules();
     await deleteDb();
     await new Promise<void>((resolve, reject) => {
@@ -122,7 +130,7 @@ describe('upgrading', () => {
     dbm = db3;
     expect(db3.DB_VERSION).toBe(3);
     expect((await db3.getEntry('old'))!.id).toBe('old');
-    expect([...(await db3.diaryDb()).objectStoreNames]).toEqual(
+    expect(await storeNames()).toEqual(
       expect.arrayContaining(['entries', 'customFoods', 'batches', 'offProducts', 'healthDays']),
     );
     await hd.putHealthDay({ date: '2026-11-17', steps: 1 });
@@ -144,4 +152,14 @@ test('erasing everything clears health days too', async () => {
   await h.putHealthDay({ date: '2026-11-17', steps: 1 });
   await dbm.eraseEverything();
   expect(await h.getHealthDay('2026-11-17')).toBeUndefined();
+});
+
+test('a misspelt key is refused rather than clearing the day', async () => {
+  await h.putHealthDay({ date: '2026-11-17', steps: 100 });
+  // an untyped caller, such as an imported backup, can hand over a key the type does not allow
+  const typo = { date: '2026-11-17', step: 5 } as unknown as import('@/types/health').HealthDay;
+  await expect(h.putHealthDay(typo)).rejects.toThrow(/unknown key: step/);
+  expect(await h.getHealthDay('2026-11-17')).toEqual({ date: '2026-11-17', steps: 100 });
+  const extra = { date: '2026-11-17', steps: 7, note: 'x' } as unknown as import('@/types/health').HealthDay;
+  await expect(h.putHealthDay(extra)).rejects.toThrow(/unknown key: note/);
 });
