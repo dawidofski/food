@@ -6,7 +6,7 @@ import type { Profile } from '@/types/profile';
 import { figureText, readNamedFigure, type FigureRead } from '@/ui/components/figureForm';
 
 /**
- * A whole-day burn above this is almost certainly a slip (an extra digit, a lifetime total). It only asks for a
+ * The app's own choice and not a published figure: a whole-day burn above this is far above a usual day and more likely a slip (an extra digit). It only asks for a
  * second look; it never refuses.
  */
 export const BURN_IMPLAUSIBLY_HIGH_KCAL = 10000;
@@ -101,7 +101,7 @@ function Fields({ dayKey, initial, profile, now }: { dayKey: string; initial: He
   return (
     <section className="rounded-xl border border-slate-300 dark:border-slate-700 p-3">
       <h2 className="text-base font-semibold">Sleep, steps and energy burned</h2>
-      <p className={note}>You typed these yourself from Samsung Health. Leave a field blank if you do not know it; blank is not zero.</p>
+      <p className={note}>You entered these figures yourself; they are your own readings. Leave a field blank if you do not know it; blank is not zero.</p>
       <form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); run(e.currentTarget, false); }} className="mt-3 space-y-4" noValidate>
         <div>
           <label htmlFor="dh-sleep" className="block text-sm font-medium">Sleep score (0–100), Samsung Health’s own score</label>
@@ -118,16 +118,16 @@ function Fields({ dayKey, initial, profile, now }: { dayKey: string; initial: He
           <label htmlFor="dh-burn" className="block text-sm font-medium">Energy burned (kcal), the whole day, not active calories</label>
           <input id="dh-burn" name="dh-burn" type="number" inputMode="decimal" step="any" value={burn} onChange={(ev) => edit(setBurn)(ev.target.value)} className={field} aria-describedby={flag ? 'dh-burn-note dh-burn-flag' : 'dh-burn-note'} />
           <p id="dh-burn-note" data-testid="burn-note" className={note}>
-            Copy the total energy burned for the day, not the active figure. They differ by roughly a resting metabolism, and the active one would be about 1,800 kcal too low.
+            {`Copy the total energy burned for the day, not the active figure. They differ by roughly a resting metabolism.${rmr !== undefined ? ` Typing the active one would put the figure about ${rmr} kcal too low.` : ""}`}
           </p>
           {flag?.kind === 'low' && rmr !== undefined && (
             <p id="dh-burn-flag" data-testid="burn-below-resting" className={flagBox}>
-              {`${flag.value} kcal is below your resting rate of about ${rmr} kcal, which a whole day cannot normally be. This looks like the active-energy figure rather than the whole day's. If it is right, for a day spent in bed say, keep it.`}
+              {`${flag.value} kcal is below your resting rate of about ${rmr} kcal, which a whole day does not normally come in under. This looks like the active-energy figure rather than the whole day's. Your resting rate is only an estimate, so a real day can come in under it; if this figure is right, keep it.`}
             </p>
           )}
           {flag?.kind === 'high' && (
             <p id="dh-burn-flag" data-testid="burn-implausibly-high" className={flagBox}>
-              {`${flag.value} kcal is more than ${BURN_IMPLAUSIBLY_HIGH_KCAL} kcal for one day, which is more than almost anyone burns. Check for an extra digit. If it is right, keep it.`}
+              {`${flag.value} kcal is more than ${BURN_IMPLAUSIBLY_HIGH_KCAL} kcal for one day, which is far above a usual day. Check for an extra digit. If it is right, keep it.`}
             </p>
           )}
         </div>

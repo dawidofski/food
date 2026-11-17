@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { eraseEverything, getHealthDay, putHealthDay } from '@/data/db';
 import { computeTargets } from '@/domain/targets';
 import Diary from '@/ui/screens/Diary';
-import { localDayKey } from '@/domain/dayBoundary';
+import { last7DayKeys } from '@/domain/dayBoundary';
 import DayHealthForm from '@/ui/components/DayHealthForm';
 import { ownerProfile } from '../fixtures/profile';
 
@@ -172,20 +172,55 @@ describe('daily health form', () => {
 
   test('the section says once that every figure is the person\'s own', async () => {
     await open();
-    expect(screen.getAllByText(/you typed these yourself/i)).toHaveLength(1);
+    expect(screen.getAllByText(/you entered these figures yourself/i)).toHaveLength(1);
   });
 });
 
 describe('on the Diary', () => {
   test('moving back a day shows that day\'s figures', async () => {
-    const today = localDayKey(new Date());
-    const yesterday = localDayKey(new Date(Date.now() - 86_400_000));
+    const keys = last7DayKeys(new Date());
+    const today = keys[6]!;
+    const yesterday = keys[5]!;
+    const [y, m, d] = yesterday.split("-").map(Number);
+    const yesterdayLabel = new Date(y!, m! - 1, d!).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
     await putHealthDay({ date: today, steps: 111 });
     await putHealthDay({ date: yesterday, steps: 222 });
     render(<Diary />);
     await waitFor(() => expect(steps().value).toBe('111'));
     const nav = screen.getByRole('navigation', { name: 'Days' });
-    fireEvent.click(within(nav).getAllByRole('button')[5]!);
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(`^${yesterdayLabel}`) }));
     await waitFor(() => expect(steps().value).toBe('222'));
+  });
+});
+
+describe('what the burn field and its flags say', () => {
+  test('the burn note names the profile\'s own resting rate and no fixed figure', async () => {
+    await open();
+    const text = screen.getByTestId('burn-note').textContent ?? '';
+    expect(text).toContain(`about ${rmr} kcal too low`);
+    expect(text).not.toContain('1,800');
+  });
+
+  test('with no profile the burn note gives no number', async () => {
+    await open(null);
+    const text = screen.getByTestId('burn-note').textContent ?? '';
+    expect(text).toMatch(/roughly a resting metabolism/);
+    expect(text).not.toMatch(/\d/);
+  });
+
+  test('exactly 10000 kcal is not flagged', async () => {
+    await open();
+    type(burn(), '10000');
+    save();
+    await waitFor(async () => expect((await getHealthDay(DAY))?.energyBurnedKcal).toBe(10000));
+    expect(screen.queryByTestId('burn-implausibly-high')).toBeNull();
+  });
+
+  test('10001 kcal is flagged and not yet saved', async () => {
+    await open();
+    type(burn(), '10001');
+    save();
+    await screen.findByTestId('burn-implausibly-high');
+    expect(await getHealthDay(DAY)).toBeUndefined();
   });
 });
