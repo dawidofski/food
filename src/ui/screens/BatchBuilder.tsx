@@ -364,8 +364,9 @@ function BatchFigures({ batch, onSaved, onCancel }: { batch: Batch; onSaved: () 
     setBusy(true);
     try {
       const applied = applyCorrection({ nutrients: batch.nutrientsPerPortion, coverage: batch.coverage }, correction);
-      // A typed figure is the person's own reading, so the batch is self-reported; portions logged from it carry the badge.
-      await saveBatch({ ...batch, nutrientsPerPortion: applied.nutrients, coverage: applied.coverage, selfReported: true });
+      // A typed number is the person's own reading, so the batch is self-reported; a correction that only clears puts none of theirs in, so it marks nothing.
+      const typed = Object.values(correction).some((v) => typeof v === 'number');
+      await saveBatch({ ...batch, nutrientsPerPortion: applied.nutrients, coverage: applied.coverage, ...(typed ? { selfReported: true } : {}) });
       onSaved();
     } catch (err) {
       setError(`Could not save: ${err instanceof Error ? err.message : String(err)}`);

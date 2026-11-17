@@ -173,6 +173,7 @@ describe('correcting a batch\'s figures by hand', () => {
     expect(field(/^energy/i).value).toBe(String(batch.nutrientsPerPortion.energyKcal));
     // A figure the batch never knew renders blank, not 0.
     expect(field(/^fibre/i).value).toBe('');
+    expect(batch.nutrientsPerPortion.sodiumMg).toBeDefined(); // else the clear below proves nothing
     type(/^energy/i, '500');
     type(/^sodium/i, '');
     await save();
@@ -239,5 +240,18 @@ describe('correcting a batch\'s figures by hand', () => {
     const { batch: rebuilt } = rebuildBatch(typed, { portionCount: 8 }, fixtureLookup);
     expect(rebuilt.nutrientsPerPortion.energyKcal).not.toBe(999);
     expect(rebuilt.selfReported).toBeUndefined();
+  });
+
+  test('a correction that only clears a figure leaves the batch unmarked, and the figure unknown', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    expect(batch.nutrientsPerPortion.sodiumMg).toBeDefined();
+    await saveBatch(batch);
+    await open();
+    type(/^sodium/i, '');
+    await save();
+    await waitFor(async () => expect((await getBatch(batch.id))!.coverage.sodiumMg).toBe('unknown'));
+    const after = (await getBatch(batch.id))!;
+    expect('sodiumMg' in after.nutrientsPerPortion).toBe(false);
+    expect(after.selfReported).toBeUndefined();
   });
 });

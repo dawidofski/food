@@ -48,6 +48,7 @@ describe('editing a batch never reaches the meals already eaten', () => {
     const stored = (await getBatch(batch.id))!;
     const { batch: eight } = rebuildBatch(stored, { portionCount: 8 }, fixtureLookup);
     await saveBatch(eight);
+    expect(eight.nutrientsPerPortion.sodiumMg).toBeDefined(); // else clearing it below proves nothing
     const corrected = applyCorrection({ nutrients: eight.nutrientsPerPortion, coverage: eight.coverage }, { energyKcal: 999, sodiumMg: null });
     await saveBatch({ ...eight, nutrientsPerPortion: corrected.nutrients, coverage: corrected.coverage });
 
