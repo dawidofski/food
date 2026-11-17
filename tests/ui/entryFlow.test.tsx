@@ -589,6 +589,37 @@ describe('correctEntry', () => {
     expect(await entriesToday()).toHaveLength(1);
   });
 
+  test('a correction keeps the provenance and its snapshotted fped, rather than re-deriving them', async () => {
+    const fped = { vegCupEq: 0.7, fruitCupEq: 0.1, wholeGrainOzEq: 0.3 };
+    // Item fped deliberately differs from the entry's: a recomputation from the refs would give a different total.
+    const e = await seedEntry({
+      resolution: 'ai', fped,
+      items: [{ source: 'dataset', foodId: 'not-in-the-database', grams: 40, classification: flags, fped: { vegCupEq: 9, fruitCupEq: 9, wholeGrainOzEq: 9 } }],
+    });
+    mount();
+    await correct(e, { energyKcal: 120 });
+    await waitFor(() => expect(['gate', 'committed']).toContain(screen.getByTestId('stage').textContent));
+    if (screen.getByTestId('stage').textContent === 'gate') await click(/go ahead/i);
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const revision = (await allEntriesIncludingTombstones()).find((x) => x.id !== e.id)!;
+    expect(revision.resolution).toBe('ai');
+    expect(revision.fped).toEqual(fped);
+  });
+
+  test('clearing a figure stores it as unknown: the key is absent and its coverage is unknown', async () => {
+    const e = await seedEntry();
+    mount();
+    await correct(e, { sodiumMg: null });
+    await waitFor(() => expect(['gate', 'committed']).toContain(screen.getByTestId('stage').textContent));
+    if (screen.getByTestId('stage').textContent === 'gate') await click(/go ahead/i);
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const revision = (await allEntriesIncludingTombstones()).find((x) => x.id !== e.id)!;
+    expect('sodiumMg' in revision.nutrients).toBe(false);
+    expect(revision.coverage.sodiumMg).toBe('unknown');
+    expect(revision.nutrients.energyKcal).toBe(100);
+    expect(revision.correctedKeys).toBeUndefined();
+  });
+
   test('a correction that crosses a ceiling shows that card in the gate', async () => {
     const e = await seedEntry();
     mount();
@@ -597,5 +628,8 @@ describe('correctEntry', () => {
     await waitFor(() => expect(screen.getByTestId('stage').textContent).toBe('gate'));
     // The entry and daily sodium cards merge into one; whichever survives, a sodium card is what the person sees.
     expect(screen.getAllByTestId('card').map((c) => c.textContent)).toEqual([expect.stringMatching(/^sodium-/)]);
+    // Pin that the correction itself crossed the limit: the entry rule is in the card, not only the daily rule.
+    const card = flowRef!.cards[0]!;
+    expect([card.ruleId, ...card.merged.map((m) => m.ruleId)]).toContain('sodium-entry');
   });
 });

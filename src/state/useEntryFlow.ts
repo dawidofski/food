@@ -142,17 +142,17 @@ export type EntryFlow = {
   /** With `revises`, the entry is stored as a revision of that entry, and only once the gate has been passed. */
   submit: (text: string, opts?: { revises?: Revises }) => Promise<void>;
   /**
-   * A food that is already known, at a gram amount the person set: the path a scanned barcode takes. The text is
-   * only what gets stored as `rawText` and shown in the diary; the food is NOT searched for again, so no
-   * near-miss can substitute a different product for the one in the person's hand. From here on it is an
-   * ordinary entry: the same rules, the same warning gate, the same confirmation. Nothing is added silently.
-   */
-  /**
    * Corrects an entry's own figures by hand. The entry's foods are NOT re-read: its items, classification and fped
    * are carried unchanged and only the figures change. The result goes through the same warning gate as any entry,
    * and is stored as a revision (original time kept) only once the gate is passed. Cancelling writes nothing.
    */
   correctEntry: (entry: DiaryEntry, c: Correction) => Promise<void>;
+  /**
+   * A food that is already known, at a gram amount the person set: the path a scanned barcode takes. The text is
+   * only what gets stored as `rawText` and shown in the diary; the food is NOT searched for again, so no
+   * near-miss can substitute a different product for the one in the person's hand. From here on it is an
+   * ordinary entry: the same rules, the same warning gate, the same confirmation. Nothing is added silently.
+   */
   submitKnownFood: (food: DatasetFood, grams: number, text: string, source?: FoodSource) => Promise<void>;
   answer: (answerKey: string, yes: boolean) => void;
   addAnyway: () => Promise<void>;
