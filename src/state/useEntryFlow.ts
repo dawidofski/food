@@ -116,11 +116,20 @@ type Session = {
    * Set only by a correction: what the revision keeps from the entry as it was, because the food is not being
    * re-read. The entry's own resolution kind, its own entry-level fped and its corrected-figures list.
    */
-  kept?: { resolution: DiaryEntry['resolution']; fped: DiaryEntry['fped']; correctedKeys: NutrientKey[]; meal: DiaryEntry['meal'] };
+  kept?: { resolution: DiaryEntry['resolution']; fped: DiaryEntry['fped']; correctedKeys: NutrientKey[] };
 };
 
 /** The entry being corrected. `at` is when the food was eaten, which a correction does not change. */
-export type Revises = { id: string; at: string };
+export type Revises = {
+  id: string;
+  at: string;
+  /**
+   * The slot the entry already had, carried so a revision keeps it. Absent means the entry never had one, and a
+   * revision must leave it absent: `mealFromClock` is a suggestion for a NEW entry, and filling it in here would
+   * guess a slot onto history the person did not write (`DiaryEntry.meal`, spec A2.2, A4).
+   */
+  meal?: DiaryEntry['meal'];
+};
 
 export type EntryFlow = {
   stage: FlowStage;
@@ -153,7 +162,7 @@ export type EntryFlow = {
    */
   correctEntry: (entry: DiaryEntry, c: Correction) => Promise<void>;
   /** Change only which meal an entry belonged to, as a revision, without re-reading the food or re-running the gate. */
-  setEntryMeal: (entry: DiaryEntry, meal: MealSlot) => Promise<void>;
+  setEntryMeal: (entry: DiaryEntry, meal: MealSlot) => Promise<DiaryEntry | undefined>;
   /**
    * A food that is already known, at a gram amount the person set: the path a scanned barcode takes. The text is
    * only what gets stored as `rawText` and shown in the diary; the food is NOT searched for again, so no
@@ -306,9 +315,11 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       userAction: action,
       state: 'active',
     };
-    // A correction keeps the slot the entry already had; a new entry takes the clock's guess, which the person
-    // can change on the entry screen. A field not copied here is silently dropped on every correction.
-    const meal = s.kept ? s.kept.meal : mealFromClock(new Date(entry.at));
+    // A revision keeps the slot the entry already had — including having none — and only a genuinely new entry
+    // takes the clock's guess. This reads `revises`, not `kept`, because `kept` is set by the figure-correction
+    // path alone: a text correction goes through `submit` and would otherwise have the clock overwrite a slot the
+    // person chose, and invent one for an entry from before slots existed.
+    const meal = s.revises ? s.revises.meal : mealFromClock(new Date(entry.at));
     if (meal !== undefined) entry.meal = meal;
     // A correction keeps the entry's own fped: the food is unchanged, so nothing is recomputed from the refs.
     const fped = s.kept ? s.kept.fped : sumFped(s.resolution.refs);
@@ -537,8 +548,8 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
         needsHelp: [],
         confidence: 1,
       };
-      revisesRef.current = { id: entry.id, at: entry.at };
-      keptRef.current = { resolution: entry.resolution, fped: entry.fped, correctedKeys: applied.correctedKeys, meal: entry.meal };
+      revisesRef.current = { id: entry.id, at: entry.at, meal: entry.meal };
+      keptRef.current = { resolution: entry.resolution, fped: entry.fped, correctedKeys: applied.correctedKeys };
       pendingResolution.current = null;
       // No parsed items: nothing is re-judged as an unusual serving, since the portion is not what changes.
       await run(entry.rawText, { items: [], resolution });
@@ -553,10 +564,12 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
    * and putting a slot change through the warning gate would show someone a warning for moving breakfast to lunch.
    * It is still a revision, like every other change here — the original is kept as `superseded`, never mutated.
    */
-  const setEntryMeal = useCallback(async (entry: DiaryEntry, meal: MealSlot) => {
+  const setEntryMeal = useCallback(async (entry: DiaryEntry, meal: MealSlot): Promise<DiaryEntry | undefined> => {
+    if (entry.meal === meal) return undefined;
     const d = depsRef.current;
     const { id: _id, ...fields } = { ...entry, meal };
-    await (d.store.reviseEntry ?? reviseEntry)(entry.id, fields);
+    // The revision gets a new id, so the caller must follow it or it is left holding a superseded row.
+    return (d.store.reviseEntry ?? reviseEntry)(entry.id, fields);
   }, []);
 
   const continueWithout = useCallback(async () => {

@@ -17,18 +17,28 @@ const GROUP_LABEL: Record<MealGroup, string> = {
 const SUB_FIGURES: NutrientKey[] = ['proteinG', 'satFatG'];
 
 /**
- * One figure for a slot, or nothing at all.
+ * One figure for a slot, named, or nothing at all.
  *
- * A key no entry in the slot knew has no figure — never `0`, which would read as "this meal had none". A total that
- * is only partly known is a floor and says "at least", the same reading `NutrientBar` gives it, because some of the
- * slot's entries carried no value for it.
+ * A key no entry in the slot knew has no figure — never `0`, which would read as "this meal had none". A total
+ * that is only partly known is a floor and says "at least", the same reading `NutrientBar` gives it, because some
+ * of the slot's entries carried no value for it. A floor under half a unit says so in words instead: `fmtAmount`
+ * would print it as "at least 0 g", which reads as none at all. `CoverageNote` makes the same exception, for the
+ * same reason.
+ *
+ * The figure is always named. "12 g · 4 g" tells nobody which is protein and which is saturated fat, and when
+ * only one of the two is known a bare figure says nothing at all.
  */
-function figure(totals: DayTotals, key: NutrientKey): string | undefined {
+function figure(totals: DayTotals, key: NutrientKey, named = true): string | undefined {
   const v = totals.nutrients[key];
   if (!isKnownValue(v) || totals.coverage[key] === 'unknown') return undefined;
   const complete = totals.coverage[key] === 'known' && totals.energyCoveredShare[key] >= 0.999;
-  const { unit } = NUTRIENT_LABEL[key];
-  return `${complete ? '' : 'at least '}${fmtAmount(v)} ${unit}`;
+  const { name, unit } = NUTRIENT_LABEL[key];
+  // The slot's energy stands alone under its own heading, so it is not named; the rest share a line and are.
+  const of = named ? ` ${name.toLowerCase()}` : '';
+  const amount = fmtAmount(v);
+  if (complete) return `${amount} ${unit}${of}`;
+  if (v > 0 && amount.startsWith('0')) return `under 1 ${unit}${named ? ` of${of}` : ''} counted so far`;
+  return `at least ${amount} ${unit}${of}`;
 }
 
 /**
@@ -51,7 +61,7 @@ export default function MealSection({
   /** The slot's entry rows. */
   children: ReactNode;
 }) {
-  const energy = figure(totals, 'energyKcal');
+  const energy = figure(totals, 'energyKcal', false);
   const subs = SUB_FIGURES.map((k) => figure(totals, k)).filter((s): s is string => s !== undefined);
   const empty = totals.entryCount === 0;
 

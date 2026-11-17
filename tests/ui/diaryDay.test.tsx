@@ -77,11 +77,11 @@ describe('the diary shows one day whole', () => {
     await show();
     const b = within(screen.getByTestId('meal-breakfast'));
     expect(b.getByText('320 kcal')).toBeInTheDocument();
-    expect(b.getByText(/12 g/)).toBeInTheDocument();
+    expect(b.getByText(/12 g protein/)).toBeInTheDocument();
     expect(b.getByText('toast')).toBeInTheDocument();
     const d = within(screen.getByTestId('meal-dinner'));
     expect(d.getByText('880 kcal')).toBeInTheDocument();
-    expect(d.getByText(/52 g/)).toBeInTheDocument();
+    expect(d.getByText(/52 g protein/)).toBeInTheDocument();
   });
 
   test('shows an empty slot as a dash, not a zero', async () => {
@@ -98,7 +98,7 @@ describe('the diary shows one day whole', () => {
     await seed({ meal: 'dinner', nutrients: { energyKcal: 300 }, coverage: known({ energyKcal: 0 }) });
     await show();
     const d = within(screen.getByTestId('meal-dinner'));
-    expect(d.getByText(/at least 19 g/)).toBeInTheDocument();
+    expect(d.getByText(/at least 19 g saturated fat/)).toBeInTheDocument();
   });
 
   test('shows nothing for a slot whose entries all lack a figure', async () => {

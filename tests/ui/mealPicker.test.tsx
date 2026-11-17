@@ -65,12 +65,45 @@ describe('choosing a meal slot after saving', () => {
     expect(screen.getByRole('button', { name: 'Lunch' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test("says the suggested slot is the app's own guess", async () => {
+  test("says on screen that a suggested slot uses the app's own times, without claiming this one was guessed", async () => {
     const e = entryOf({ meal: 'lunch' });
     await addEntry(e);
     render(<EntryDetail entry={e} deps={realDeps} onClose={() => undefined} onChanged={() => undefined} />);
     // Said on screen, not only in a comment: the boundaries are this app's choice, not a published definition.
-    expect(screen.getByText(/this app’s own working times for meals, not a published\s+definition/)).toBeInTheDocument();
+    expect(screen.getByText(/this app’s own working times for meals\s+rather than a published definition/)).toBeInTheDocument();
+    // Nothing stored says whether this entry's slot was the clock's guess or the person's own pick, so the
+    // screen must not assert either about it.
+    const note = screen.getByText(/A slot is suggested from the time/);
+    expect(note.textContent).not.toMatch(/Suggested from the time you logged it/);
+  });
+
+  test('does not offer the picker while a correction is waiting at the warning gate', async () => {
+    const e = entryOf({ meal: 'lunch' });
+    await addEntry(e);
+    render(<EntryDetail entry={e} deps={realDeps} onClose={() => undefined} onChanged={() => undefined} />);
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /correct the figures/i })); });
+    fireEvent.change(screen.getByLabelText(/energy/i), { target: { value: '70' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /save figures/i })); });
+    await screen.findByRole('button', { name: /add anyway/i });
+    // Changing the slot here would supersede the row the pending correction is about and discard it.
+    expect(screen.getByRole('button', { name: 'Dinner' })).toBeDisabled();
+  });
+
+  test('keeps the slot the person chose when the text is corrected, and invents none for an entry that had none', async () => {
+    // The text path goes through submit(), which does not set `kept`. Before this was fixed it recomputed the
+    // slot from the clock: a chosen slot was silently replaced, and an entry from before slots existed had one
+    // guessed onto it from its timestamp, which the field's own contract forbids.
+    const chosen = entryOf({ meal: 'snack', rawText: 'an apple' });
+    await addEntry(chosen);
+    render(<EntryDetail entry={chosen} deps={realDeps} onClose={() => undefined} onChanged={() => undefined} />);
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /^edit$/i })); });
+    fireEvent.change(screen.getByLabelText(/correct what you ate/i), { target: { value: 'two apples' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /save/i })); });
+    // The gate only appears when something is worth saying; confirm it if it does.
+    const anyway = screen.queryByRole('button', { name: /add anyway/i });
+    if (anyway) await act(async () => { fireEvent.click(anyway); });
+    await waitFor(async () => expect((await live())[0]?.rawText).toBe('two apples'), { timeout: 4000 });
+    expect((await live())[0]?.meal).toBe('snack');
   });
 
   test('changes the slot and keeps the entry otherwise identical', async () => {

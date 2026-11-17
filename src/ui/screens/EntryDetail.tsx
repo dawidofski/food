@@ -64,7 +64,7 @@ export default function EntryDetail({
   entry: DiaryEntry;
   deps: FlowDeps;
   onClose: () => void;
-  onChanged: () => void;
+  onChanged: (nextId?: string) => void;
 }) {
   const flow = useEntryFlow(deps);
   const [mode, setMode] = useState<'view' | 'edit' | 'figures' | 'confirmDelete'>('view');
@@ -73,9 +73,8 @@ export default function EntryDetail({
   const initialFigures = (): Partial<Record<NutrientKey, string>> => Object.fromEntries(SHOWN.map((k) => [k, fieldText(entry, k)]));
   const [figures, setFigures] = useState(initialFigures);
   const [figureError, setFigureError] = useState<string | null>(null);
-  // Once the person has picked a slot themselves, the note calling it a guess no longer applies to it.
-  const [mealChanged, setMealChanged] = useState(false);
   const [mealError, setMealError] = useState<string | null>(null);
+  const [mealSaving, setMealSaving] = useState(false);
 
   useEffect(() => {
     if (!flow.outcome) return;
@@ -94,7 +93,7 @@ export default function EntryDetail({
 
   const onSave = (e: FormEvent) => {
     e.preventDefault();
-    void flow.submit(text, { revises: { id: entry.id, at: entry.at } });
+    void flow.submit(text, { revises: { id: entry.id, at: entry.at, meal: entry.meal } });
   };
 
   const onSaveFigures = (e: FormEvent<HTMLFormElement>) => {
@@ -134,15 +133,22 @@ export default function EntryDetail({
 
       <MealPicker
         value={entry.meal}
-        suggested={entry.meal !== undefined && !mealChanged}
+        // Disabled while a write is in flight, and while the gate is open: a revision here would supersede the
+        // row the pending correction is about, and discard it.
+        disabled={mealSaving || gateOpen}
         onChange={(m) => {
-          if (m === entry.meal) return;
-          setMealChanged(true);
+          if (m === entry.meal || mealSaving) return;
           setMealError(null);
+          setMealSaving(true);
           void flow
             .setEntryMeal(entry, m)
-            .then(() => onChanged())
-            .catch(() => setMealError('That could not be saved. The entry is unchanged.'));
+            .then((revision) => {
+              // A revision has a new id; without handing it up, the diary reloads, cannot find this entry and
+              // closes the screen under the person.
+              onChanged(revision?.id);
+            })
+            .catch(() => setMealError('That meal could not be changed. The entry is unchanged.'))
+            .finally(() => setMealSaving(false));
         }}
       />
       {mealError && <p role="alert" className="text-sm">{mealError}</p>}

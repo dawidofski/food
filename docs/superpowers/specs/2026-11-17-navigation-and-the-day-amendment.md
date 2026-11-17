@@ -255,3 +255,26 @@ Two sentences become false the moment this ships and must go in the same change:
 - The Settings line "Your own energy figure replaces your energy target but not those limits" — it now replaces
   both. The surrounding sentence about a goal having already moved them stays true where no energy figure was
   typed.
+
+---
+
+# A4. The meal slot is chosen after saving, not before
+
+Decided 2026-11-17, when the owner was shown what had been built and what had not.
+
+§A2.2 inherited "changeable before and after saving" from §8.3. Only *after* was built: an entry takes the
+clock's suggestion when it is stored, and the entry screen — one tap from the diary — offers the four slots to
+change it.
+
+Offered the missing half, the owner answered that tapping the entry is fine. **So this is the design, not a
+shortfall.** The reasons it is a good one:
+
+- The logging flow ends at the warning gate, which is a warning surface. An unrelated control there competes
+  with the one thing that screen exists to say.
+- Nothing is derived from a slot: no figure, no target, no warning. A slot that is briefly wrong costs a tap and
+  changes nothing the app tells anyone.
+- The clock's suggestion is right most of the time, and `MEAL_DEFAULT_FROM` is tuned for someone eating in Spain
+  rather than to a textbook.
+
+The boundaries remain this app's own working times, said on screen as such, and `mealFromClock` remains a
+suggestion that only ever becomes an entry's slot once it has been stored and can be changed.

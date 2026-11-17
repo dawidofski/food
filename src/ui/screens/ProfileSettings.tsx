@@ -318,7 +318,11 @@ function TargetSources({ profile, reported }: { profile: Profile; reported: Repo
     );
   }
 
-  if (hasRate) {
+  // Also shown with no goal when the person typed an energy figure: that state tightens or loosens four limits,
+  // and before this it was the one state that explained nothing. Keyed on `energyKcal` rather than on
+  // `basis.energy === 'custom'`, which is also set by a typed resting rate that does NOT move the energy target.
+  const typedEnergy = Number.isFinite(profile.overrides?.energyKcal);
+  if (hasRate || typedEnergy) {
     // A typed figure for one of the derived limits is the person's own, so the "worked out as shares" sentence must not cover it.
     const typed = (k: OverridableTargetKey): boolean => Number.isFinite(profile.overrides?.[k]);
     const own = [
@@ -329,8 +333,8 @@ function TargetSources({ profile, reported }: { profile: Profile; reported: Repo
     ].filter((n): n is string => n !== null);
     const ownNote = own.length > 0 ? ` Your own figures, not worked out by the app: ${own.join(', ')}.` : '';
     lines.push(
-      (basis.energy === 'custom'
-        ? 'Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, which is your own figure, so your goal no longer moves them (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.'
+      (typedEnergy
+        ? `Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, which is your own figure${hasRate ? ', so your goal no longer moves them' : ''} (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.`
         : 'Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, so they move when your goal changes it (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.') + ownNote,
     );
   }
