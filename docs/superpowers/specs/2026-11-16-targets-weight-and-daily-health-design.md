@@ -420,13 +420,25 @@ and is fenced accordingly (§A4).
 Also unchanged: the whole path stays optional and off until a key is entered and the switch turned on, and the
 privacy disclosure in Settings must be updated to match whatever is actually sent, before any of it ships.
 
-## A0. The model name is probably wrong already
+## A0. The model is `deepseek-flash`, and the current name is almost certainly dead
 
-`DEEPSEEK_MODEL = 'deepseek-chat'`. DeepSeek's own Models & Pricing page (read 2026-11-16) lists exactly two
-models, `deepseek-flash` (DeepSeek-V4.1-Flash-1017) and `deepseek-v4-pro`, and `deepseek-chat` is not among them.
-Legacy names are noted as still accepted for the retired Flash builds; `deepseek-chat` is not one of the names
-that note covers. Verify against a live key and move to `deepseek-flash`, which is also the cheaper model and the
-only one of the two with vision. Do this first: every other item here depends on the call working.
+**Settled, from DeepSeek's Models & Pricing table supplied by the owner on 17 Nov 2026.** Exactly two models
+exist: `deepseek-flash` (DeepSeek-V4.1-Flash-1017) and `deepseek-v4-pro` (DeepSeek-V4-Pro-0813).
+
+`src/ai/deepseek.ts` calls **`deepseek-chat`**. That name is not one of the two, and it is not one of the legacy
+names the table says are still served — those are `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp`. So the
+AI fallback is most likely returning an error on every call already.
+
+**That failure is invisible.** `interpretEntry` returns `[]` for every failure — no key, HTTP error, timeout,
+bad shape — and nothing above it distinguishes "the service refused us" from "nothing matched". Someone whose
+key is valid and whose model name is dead sees the app quietly fail to help, for ever, with no way to tell.
+Fixing the name is one line; **fixing the silence is the part that matters**, because the next time a model is
+retired the same thing happens again.
+
+**`deepseek-flash` is the model for every operation in the addendum.** It is the only one of the two with
+**Vision**, so `deepseek-v4-pro` cannot do §A4 at all, and it is roughly four times cheaper per input token
+($0.15 vs $0.66 per 1M cache-miss input tokens off-peak). One model across every operation also means one
+failure mode to reason about.
 
 ## A1. Composite dishes — the largest real gap
 
