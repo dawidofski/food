@@ -43,10 +43,21 @@ export type Resolution = {
 
 export type Level = 'INFO' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 
+/** The slots of the day a diary entry can belong to. */
+export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+/** In the order the day is drawn: breakfast, lunch, dinner, snack. */
+export const MEAL_SLOTS: readonly MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
 export type DiaryEntry = {
   id: string;
   /** ISO datetime of when the food was eaten. */
   at: string;
+  /**
+   * The slot of the day the person put this food in. Absent means they never chose one: that is not the same as any
+   * slot, and it is never filled in from `at`, because guessing would rewrite history they did not write.
+   */
+  meal?: MealSlot;
   /** Exactly what the user typed, kept verbatim so a mis-parse stays traceable. */
   rawText: string;
   resolution: 'local' | 'ai' | 'manual' | 'batch';

@@ -3,7 +3,7 @@ import {
   type ImportRows,
 } from '@/data/db';
 import { API_KEY_LS } from '@/state/aiSettings';
-import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
+import { MEAL_SLOTS, type Batch, type CustomFood, type DiaryEntry } from '@/types/diary';
 import type { HealthDay } from '@/types/health';
 import type { Profile } from '@/types/profile';
 
@@ -150,6 +150,13 @@ function entry(v: unknown, i: number): DiaryEntry {
   arr(o.warningsShown, `${w} warnings`);
   oneOf(o.userAction, ['added', 'addedAfterAlternatives', 'cancelled'], `${w} action`);
   oneOf(o.state, ['active', 'deleted', 'superseded'], `${w} state`);
+  // Absent means the person never chose a slot, and stays absent. A present value must be a slot this build has, and
+  // unlike correctedKeys below an unknown one REJECTS the file: an unknown figure key costs a name, but an unknown slot
+  // would put the entry in no group the diary draws. The day view tolerates an unrecognised slot (it lists it under
+  // "Earlier"), and that is not a contradiction: a file is a record this build owns, so a wrong slot in one is worth
+  // refusing, while a value can still reach the store without passing here (a hand-edited database, a row from a later
+  // build), and an entry in no rendered group is invisible, which reads as lost food.
+  if (o.meal !== undefined) oneOf(o.meal, [...MEAL_SLOTS], `${w} meal`);
   // Absent means no correction. A present value must be a list of strings; anything else is a damaged file.
   // An UNKNOWN string key is accepted: a backup from a newer version may name a figure this build lacks. Such a key
   // cannot produce a wrong figure, only an unnamed one, and the badge and the entry screen both skip it. Refusing the

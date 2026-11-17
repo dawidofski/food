@@ -265,6 +265,38 @@ describe('export and import', () => {
     expect('correctedKeys' in (back ?? {})).toBe(false);
   });
 
+  test('carries a meal slot through a backup round trip', async () => {
+    await addEntry(entry('m1', { meal: 'dinner' }));
+    const blob = await exportAll();
+    await eraseEverything();
+    await importAll(file(blob), 'replace');
+    const back = (await allEntriesIncludingTombstones()).find((e) => e.id === 'm1');
+    expect(back?.meal).toBe('dinner');
+  });
+
+  test('leaves an entry with no meal slot without one', async () => {
+    // 12:00 is lunchtime: a timestamp-based guess would have filled this in.
+    await addEntry(entry('nomeal', { at: '2026-11-10T12:00:00.000Z' }));
+    const blob = await exportAll();
+    await eraseEverything();
+    await importAll(file(blob), 'replace');
+    const back = (await allEntriesIncludingTombstones()).find((e) => e.id === 'nomeal');
+    expect(back).toBeDefined();
+    expect(back?.meal).toBeUndefined();
+    expect('meal' in (back ?? {})).toBe(false);
+  });
+
+  test('refuses a file whose entry names a slot this build does not have', async () => {
+    await seedEverything();
+    for (const mode of ['replace', 'merge'] as const) {
+      const g = JSON.parse(await (await exportAll()).text());
+      g.entries.push({ ...entry('brunch-entry'), meal: 'brunch' });
+      const before = await snapshot();
+      await expect(importAll(file(JSON.stringify(g)), mode)).rejects.toThrow(/meal/);
+      expect(await snapshot()).toEqual(before);
+    }
+  });
+
   test('replace with a file that has no profile removes the local one', async () => {
     await putProfile(ownerProfile);
     const parsed = JSON.parse(await (await exportAll()).text());
