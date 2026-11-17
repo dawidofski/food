@@ -1,3 +1,4 @@
+import { KCAL_PER_KG } from '@/domain/goalConversion';
 import type { NutrientKey } from '@/types/nutrients';
 import type { ActivityLevel, Goal, Profile, Sex, Targets } from '@/types/profile';
 
@@ -131,13 +132,6 @@ function usableBodyFatPct(pct: number | undefined): number | undefined {
     : undefined;
 }
 
-/**
- * Energy per kilogram of body weight change, used to turn a weekly rate into a daily energy offset. The app adopts 7,700
- * kcal/kg as a working approximation; it is the app's own choice here, not a figure taken from a cited source. Why it is
- * accepted to SET a weekly offset and refused for a twelve-week projection is recorded in the design document's
- * verification log, under "Weight goal and energy".
- */
-const KCAL_PER_KG = 7700;
 
 /**
  * The largest weekly rate of change the app will turn into an energy offset. This is the app's own choice and not a

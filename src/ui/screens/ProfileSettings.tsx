@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { getProfile, putProfile } from '@/data/db';
 import { localDayKey } from '@/domain/dayBoundary';
-import { computeTargets } from '@/domain/targets';
+import {
+  CONVERSION_NOTE, dailyKcalForRate, dailyToRatePhrase, formatRate, offsetWord, rateForDailyKcal, rateToDailyPhrase,
+} from '@/domain/goalConversion';
+import { computeTargets, MAX_GOAL_RATE_KG_PER_WEEK } from '@/domain/targets';
 import { unrecognisedAllergenFlags } from '@/rules/catalogue/allergen';
-import type { Profile, Targets } from '@/types/profile';
+import type { Goal, Profile, Targets } from '@/types/profile';
 import { BodyDataForm, fieldClass, parseNumber, weightProblem } from './FirstRun';
 
 /**
@@ -71,6 +74,7 @@ export default function ProfileSettings() {
         )}
         <BodyDataForm initial={hasBody ? profile : null} base={profile} submitLabel="Save body data" onSaved={setProfile} />
       </section>
+      <GoalSection profile={base} hasBody={hasBody} save={save} />
       {hasBody && <WeightLog profile={base} save={save} />}
       <FlagList
         profile={base}
@@ -95,6 +99,206 @@ export default function ProfileSettings() {
 }
 
 type SaveFn = (p: Profile) => Promise<boolean>;
+
+type GoalChoice = 'none' | Goal['kind'];
+const GOAL_CHOICES: { value: GoalChoice; label: string; hint: string }[] = [
+  { value: 'none', label: 'No goal', hint: 'Nothing stated. Targets stay at maintenance.' },
+  { value: 'lose', label: 'Lose', hint: 'Raises the protein target if you exercise, and sets a deficit if you give a rate.' },
+  { value: 'hold', label: 'Hold', hint: 'Keeps energy at maintenance.' },
+  { value: 'gain', label: 'Gain', hint: 'Sets a surplus if you give a rate.' },
+];
+
+const BODY_FAT_MIN = 3;
+const BODY_FAT_MAX = 60;
+
+function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: boolean; save: SaveFn }) {
+  const g = profile.goal;
+  const [kind, setKind] = useState<GoalChoice>(g?.kind ?? 'none');
+  const [rateNum, setRateNum] = useState<number | undefined>(g?.rateKgPerWeek);
+  const [rateText, setRateText] = useState(g?.rateKgPerWeek !== undefined ? formatRate(g.rateKgPerWeek) : '');
+  const [kcalText, setKcalText] = useState(g?.rateKgPerWeek !== undefined ? String(dailyKcalForRate(g.rateKgPerWeek)) : '');
+  const [bfText, setBfText] = useState(profile.bodyFatPct !== undefined ? String(profile.bodyFatPct) : '');
+  const [error, setError] = useState<string | null>(null);
+
+  if (!hasBody) {
+    return (
+      <section aria-labelledby="goal-h" className={section}>
+        <h2 id="goal-h" className="text-lg font-semibold">Your goal</h2>
+        <p className="text-sm">A weight goal needs your body data, because a deficit worked out for someone the app knows nothing about would mean nothing. Fill in body data above first.</p>
+      </section>
+    );
+  }
+
+  const offsetKind = kind === 'lose' || kind === 'gain' ? kind : undefined;
+  const word = offsetKind ? offsetWord(offsetKind) : 'deficit';
+
+  const onRate = (raw: string) => {
+    setRateText(raw);
+    if (raw.trim() === '') {
+      setRateNum(undefined);
+      setKcalText('');
+      return;
+    }
+    const n = parseNumber(raw);
+    setRateNum(n);
+    setKcalText(Number.isFinite(n) && n > 0 ? String(dailyKcalForRate(n)) : '');
+  };
+  const onKcal = (raw: string) => {
+    setKcalText(raw);
+    if (raw.trim() === '') {
+      setRateNum(undefined);
+      setRateText('');
+      return;
+    }
+    const n = parseNumber(raw);
+    const rate = Number.isFinite(n) && n > 0 ? rateForDailyKcal(n) : NaN;
+    setRateNum(rate);
+    setRateText(Number.isFinite(rate) ? formatRate(rate) : '');
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    let bodyFatPct: number | undefined;
+    if (bfText.trim() !== '') {
+      bodyFatPct = parseNumber(bfText);
+      if (!Number.isFinite(bodyFatPct) || bodyFatPct < BODY_FAT_MIN || bodyFatPct > BODY_FAT_MAX) {
+        return setError(`Body fat must be between ${BODY_FAT_MIN} and ${BODY_FAT_MAX} %, or left blank if you do not know it.`);
+      }
+    }
+    let goal: Goal | undefined;
+    if (kind === 'hold') goal = { kind: 'hold' };
+    else if (kind === 'lose' || kind === 'gain') {
+      if (rateNum !== undefined && !(Number.isFinite(rateNum) && rateNum > 0)) return setError('The rate must be a number above zero, or left blank.');
+      goal = rateNum === undefined ? { kind } : { kind, rateKgPerWeek: rateNum };
+    }
+    const { goal: _g, bodyFatPct: _b, ...rest } = profile;
+    const ok = await save({ ...rest, ...(goal ? { goal } : {}), ...(bodyFatPct !== undefined ? { bodyFatPct } : {}) });
+    if (ok) setError(null);
+  };
+
+  const hint = 'text-xs text-slate-700 dark:text-slate-300';
+
+  return (
+    <section aria-labelledby="goal-h" className={section}>
+      <h2 id="goal-h" className="text-lg font-semibold">Your goal</h2>
+      <form onSubmit={(e) => void submit(e)} className="space-y-3">
+        <fieldset className="space-y-1">
+          <legend className="text-sm font-medium">What are you aiming for?</legend>
+          {GOAL_CHOICES.map((c) => (
+            <label key={c.value} className="flex min-h-11 items-start gap-3 py-2">
+              <input type="radio" name="goal-kind" value={c.value} checked={kind === c.value} onChange={() => setKind(c.value)} className="mt-1 h-5 w-5" />
+              <span>
+                <span className="block text-base">{c.label}</span>
+                <span className={`block ${hint}`}>{c.hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+
+        {offsetKind && (
+          <div className="space-y-2">
+            <p className="text-sm">A rate is optional. Without one, the app does not invent a {word} for you.</p>
+            <div>
+              <label htmlFor="goal-rate" className="block text-sm font-medium">Rate (kg a week)</label>
+              <input id="goal-rate" type="number" inputMode="decimal" step="any" value={rateText} onChange={(e) => onRate(e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label htmlFor="goal-kcal" className="block text-sm font-medium">{`Daily ${word} (kcal)`}</label>
+              <input id="goal-kcal" type="number" inputMode="decimal" step="any" value={kcalText} onChange={(e) => onKcal(e.target.value)} className={fieldClass} />
+            </div>
+            {rateNum !== undefined && Number.isFinite(rateNum) && rateNum > 0 && (
+              <>
+                <p className="text-sm">{rateToDailyPhrase(offsetKind, rateNum)}</p>
+                <p className="text-sm">{dailyToRatePhrase(offsetKind, dailyKcalForRate(rateNum))}</p>
+              </>
+            )}
+            <p className={hint}>
+              {CONVERSION_NOTE} {`The app's own maximum is ${MAX_GOAL_RATE_KG_PER_WEEK} kg a week; that is its own choice, not a published figure.`}
+            </p>
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="goal-bf" className="block text-sm font-medium">Body fat (%, optional)</label>
+          <input id="goal-bf" type="number" inputMode="decimal" step="any" value={bfText} onChange={(e) => setBfText(e.target.value)} className={fieldClass} />
+          <p className={hint}>
+            {`Leave it blank if you do not know it: blank means unknown, not 0 %. A figure from ${BODY_FAT_MIN} to ${BODY_FAT_MAX} % lets the app estimate your resting energy from lean mass; otherwise it uses your height, weight, age and sex.`}
+          </p>
+        </div>
+
+        {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
+        <button type="submit" className="min-h-12 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 text-white dark:text-slate-900">Save goal</button>
+      </form>
+      <TargetSources profile={profile} />
+    </section>
+  );
+}
+
+/** Says where each saved target came from. A figure the person typed is theirs: it never carries a citation. */
+function TargetSources({ profile }: { profile: Profile }) {
+  const t = computeTargets(profile, new Date());
+  const { basis } = t;
+  const kind = profile.goal?.kind;
+  const rate = profile.goal?.rateKgPerWeek;
+  const hasRate = (kind === 'lose' || kind === 'gain') && typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
+
+  const protein =
+    basis.protein === 'custom'
+      ? 'Protein: your own figure, not calculated by the app.'
+      : basis.protein === 'efsa-pri'
+        ? 'Protein: 0.83 g per kg of body weight, the population reference intake for adults from EFSA (EFSA Journal 2012;10(2):2557). It is used for people who do not exercise.'
+        : kind === 'lose'
+          ? 'Protein: 2.0 g per kg of body weight, the top of the 1.4 to 2.0 g per kg range in the ISSN position stand (Jager et al., 2017). The app takes the top of the range for a weight-loss goal.'
+          : 'Protein: 1.7 g per kg of body weight, within the 1.4 to 2.0 g per kg range in the ISSN position stand (Jager et al., 2017). The app chose the middle of that range.';
+  const energy =
+    basis.energy === 'custom'
+      ? 'Energy: your own figure, not calculated by the app.'
+      : basis.energy === 'katch-mcardle'
+        ? 'Energy: resting energy from the Katch-McArdle equation, using your body-fat percentage, multiplied by your activity level.'
+        : 'Energy: resting energy from the Mifflin-St Jeor equation, multiplied by your activity level.';
+
+  const lines: string[] = [protein, energy];
+  if (basis.energy === 'mifflin' && profile.bodyFatPct !== undefined) {
+    lines.push(`The body-fat percentage you gave (${profile.bodyFatPct} %) is outside ${BODY_FAT_MIN} to ${BODY_FAT_MAX} %, so it was not used and resting energy comes from the Mifflin-St Jeor equation.`);
+  }
+
+  if (basis.energy === 'custom') {
+    if (kind === 'lose' || kind === 'gain') lines.push('Your own energy figure replaces anything your goal would have set.');
+  } else if (kind === 'hold') {
+    lines.push('Your goal is to hold, so your energy target stays at maintenance.');
+  } else if ((kind === 'lose' || kind === 'gain') && !hasRate) {
+    const proteinMoved = kind === 'lose' && basis.protein === 'issn-range';
+    lines.push(
+      `Choosing ${kind} without a rate ${proteinMoved ? 'raises your protein target to 2.0 g per kg. Your' : 'does not move energy: your'} energy target stays at maintenance, because the app will not invent a ${offsetWord(kind)} you did not ask for. Add a rate to set one.`,
+    );
+  } else if (hasRate && t.goalCapped) {
+    const why: string[] = [];
+    if (rate > MAX_GOAL_RATE_KG_PER_WEEK) {
+      why.push(`The app's own maximum is ${MAX_GOAL_RATE_KG_PER_WEEK} kg a week (its own choice, not a published figure), so a faster rate is reduced to that.`);
+    }
+    if (kind === 'lose' && t.energyKcal <= t.rmrKcal) {
+      why.push(`A deficit that deep would take your energy below your resting energy of ${t.rmrKcal} kcal a day, so the target stops there.`);
+    }
+    lines.push(`We could not give you the rate you asked for. ${why.join(' ')} Your energy target is ${t.energyKcal} kcal a day.`);
+  } else if (hasRate) {
+    const n = dailyKcalForRate(rate);
+    lines.push(
+      kind === 'lose'
+        ? `Your goal takes ${n} kcal a day off your maintenance energy. ${CONVERSION_NOTE}`
+        : `Your goal adds ${n} kcal a day to your maintenance energy. ${CONVERSION_NOTE}`,
+    );
+  }
+
+  return (
+    <div className="space-y-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-3">
+      <h3 className="text-sm font-semibold">Where your targets come from</h3>
+      <ul className="space-y-1 text-sm">
+        {lines.map((l) => <li key={l}>{l}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 
 function WeightLog({ profile, save }: { profile: Profile; save: SaveFn }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
