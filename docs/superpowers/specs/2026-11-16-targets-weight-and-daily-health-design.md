@@ -496,5 +496,6 @@ gaining or no goal is stated; 2.0 (the top) when the goal is to lose weight, for
 (1.7) or 160 g (2.0, losing). `Targets.basis.protein` is `'efsa-pri'` or `'issn-range'` accordingly. The
 Missing screen's note was corrected, because it still stated 1.2 g/kg.
 
-**Known limit:** an incomplete profile falls back to a generic basis whose activity level is `light`, so it receives
-the exercising range even though nobody said they exercise.
+**Decision:** when the targets are generic (no profile, or an incomplete one), protein is EFSA's 0.83 g/kg for both
+floor and target, with basis `'efsa-pri'`. The generic basis's `light` activity serves the energy formula only and is
+not a claim that the person exercises, which the ISSN range requires.

@@ -193,6 +193,21 @@ describe('targets', () => {
       }
     });
 
+    test('a null profile gets the EFSA PRI, not the sports range, though its energy basis is light activity', () => {
+      const t = computeTargets(null, ON);
+      expect(t.proteinG).toBe(58); // 0.83 x 70 kg
+      expect(t.proteinFloorG).toBe(58);
+      expect(t.basis.protein).toBe('efsa-pri');
+      expect(t.energyKcal).toBe(2084); // energy still uses light activity
+    });
+
+    test('an incomplete profile that falls back to generic also gets the EFSA PRI, even with a lose goal', () => {
+      const t = computeTargets(profileAt(80, 'moderate', { kind: 'lose' }, { heightCm: undefined }), ON);
+      expect(t.isGeneric).toBe(true);
+      expect(t.proteinG).toBe(58);
+      expect(t.basis.protein).toBe('efsa-pri');
+    });
+
     test('basis names where energy and expenditure come from', () => {
       const t = computeTargets(profileAt(80, 'moderate'), ON);
       expect(t.basis.energy).toBe('mifflin');

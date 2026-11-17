@@ -127,7 +127,10 @@ function derive(
 ): Targets {
   const rmr = 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
   const energy = Math.round(rmr * ACTIVITY_FACTORS[activity]);
-  const exercises = activity !== 'sedentary';
+  // The generic basis's 'light' activity level is a convenience for the energy formula, not a claim that anyone exercises.
+  // The ISSN range is stated for exercising individuals, so for a person the app knows nothing about, protein takes
+  // EFSA's PRI, which is stated for adults generally. Energy and protein are deliberately not coupled here.
+  const exercises = activity !== 'sedentary' && !isGeneric;
   const proteinPerKg = !exercises
     ? PROTEIN_EFSA_PRI_G_PER_KG
     : goal?.kind === 'lose'
