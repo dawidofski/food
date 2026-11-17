@@ -3,6 +3,7 @@ import { computeTargets } from '@/domain/targets';
 import { evaluate } from '@/rules/engine';
 import { sodiumDailyRule } from '@/rules/catalogue/sodium';
 import { addedSugarDailyRule } from '@/rules/catalogue/addedSugar';
+import { nutrientDensityRule } from '@/rules/catalogue/nutrientDensity';
 import type { Goal, Profile } from '@/types/profile';
 import type { Context } from '@/rules/types';
 import { ctx, type Opts } from './catalogueContexts';
@@ -68,5 +69,17 @@ describe('the warning engine sees a goal-adjusted target', () => {
       );
     expect(sugarCard(LOSE)?.level).toBe('MODERATE');
     expect(sugarCard(HOLD)?.level).not.toBe('MODERATE');
+  });
+
+  test('nutrient-density: a 35 g-protein, 600 kcal entry is silent at hold and flagged under a deficit', () => {
+    // Recorded consequence, not a defect (spec verification log): the rule divides by energy, fibre AND protein targets, and a
+    // deficit lowers energy (and tightens fibre to its 30 g floor) while the protein target rises to 2.0 g/kg. The same
+    // 600 kcal is then a larger share of energy (32%) than of protein (22%) or fibre (20%).
+    const entry = { pendingEnergy: 600, pendingFibre: 6, pendingProtein: 35 };
+    expect(HOLD.proteinG).toBe(136);
+    expect(LOSE.proteinG).toBe(160);
+    expect(nutrientDensityRule.level(withTargets(HOLD, entry))).toBeNull();
+    expect(nutrientDensityRule.level(withTargets(LOSE, entry))).toBe('INFO');
+    expect(nutrientDensityRule.portionNote(withTargets(LOSE, entry))).toMatch(/32% of your energy target, 20% of your fibre target and 22% of your protein target/);
   });
 });

@@ -166,6 +166,9 @@ describe('the energy and fibre targets are labelled as the app\'s own', () => {
     const note = await screen.findByTestId('own-targets-note');
     expect(note.textContent).toMatch(/own working figures[^.]*not a published recommendation/i);
     expect(note.textContent).toMatch(/WHO advises at least 25 g of fibre/i);
+    // One account of where energy comes from, agreeing with Settings: a published equation, the app's own factors.
+    expect(note.textContent).toMatch(/energy target is a published resting-energy equation[^.]*times an activity factor/i);
+    expect(note.textContent).toMatch(/activity factors, the goal offset and the fibre rule are this app.s own working figures/i);
     expect(note.textContent).toMatch(/EFSA[^.]*0\.83 g/);
     expect(note.textContent).toMatch(/International Society of Sports Nutrition[^.]*1\.4 to 2\.0 g/);
     expect(note.textContent).toMatch(/this app uses the middle, 1\.7 g, and the top, 2\.0 g, when your goal is to lose weight/);

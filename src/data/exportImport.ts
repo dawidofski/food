@@ -210,9 +210,8 @@ function profile(v: unknown): Profile {
   strings(o.conditions, 'profile conditions');
   if (o.overrides !== undefined) {
     for (const [k, x] of Object.entries(obj(o.overrides, 'profile overrides'))) {
-      if (k === 'micronutrients') numberMap(x, 'profile micronutrient overrides');
-      else if (k === 'isGeneric') bool(x, 'profile overrides.isGeneric');
-      else num(x, `profile override ${k}`);
+      // Overrides are plain numbers (Profile['overrides']); a nested map or a flag would make every later profile save throw.
+      num(x, `profile override ${k}`);
     }
   }
   return v as Profile;

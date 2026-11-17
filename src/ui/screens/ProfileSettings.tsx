@@ -4,9 +4,9 @@ import { localDayKey } from '@/domain/dayBoundary';
 import {
   CONVERSION_NOTE, dailyKcalForRate, dailyToRatePhrase, formatRate, offsetWord, rateForDailyKcal, rateToDailyPhrase,
 } from '@/domain/goalConversion';
-import { computeTargets, MAX_GOAL_RATE_KG_PER_WEEK } from '@/domain/targets';
+import { BODY_FAT_PCT_PLAUSIBLE, computeTargets, MAX_GOAL_RATE_KG_PER_WEEK } from '@/domain/targets';
 import { unrecognisedAllergenFlags } from '@/rules/catalogue/allergen';
-import type { Goal, Profile, Targets } from '@/types/profile';
+import type { Goal, Profile } from '@/types/profile';
 import { BodyDataForm, fieldClass, parseNumber, weightProblem } from './FirstRun';
 
 /**
@@ -108,8 +108,8 @@ const GOAL_CHOICES: { value: GoalChoice; label: string; hint: string }[] = [
   { value: 'gain', label: 'Gain', hint: 'Sets a surplus if you give a rate.' },
 ];
 
-const BODY_FAT_MIN = 3;
-const BODY_FAT_MAX = 60;
+const BODY_FAT_MIN = BODY_FAT_PCT_PLAUSIBLE.min;
+const BODY_FAT_MAX = BODY_FAT_PCT_PLAUSIBLE.max;
 
 function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: boolean; save: SaveFn }) {
   const g = profile.goal;
@@ -261,7 +261,17 @@ function TargetSources({ profile }: { profile: Profile }) {
         ? 'Energy: resting energy from the Katch-McArdle equation, using your body-fat percentage, multiplied by your activity level.'
         : 'Energy: resting energy from the Mifflin-St Jeor equation, multiplied by your activity level.';
 
-  const lines: string[] = [protein, energy];
+  // With no usable weight the targets are the general-adult basis, not the person's: attributing a cited figure to them, or a
+  // goal offset, would be false. Only a figure the person typed is still theirs.
+  const lines: string[] = t.isGeneric
+    ? [
+        'Your targets use general adult guidelines, not figures worked out for you, because no usable weight is logged. Add your weight in the weight log to personalise them.',
+        ...(basis.protein === 'custom' ? [protein] : []),
+        ...(basis.energy === 'custom' ? [energy] : []),
+        ...(kind !== undefined ? ['Your goal cannot move your energy target until a weight is logged.'] : []),
+      ]
+    : [protein, energy];
+  if (t.isGeneric) return <SourceList lines={lines} />;
   if (basis.energy === 'mifflin' && profile.bodyFatPct !== undefined) {
     const given = Number.isFinite(profile.bodyFatPct)
       ? `The body-fat percentage stored in your profile (${profile.bodyFatPct} %) is outside ${BODY_FAT_MIN} to ${BODY_FAT_MAX} %`
@@ -299,6 +309,15 @@ function TargetSources({ profile }: { profile: Profile }) {
     );
   }
 
+  if (hasRate && basis.energy !== 'custom') {
+    lines.push(
+      'Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, so they move when your goal changes it (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.',
+    );
+  }
+  return <SourceList lines={lines} />;
+}
+
+function SourceList({ lines }: { lines: string[] }) {
   return (
     <div className="space-y-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-3">
       <h3 className="text-sm font-semibold">Where your targets come from</h3>
@@ -457,7 +476,7 @@ function Overrides({ profile, save }: { profile: Profile; save: SaveFn }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const next: Partial<Targets> = { ...(profile.overrides ?? {}) };
+    const next: NonNullable<Profile['overrides']> = { ...(profile.overrides ?? {}) };
     for (const { key, label } of OVERRIDES) {
       const raw = vals[key].trim();
       if (raw === '') {

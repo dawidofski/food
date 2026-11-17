@@ -23,6 +23,10 @@ export type TargetBasis = {
   expenditure: 'formula' | 'reported' | 'observed';
 };
 
+/** The targets a person can replace with a figure of their own: the plain numbers, never the basis, the cap or the micronutrient map. */
+export type OverridableTargetKey =
+  | 'energyKcal' | 'rmrKcal' | 'proteinG' | 'proteinFloorG' | 'fibreG' | 'sodiumMg' | 'satFatG' | 'addedSugarsG' | 'addedSugarsIdealG' | 'transFatG';
+
 export type Targets = {
   energyKcal: number;
   rmrKcal: number;
@@ -38,7 +42,7 @@ export type Targets = {
   micronutrients: Partial<Record<NutrientKey, number>>;
   /** True when the targets come from the generic fallback basis, not the person's profile. */
   isGeneric: boolean;
-  /** True when the goal's requested weekly rate was reduced (to the app's maximum rate, or so energy stays at the resting rate). */
+  /** Present when the goal's requested weekly rate was reduced, and says which limit applied: the app's maximum rate, the resting-energy floor, or both. Absent when nothing was reduced. */
   goalCapped?: GoalCap;
   basis: TargetBasis;
 };
@@ -56,5 +60,5 @@ export type Profile = {
   weightLog: { date: string; kg: number }[];
   flaggedAllergens: string[];
   conditions: string[];
-  overrides?: Partial<Targets>;
+  overrides?: Partial<Record<OverridableTargetKey, number>>;
 };

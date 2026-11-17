@@ -179,6 +179,38 @@ describe('weight goal', () => {
     expect(screen.getByText(/^Energy:/)).toHaveTextContent(/Mifflin/);
   });
 
+  test('a goal with a rate says which limits move with energy and which do not', async () => {
+    await open({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 } });
+    const line = await screen.findByText(/shares of your energy target/i);
+    expect(line.textContent).toMatch(/saturated fat, added sugars, trans fat and fibre/i);
+    expect(line.textContent).toMatch(/move when your goal changes it/i);
+    expect(line.textContent).toMatch(/sodium and the micronutrient reference amounts are fixed amounts and do not move/i);
+  });
+
+  test('no such sentence without a rate, because nothing moved', async () => {
+    await open({ ...ownerProfile, goal: { kind: 'hold' } });
+    await screen.findByText(/^Energy:/);
+    expect(screen.queryByText(/shares of your energy target/i)).toBeNull();
+  });
+
+  test.each([
+    ['an empty weight log', []],
+    ['a zero weight', [{ date: '2026-01-01', kg: 0 }]],
+    ['a negative weight', [{ date: '2026-01-01', kg: -5 }]],
+  ])('with %s the figures are general, not attributed to the person, and no offset is claimed', async (_n, weightLog) => {
+    await open({ ...ownerProfile, weightLog, goal: { kind: 'lose', rateKgPerWeek: 0.5 } });
+    const heading = await screen.findByRole('heading', { name: /where your targets come from/i });
+    const box = heading.parentElement as HTMLElement;
+    expect(box.textContent).toMatch(/general adult guidelines, not figures worked out for you/i);
+    expect(box.textContent).toMatch(/goal cannot move your energy target until a weight is logged/i);
+    expect(box.textContent).not.toMatch(/EFSA|ISSN|Mifflin|Katch|off your maintenance|0 kcal|shares of your energy/i);
+  });
+
+  test('a typed figure is still labelled as theirs when targets are general', async () => {
+    await open({ ...ownerProfile, weightLog: [], overrides: { proteinG: 100 } });
+    expect(await screen.findByText(/^Protein:/)).toHaveTextContent(/your own figure/i);
+  });
+
   test('without body data the goal is not offered, and says why', async () => {
     render(<ProfileSettings />);
     expect(await screen.findByText(/needs your body data/i)).toBeInTheDocument();

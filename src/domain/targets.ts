@@ -124,7 +124,7 @@ export function currentWeightKg(p: Profile): number | undefined {
  * finite number, the percentage is ignored and the resting rate stays on Mifflin-St Jeor. Zero is a value, and an
  * implausible one, not "none stated".
  */
-const BODY_FAT_PCT_PLAUSIBLE = { min: 3, max: 60 } as const;
+export const BODY_FAT_PCT_PLAUSIBLE = { min: 3, max: 60 } as const;
 
 function usableBodyFatPct(pct: number | undefined): number | undefined {
   return typeof pct === 'number' && Number.isFinite(pct) && pct >= BODY_FAT_PCT_PLAUSIBLE.min && pct <= BODY_FAT_PCT_PLAUSIBLE.max
@@ -236,7 +236,7 @@ export function computeTargets(p: Profile | null, on: Date): Targets {
     derived !== undefined && Object.values(derived).every((v) => typeof v !== 'number' || Number.isFinite(v))
       ? derived
       : genericTargets();
-  const overrides: Partial<Targets> = {};
+  const overrides: NonNullable<Profile['overrides']> = {};
   for (const [k, v] of Object.entries(p.overrides ?? {})) {
     if (typeof v === 'number' && Number.isFinite(v)) (overrides as Record<string, number>)[k] = v;
   }

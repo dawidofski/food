@@ -511,7 +511,7 @@ correcting it, the same figure compounds its own error, so the projection refuse
 
 **Cap and floor.** The energy target never falls below the resting rate (`rmrKcal`). Separately, a requested rate is
 limited to `MAX_GOAL_RATE_KG_PER_WEEK = 1` kg/week. That maximum is the app's own choice and not a published figure.
-`Targets.goalCapped` is `true` when either limit reduced the request. A goal with no `rateKgPerWeek` does not move
+`Targets.goalCapped` is `'max-rate'`, `'floor'` or `'both'` (a `GoalCap`), naming which limit reduced the request, and is absent when neither did. A goal with no `rateKgPerWeek` does not move
 energy (protein still moves on the goal's kind). Generic targets are not goal-adjusted.
 
 **Which figures follow the adjusted energy (8.1.1).** Saturated fat, added sugars (10% and the conditional 5%), trans
@@ -519,3 +519,14 @@ fat and fibre are stated by their sources as shares of energy intake, so they fo
 tighter intake carries a tighter absolute allowance. Sodium (2,000 mg) and every micronutrient reference intake are
 absolute amounts and never move. `Targets` stays one structure, so the person's screen and the warning they are shown
 agree about every figure. `tests/rules/goalTargets.test.ts` proves it through the rules.
+
+**Consequence for the `nutrient-density` card (recorded, not changed).** That rule compares one entry's share of the energy
+target with its shares of the fibre and protein targets, and fires INFO when energy's share is the largest (and at least
+a tenth). Two of this plan's changes moved those denominators against each other: protein went from 1.2 to 1.7 g/kg
+(2.0 g/kg under a lose goal), and a deficit lowers the energy target. Worked example: 80 kg, light activity, an entry of
+600 kcal, 35 g protein and 6 g fibre. At hold, 24.9% of energy against 25.7% of protein: silent. With a 0.5 kg/week lose
+goal, 32.2% of energy against 21.9% of protein and 20% of fibre: an INFO card. Before this plan (protein 1.2 g/kg, 36.5% of
+protein) the same entry was silent in both cases. So a meal with 35 g of protein can now be called energy-dense for its
+protein because the protein target became better founded, and because a goal lowered the energy denominator. The rule is
+unchanged (the spec's non-goals forbid rewriting the warning engine); `tests/rules/goalTargets.test.ts` pins the hold and
+lose behaviour so it cannot drift unnoticed.

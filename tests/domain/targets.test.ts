@@ -270,6 +270,10 @@ describe('targets', () => {
     test('energy, and the figures derived from it, follow the new resting rate', () => {
       const t = computeTargets(profileAt(80, 'light', undefined, { bodyFatPct: 25 }), ON);
       expect(t.energyKcal).toBe(Math.round(1666 * 1.375));
+      // 2291 kcal: the shares of energy follow it, and fibre (14 g per 1,000 kcal) is above its 30 g floor here.
+      expect(t.satFatG).toBe(Math.round((0.1 * t.energyKcal) / 9));
+      expect(t.fibreG).toBe(Math.round((14 * t.energyKcal) / 1000));
+      expect(t.fibreG).toBeGreaterThan(30);
     });
   });
 
