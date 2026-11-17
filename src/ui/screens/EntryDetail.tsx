@@ -13,6 +13,7 @@ import { FIGURES_LEAD, PartialFigureNote, figureText, isPartialFigure, partialNo
 import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 import CorrectedBadge from '@/ui/components/CorrectedBadge';
+import MealPicker from '@/ui/components/MealPicker';
 import WarningGate from './WarningGate';
 import { fieldClass } from './FirstRun';
 
@@ -72,6 +73,9 @@ export default function EntryDetail({
   const initialFigures = (): Partial<Record<NutrientKey, string>> => Object.fromEntries(SHOWN.map((k) => [k, fieldText(entry, k)]));
   const [figures, setFigures] = useState(initialFigures);
   const [figureError, setFigureError] = useState<string | null>(null);
+  // Once the person has picked a slot themselves, the note calling it a guess no longer applies to it.
+  const [mealChanged, setMealChanged] = useState(false);
+  const [mealError, setMealError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!flow.outcome) return;
@@ -127,6 +131,21 @@ export default function EntryDetail({
         <h2 className="text-xl font-semibold">{entry.rawText}</h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">{whenText(entry.at)}</p>
       </div>
+
+      <MealPicker
+        value={entry.meal}
+        suggested={entry.meal !== undefined && !mealChanged}
+        onChange={(m) => {
+          if (m === entry.meal) return;
+          setMealChanged(true);
+          setMealError(null);
+          void flow
+            .setEntryMeal(entry, m)
+            .then(() => onChanged())
+            .catch(() => setMealError('That could not be saved. The entry is unchanged.'));
+        }}
+      />
+      {mealError && <p role="alert" className="text-sm">{mealError}</p>}
 
       <ul className="space-y-1">
         {entry.items.map((i, n) => (

@@ -16,6 +16,7 @@ import { interpretEntry, type AiFailure } from '@/ai/deepseek';
 import { getApiKey, isAiEnabled } from '@/state/aiSettings';
 import { loadReportedEnergy } from '@/data/reportedEnergy';
 import type { healthDaysBetween } from '@/data/healthDays';
+import { mealFromClock } from '@/domain/meals';
 import { computeTargets } from '@/domain/targets';
 import { dayTotals, weekContext } from '@/domain/totals';
 import { unusualServing, type UnusualServing } from '@/domain/unusualServing';
@@ -23,7 +24,7 @@ import { catalogue } from '@/rules/catalogue';
 import { foodsAskedAbout, rememberedAnswers, rememberNo } from '@/state/safetyMemory';
 import { evaluate } from '@/rules/engine';
 import type { Context, FoodIdentity, Rule, RuleFailure, SafetyQuestion, WarningCard } from '@/rules/types';
-import type { DiaryEntry, FoodRef, FoodSource, Resolution } from '@/types/diary';
+import type { DiaryEntry, FoodRef, FoodSource, Resolution, MealSlot } from '@/types/diary';
 import type { DatasetFood } from '@/types/food';
 import type { NutrientKey } from '@/types/nutrients';
 import type { Profile } from '@/types/profile';
@@ -115,7 +116,7 @@ type Session = {
    * Set only by a correction: what the revision keeps from the entry as it was, because the food is not being
    * re-read. The entry's own resolution kind, its own entry-level fped and its corrected-figures list.
    */
-  kept?: { resolution: DiaryEntry['resolution']; fped: DiaryEntry['fped']; correctedKeys: NutrientKey[] };
+  kept?: { resolution: DiaryEntry['resolution']; fped: DiaryEntry['fped']; correctedKeys: NutrientKey[]; meal: DiaryEntry['meal'] };
 };
 
 /** The entry being corrected. `at` is when the food was eaten, which a correction does not change. */
@@ -151,6 +152,8 @@ export type EntryFlow = {
    * and is stored as a revision (original time kept) only once the gate is passed. Cancelling writes nothing.
    */
   correctEntry: (entry: DiaryEntry, c: Correction) => Promise<void>;
+  /** Change only which meal an entry belonged to, as a revision, without re-reading the food or re-running the gate. */
+  setEntryMeal: (entry: DiaryEntry, meal: MealSlot) => Promise<void>;
   /**
    * A food that is already known, at a gram amount the person set: the path a scanned barcode takes. The text is
    * only what gets stored as `rawText` and shown in the diary; the food is NOT searched for again, so no
@@ -303,6 +306,10 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       userAction: action,
       state: 'active',
     };
+    // A correction keeps the slot the entry already had; a new entry takes the clock's guess, which the person
+    // can change on the entry screen. A field not copied here is silently dropped on every correction.
+    const meal = s.kept ? s.kept.meal : mealFromClock(new Date(entry.at));
+    if (meal !== undefined) entry.meal = meal;
     // A correction keeps the entry's own fped: the food is unchanged, so nothing is recomputed from the refs.
     const fped = s.kept ? s.kept.fped : sumFped(s.resolution.refs);
     if (fped) entry.fped = fped;
@@ -531,13 +538,26 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
         confidence: 1,
       };
       revisesRef.current = { id: entry.id, at: entry.at };
-      keptRef.current = { resolution: entry.resolution, fped: entry.fped, correctedKeys: applied.correctedKeys };
+      keptRef.current = { resolution: entry.resolution, fped: entry.fped, correctedKeys: applied.correctedKeys, meal: entry.meal };
       pendingResolution.current = null;
       // No parsed items: nothing is re-judged as an unusual serving, since the portion is not what changes.
       await run(entry.rawText, { items: [], resolution });
     },
     [run],
   );
+
+  /**
+   * Change only which meal an entry belonged to.
+   *
+   * It does not go through `run`: no food is being re-read, so there is nothing to resolve and nothing to judge,
+   * and putting a slot change through the warning gate would show someone a warning for moving breakfast to lunch.
+   * It is still a revision, like every other change here — the original is kept as `superseded`, never mutated.
+   */
+  const setEntryMeal = useCallback(async (entry: DiaryEntry, meal: MealSlot) => {
+    const d = depsRef.current;
+    const { id: _id, ...fields } = { ...entry, meal };
+    await (d.store.reviseEntry ?? reviseEntry)(entry.id, fields);
+  }, []);
 
   const continueWithout = useCallback(async () => {
     const p = pendingResolution.current;
@@ -610,6 +630,6 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   return {
     stage, cards, questions, failures, lines, unresolved, aiReadings, aiRefused, dataMissing, viewingAlternatives, outcome, error, lastText,
-    genericTargets, storedCount, submit, submitKnownFood, correctEntry, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
+    genericTargets, storedCount, submit, submitKnownFood, correctEntry, setEntryMeal, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
   };
 }
