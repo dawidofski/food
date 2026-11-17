@@ -121,8 +121,16 @@ describe('weight goal', () => {
     await open({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 5 } });
     const line = await screen.findByText(/could not give you the rate you asked for/i);
     expect(line.textContent).toMatch(/maximum is 1 kg a week \(its own choice, not a published figure\)/);
-    expect(line.textContent).toMatch(/does not set a target below your resting energy of \d+ kcal a day \(its own rule, not a published figure\)/);
+    expect(line.textContent).toMatch(/does not set a target below your resting energy of 1,755 kcal a day \(its own rule, not a published figure\)/);
+    expect(line.textContent).toMatch(/Your energy target is 1,755 kcal a day\./);
     expect(line.textContent).not.toMatch(/ {2}/);
+  });
+
+  // Finding 8: every other figure in the app carries a thousands separator; these three did not.
+  test('a four-figure offset is written with a thousands separator', async () => {
+    await open({ ...ownerProfile, goal: { kind: 'gain', rateKgPerWeek: 1 } });
+    const line = await screen.findByText(/adds .* kcal a day to your maintenance energy/);
+    expect(line.textContent).toMatch(/adds 1,100 kcal a day/);
   });
 
   test('a capped target that lands exactly on the resting energy names only the maximum rate', async () => {

@@ -9,6 +9,7 @@ import {
 } from '@/domain/goalConversion';
 import { BODY_FAT_PCT_PLAUSIBLE, computeTargets, MAX_GOAL_RATE_KG_PER_WEEK } from '@/domain/targets';
 import { unrecognisedAllergenFlags } from '@/rules/catalogue/allergen';
+import { fmtAmount } from '@/ui/components/NutrientBar';
 import type { Goal, OverridableTargetKey, Profile } from '@/types/profile';
 import { BodyDataForm, fieldClass, parseNumber, weightProblem } from './FirstRun';
 
@@ -303,17 +304,17 @@ function TargetSources({ profile, reported }: { profile: Profile; reported: Repo
       parts.push(`The app's own maximum is ${MAX_GOAL_RATE_KG_PER_WEEK} kg a week (its own choice, not a published figure), so a faster rate is reduced to that.`);
     }
     if (cap === 'floor' || cap === 'both') {
-      parts.push(`The app does not set a target below your resting energy of ${t.rmrKcal} kcal a day (its own rule, not a published figure), so the target stops there.`);
+      parts.push(`The app does not set a target below your resting energy of ${fmtAmount(t.rmrKcal)} kcal a day (its own rule, not a published figure), so the target stops there.`);
     }
-    parts.push(`Your energy target is ${t.energyKcal} kcal a day.`);
+    parts.push(`Your energy target is ${fmtAmount(t.energyKcal)} kcal a day.`);
     lines.push(parts.join(' '));
   } else if (hasRate) {
     // What the target actually moved by, read from the computed energy rather than recomputed from the rate.
     const n = Math.abs(t.energyKcal - computeTargets({ ...profile, goal: undefined, overrides: undefined }, new Date(), reported?.kcal).energyKcal);
     lines.push(
       kind === 'lose'
-        ? `Your goal takes ${n} kcal a day off your maintenance energy. ${CONVERSION_NOTE}`
-        : `Your goal adds ${n} kcal a day to your maintenance energy. ${CONVERSION_NOTE}`,
+        ? `Your goal takes ${fmtAmount(n)} kcal a day off your maintenance energy. ${CONVERSION_NOTE}`
+        : `Your goal adds ${fmtAmount(n)} kcal a day to your maintenance energy. ${CONVERSION_NOTE}`,
     );
   }
 
