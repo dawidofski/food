@@ -43,6 +43,8 @@ export default function LogOverlay({
   const restoreTo = useRef<Element | null>(null);
   const pushed = useRef(false);
   const unsaved = useRef(false);
+  /** Set while a deliberate departure is in flight, so the `popstate` it causes is not mistaken for a back gesture. */
+  const leaving = useRef(false);
   const [confirming, setConfirming] = useState(false);
 
   // Held in a ref so the open effect depends on `open` alone: a fresh `onClose` closure from the parent must
@@ -62,6 +64,7 @@ export default function LogOverlay({
   /** Leave for good, consuming the history entry we pushed so the back stack does not grow. */
   const leave = useCallback(() => {
     setConfirming(false);
+    leaving.current = true;
     if (pushed.current) {
       pushed.current = false;
       try {
@@ -89,6 +92,12 @@ export default function LogOverlay({
     push();
     const onPop = () => {
       pushed.current = false;
+      if (leaving.current) {
+        // Our own `history.back()`, from a person who chose to discard. Asking again would never let them out.
+        leaving.current = false;
+        onCloseRef.current();
+        return;
+      }
       if (unsaved.current) {
         // Back has already happened. Put the entry back and ask, rather than discarding their work.
         push();
@@ -104,6 +113,7 @@ export default function LogOverlay({
       window.removeEventListener('popstate', onPop);
       setConfirming(false);
       unsaved.current = false;
+      leaving.current = false;
       const back = restoreTo.current;
       if (back instanceof HTMLElement && document.body.contains(back)) back.focus();
     };

@@ -109,6 +109,20 @@ describe('logging from anywhere', () => {
     expect((within(screen.getByRole('dialog', { name: 'Log what you ate' })).getByRole('textbox') as HTMLInputElement).value).toBe('half a sandwich');
   });
 
+  test('lets go when the person chooses to discard', async () => {
+    // Discarding routes through history.back(), whose own handler must not mistake it for a back gesture and
+    // ask again — which would leave the person unable to get out at all.
+    await app();
+    fireEvent.click(logButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Log what you ate' });
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'half a sandwich' } });
+    await act(async () => { fireEvent.keyDown(dialog, { key: 'Escape' }); });
+    await screen.findByRole('alertdialog');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /discard it/i })); await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Log what you ate' })).toBeNull());
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
   test('asks before a back gesture throws away what was typed', async () => {
     // The route the owner hits by accident on a phone. Back has already happened by the time we hear about
     // it, so keeping the entry means putting it back.
