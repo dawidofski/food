@@ -45,6 +45,19 @@ export default function NutrientBar({
   const tickPct = okTarget ? (target / scale) * 100 : 0;
   const secondPct = okSecond ? (secondMark.value / scale) * 100 : 0;
 
+  // The track's scale is wider than the mark, so valuenow stays inside valuemax even past a limit; the text carries the
+  // reading. A partial total is a floor ("at least"), so it is never called over or under.
+  let valueText = '';
+  if (shown !== undefined) {
+    const figure = `${fmtAmount(shown)} ${unit}`;
+    const against = `the ${word} of ${fmtAmount(target)} ${unit}`;
+    if (!complete) valueText = okTarget ? `at least ${figure}, against ${against}` : `at least ${figure}`;
+    else if (!okTarget) valueText = figure;
+    else if (shown > target) valueText = `${figure}, over ${against}`;
+    else if (shown < target) valueText = `${figure}, under ${against}`;
+    else valueText = `${figure}, at ${against}`;
+  }
+
   return (
     <div data-testid={`bar-${nutrient}`} className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">
@@ -56,8 +69,9 @@ export default function NutrientBar({
           role="progressbar"
           aria-label={`${name} against its ${word}`}
           aria-valuemin={0}
-          aria-valuemax={okTarget ? Math.round(target) : 0}
+          aria-valuemax={Math.max(Math.ceil(scale), Math.round(shown))}
           aria-valuenow={Math.round(shown)}
+          aria-valuetext={valueText}
           className="relative h-3 rounded-full bg-slate-200 dark:bg-slate-800"
         >
           <div className="absolute inset-y-0 left-0 rounded-full bg-sky-700 dark:bg-sky-500" style={{ width: `${fillPct}%` }} />
