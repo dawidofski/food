@@ -62,10 +62,11 @@ describe('first run', () => {
     expect(computeTargets(p, new Date()).isGeneric).toBe(false);
   });
 
-  test('can be skipped, and the app then opens on the log with no profile', async () => {
+  test('can be skipped, and the app then opens on the diary with no profile', async () => {
+    // Repointed when logging moved from a tab to a floating button (A2.4): the app now opens on the diary.
     render(<App />);
     await click(/skip|not now|later/i);
-    expect(await screen.findByRole('heading', { name: /what did you eat/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^diary$/i })).toBeInTheDocument();
     expect(await getProfile()).toBeNull();
   });
 
@@ -75,7 +76,7 @@ describe('first run', () => {
     cleanup();
     await putProfile(ownerProfile);
     render(<App />);
-    expect(await screen.findByRole('heading', { name: /what did you eat/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^diary$/i })).toBeInTheDocument();
   });
 });
 
@@ -414,7 +415,7 @@ describe('erasing from inside the app', () => {
   test('an erase mid-session returns to first run', async () => {
     await putProfile(ownerProfile);
     render(<App />);
-    await screen.findByRole('heading', { name: /what did you eat/i });
+    await screen.findByRole('heading', { name: /^diary$/i });
     await click(/^settings$/i);
     await click(/^erase everything$/i);
     await click(/yes, erase everything/i);

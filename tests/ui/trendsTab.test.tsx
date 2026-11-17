@@ -7,8 +7,8 @@ import type { DiaryEntry } from '@/types/diary';
 import type { ClassificationFlags } from '@/types/nutrients';
 import App from '@/App';
 import BehaviourHistory from '@/ui/screens/BehaviourHistory';
-import Progress from '@/ui/screens/Progress';
-import Trends from '@/ui/screens/Trends';
+import TrendsTab from '@/ui/screens/TrendsTab';
+import Trends from '@/ui/screens/WeekTrends';
 
 beforeEach(async () => {
   await eraseEverything();
@@ -181,21 +181,31 @@ describe('behaviour history screen', () => {
 });
 
 describe('progress tab and navigation', () => {
-  test('opens on the existing missing view and switches to trends and warning history', async () => {
-    render(<Progress />);
+  test('opens on worth a look and switches to this week and warning history', async () => {
+    // Repointed when the tab was renamed Trends: the views are the same three, named so that none of them
+    // repeats the tab's own name.
+    render(<TrendsTab />);
     expect(await screen.findByRole('heading', { name: /what.s missing/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^trends$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^this week$/i }));
     expect(await screen.findByRole('heading', { name: /^trends$/i, level: 1 })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /warning history/i }));
     expect(await screen.findByRole('heading', { name: /^warning history$/i, level: 1 })).toBeInTheDocument();
   });
 
-  test('the main nav stays at six tabs and reaches the new screens through Progress', async () => {
+  test('no view inside the Trends tab is itself called Trends', () => {
+    render(<TrendsTab />);
+    const views = within(screen.getByRole('group', { name: 'Trends views' })).getAllByRole('button');
+    expect(views).toHaveLength(3);
+    expect(views.map((b) => b.textContent)).not.toContain('Trends');
+  });
+
+  test('the main nav reaches these views through the Trends tab', async () => {
+    // Repointed from six text tabs to four icons: the claim worth keeping is that the nav reaches these views.
     skipSetup();
     render(<App />);
     const nav = await screen.findByRole('navigation', { name: 'Main' });
-    expect(within(nav).getAllByRole('button')).toHaveLength(6);
-    fireEvent.click(within(nav).getByRole('button', { name: /^progress$/i }));
-    expect(await screen.findByRole('button', { name: /^trends$/i })).toBeInTheDocument();
+    expect(within(nav).getAllByRole('button')).toHaveLength(4);
+    fireEvent.click(within(nav).getByRole('button', { name: 'Trends' }));
+    expect(await screen.findByRole('button', { name: /^this week$/i })).toBeInTheDocument();
   });
 });

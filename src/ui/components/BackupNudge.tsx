@@ -14,7 +14,7 @@ import { downloadBackup } from '@/state/exportDownload';
  * `src/state/backupReminder.ts` for why the app cannot say that.
  *
  * It appears only when the diary is worth copying and nothing has been copied lately; dismissing silences it for
- * a week and exporting for a month. Every storage read behind that decision is wrapped, and the count comes from
+ * a week and exporting for a week too. Every storage read behind that decision is wrapped, and the count comes from
  * IndexedDB: if either is unavailable the reminder simply does not appear and the diary is unaffected.
  */
 export default function BackupNudge({

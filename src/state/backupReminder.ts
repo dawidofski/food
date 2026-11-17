@@ -18,8 +18,15 @@ export const NUDGE_DISMISSED_KEY = lsKey('backupNudgeDismissedAt');
 
 /** Below this, there is not enough diary to be worth nagging anybody about. */
 export const MIN_ENTRIES_FOR_NUDGE = 20;
-/** A copy made inside this window silences the reminder. */
-export const EXPORT_SILENCE_DAYS = 30;
+/**
+ * A copy made inside this window silences the reminder.
+ *
+ * Seven, because the owner asked to be offered a copy to his phone **each week**. A scheduled, automatic weekly
+ * backup is not something a web page can do — nothing can wake this app at a chosen time (see amendment A2.1) —
+ * so the honest form of "each week" is an offer waiting on the diary a week after the last one, one tap away.
+ * It is the same span as a dismissal, so "not now" and "done" quiet it for equally long.
+ */
+export const EXPORT_SILENCE_DAYS = 7;
 /** "Not now" means not now, for this long. */
 export const DISMISS_SILENCE_DAYS = 7;
 
@@ -90,8 +97,8 @@ function olderThan(stamp: Date | null, days: number, now: Date): boolean {
 }
 
 /**
- * True when the diary is big enough to be worth a copy, no copy has been offered in the last 30 days, and the
- * reminder was not dismissed in the last 7. An unreadable or absent stamp counts as "never", so blocked storage
+ * True when the diary is big enough to be worth a copy, no copy has been offered in the last week, and the
+ * reminder was not dismissed in the last week. An unreadable or absent stamp counts as "never", so blocked storage
  * shows the reminder rather than hiding it: being told twice costs a tap, being told never costs the diary.
  */
 export function isBackupNudgeDue(entryCount: number, now: Date = new Date()): boolean {

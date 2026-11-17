@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { addEntry, countActiveEntries, eraseEverything, lsKey } from '@/data/db';
-import { LAST_EXPORT_KEY, NUDGE_DISMISSED_KEY, dismissNudge, recordExportOffered } from '@/state/backupReminder';
+import { EXPORT_SILENCE_DAYS, LAST_EXPORT_KEY, NUDGE_DISMISSED_KEY, dismissNudge, recordExportOffered } from '@/state/backupReminder';
 import { PERSIST_ASKED_KEY } from '@/state/persistentStorage';
 import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
@@ -115,15 +115,17 @@ describe('the backup nudge: when it appears', () => {
     expect(nudge()).toBeNull();
   });
 
-  test('an export ten days ago hides it; one thirty-one days ago shows it again', async () => {
+  test('a copy this week hides it; one older than a week shows it again', async () => {
+    // Repointed when the owner asked to be offered a copy each week rather than each month: the spans are now
+    // taken from the constant so the test states the behaviour, not the number it happened to have.
     await seedEntries(20);
-    recordExportOffered(ago(10));
+    recordExportOffered(ago(EXPORT_SILENCE_DAYS - 1));
     diary();
     await settle();
     expect(nudge()).toBeNull();
     cleanup();
 
-    recordExportOffered(ago(31));
+    recordExportOffered(ago(EXPORT_SILENCE_DAYS + 1));
     diary();
     expect(await screen.findByTestId('backup-nudge')).toBeInTheDocument();
   });

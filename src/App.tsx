@@ -1,18 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getProfile } from '@/data/db';
 import { isSetupSkipped, skipSetup } from '@/state/setup';
 import FirstRun from '@/ui/screens/FirstRun';
 import Diary from '@/ui/screens/Diary';
-import Progress from '@/ui/screens/Progress';
-import BatchBuilder from '@/ui/screens/BatchBuilder';
-import Log from '@/ui/screens/Log';
-import MyFoods from '@/ui/screens/MyFoods';
+import TrendsTab from '@/ui/screens/TrendsTab';
+import Food from '@/ui/screens/Food';
 import Settings from '@/ui/screens/Settings';
+import LogOverlay from '@/ui/components/LogOverlay';
+import NavIcon, { type NavIconName } from '@/ui/components/NavIcon';
 
-type Tab = 'log' | 'diary' | 'progress' | 'batches' | 'foods' | 'settings';
+type Tab = 'diary' | 'trends' | 'food' | 'settings';
+
+/** The four destinations, in order. Each name is the control's accessible name; the icon carries none. */
+const TABS: { id: Tab; label: string; icon: NavIconName }[] = [
+  { id: 'diary', label: 'Diary', icon: 'diary' },
+  { id: 'trends', label: 'Trends', icon: 'trends' },
+  { id: 'food', label: 'Food', icon: 'food' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
+];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('log');
+  const [tab, setTab] = useState<Tab>('diary');
   /**
    * First run asks for a profile, but only once: it is skippable because the app works on general adult targets
    * without one, and a skip is remembered.
@@ -29,35 +37,73 @@ export default function App() {
   }, []);
   /** Set when a portion is picked from the fridge list, so the log opens with it typed in. The gate still runs. */
   const [draft, setDraft] = useState('');
-  const tabBtn = (id: Tab, label: string) => (
-    <button
-      type="button"
-      aria-current={tab === id ? 'page' : undefined}
-      onClick={() => { setDraft(''); setTab(id); }}
-      className={`min-h-12 flex-1 text-sm ${tab === id ? 'font-semibold underline' : ''}`}
-    >
-      {label}
-    </button>
-  );
+  const [logOpen, setLogOpen] = useState(false);
+  const logButton = useRef<HTMLButtonElement | null>(null);
+
+  const openLog = (text = '') => {
+    setDraft(text);
+    setLogOpen(true);
+  };
+
   if (setup === 'loading') return null;
   if (setup === 'needed') {
     return <FirstRun onDone={() => setSetup('done')} onSkip={() => { skipSetup(); setSetup('done'); }} />;
   }
+
+  // Not over Settings: that screen holds erase, export and the profile, and a button offering to add food has no
+  // business floating over any of them.
+  const showLogButton = tab !== 'settings';
+
   return (
     <>
-      {tab === 'log' && <Log key={draft} initialDraft={draft} />}
       {tab === 'diary' && <Diary />}
-      {tab === 'progress' && <Progress />}
-      {tab === 'batches' && <BatchBuilder onLogPortion={(text) => { setDraft(text); setTab('log'); }} />}
-      {tab === 'foods' && <MyFoods />}
-      {tab === 'settings' && <Settings onErased={() => { setDraft(''); setTab('log'); setSetup(isSetupSkipped() ? 'done' : 'needed'); }} />}
-      <nav aria-label="Main" className="sticky bottom-0 flex border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950">
-        {tabBtn('log', 'Log')}
-        {tabBtn('diary', 'Diary')}
-        {tabBtn('progress', 'Progress')}
-        {tabBtn('batches', 'Batches')}
-        {tabBtn('foods', 'My foods')}
-        {tabBtn('settings', 'Settings')}
+      {tab === 'trends' && <TrendsTab />}
+      {tab === 'food' && <Food onLogPortion={(text) => openLog(text)} />}
+      {tab === 'settings' && (
+        <Settings
+          onErased={() => {
+            setDraft('');
+            setLogOpen(false);
+            setTab('diary');
+            setSetup(isSetupSkipped() ? 'done' : 'needed');
+          }}
+        />
+      )}
+
+      {/*
+        Room beneath the last thing on the page, so the floating button never sits over a control the person is
+        reaching for. A smaller z-index would not do it: the button has to stay above the page to be reachable,
+        so the page has to end above the button.
+      */}
+      {showLogButton && <div aria-hidden="true" className="h-24" />}
+
+      {showLogButton && (
+        <button
+          ref={logButton}
+          type="button"
+          aria-label="Log what you ate"
+          onClick={() => openLog('')}
+          className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full border border-slate-900 dark:border-slate-100 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-lg"
+        >
+          <NavIcon name="log" className="h-7 w-7" />
+        </button>
+      )}
+
+      <LogOverlay open={logOpen} initialDraft={draft} onClose={() => setLogOpen(false)} returnFocusTo={logButton} />
+
+      <nav aria-label="Main" className="sticky bottom-0 z-20 flex border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            aria-label={t.label}
+            aria-current={tab === t.id ? 'page' : undefined}
+            onClick={() => { setDraft(''); setTab(t.id); }}
+            className={`min-h-14 flex-1 flex items-center justify-center ${tab === t.id ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}
+          >
+            <NavIcon name={t.icon} />
+          </button>
+        ))}
       </nav>
     </>
   );

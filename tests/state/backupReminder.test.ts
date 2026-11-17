@@ -57,11 +57,13 @@ describe('when the nudge is due', () => {
   });
 
   test('a recent export silences it, an old one does not', () => {
-    recordExportOffered(ago(10));
+    // Relative to the constant, not to the span it happened to have: the owner changed it from a month to a
+    // week and the behaviour under test is unchanged.
+    recordExportOffered(ago(1));
     expect(isBackupNudgeDue(40, now)).toBe(false);
     recordExportOffered(ago(EXPORT_SILENCE_DAYS - 1));
     expect(isBackupNudgeDue(40, now)).toBe(false);
-    recordExportOffered(ago(31));
+    recordExportOffered(ago(EXPORT_SILENCE_DAYS + 1));
     expect(isBackupNudgeDue(40, now)).toBe(true);
   });
 
@@ -105,5 +107,19 @@ describe('blocked storage', () => {
     });
     expect(() => recordExportOffered(now)).not.toThrow();
     expect(() => dismissNudge(now)).not.toThrow();
+  });
+});
+
+describe('the copy is offered weekly, as the owner asked', () => {
+  test('stays quiet for six days after a copy and asks again on the seventh', () => {
+    recordExportOffered(ago(6));
+    expect(isBackupNudgeDue(MIN_ENTRIES_FOR_NUDGE, now)).toBe(false);
+    recordExportOffered(ago(7));
+    expect(isBackupNudgeDue(MIN_ENTRIES_FOR_NUDGE, now)).toBe(true);
+  });
+
+  test('a copy is no longer good for a month', () => {
+    // The owner asked for each week; 30 days was the old span and must not quietly return.
+    expect(EXPORT_SILENCE_DAYS).toBe(7);
   });
 });
