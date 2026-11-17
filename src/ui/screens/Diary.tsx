@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { countActiveEntries, getProfile } from '@/data/db';
+import { loadReportedEnergy } from '@/data/reportedEnergy';
 import { last7DayKeys, localDayRange } from '@/domain/dayBoundary';
+import type { ReportedExpenditure } from '@/domain/expenditure';
 import { isKnownValue } from '@/domain/nutrients';
-import { dayTotals } from '@/domain/totals';
+import { computeTargets } from '@/domain/targets';
+import { dayTotals, mealTotals, MEAL_GROUPS } from '@/domain/totals';
 import { requestPersistenceOnce } from '@/state/persistentStorage';
 import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
 import type { Profile } from '@/types/profile';
+import DayFigures from '@/ui/components/DayFigures';
 import DayHealthForm from '@/ui/components/DayHealthForm';
+import MealSection from '@/ui/components/MealSection';
 import BackupNudge from '@/ui/components/BackupNudge';
 import CorrectedBadge from '@/ui/components/CorrectedBadge';
-import CoverageNote from '@/ui/components/CoverageNote';
 import { fmtAmount } from '@/ui/components/NutrientBar';
 import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
@@ -38,11 +42,21 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
 
+  const [reported, setReported] = useState<ReportedExpenditure | undefined>(undefined);
+
   useEffect(() => {
     let live = true;
     getProfile().then((p) => { if (live) setProfile(p); }, () => undefined);
     return () => { live = false; };
   }, []);
+
+  // The same guarded path the missing screen and the warning engine use, so the three cannot disagree about the
+  // figure behind the targets. It cannot reject: an unreadable store means the formula is used.
+  useEffect(() => {
+    let live = true;
+    void loadReportedEnergy(deps.now(), deps.store.healthDaysBetween).then((r) => { if (live) setReported(r); });
+    return () => { live = false; };
+  }, [deps, reload]);
 
   /**
    * Ask the browser once to keep this app's data. Here rather than at start-up because the diary is a resting
@@ -85,7 +99,23 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
 
   const totals = dayTotals(entries, dayKey);
   const dayEntries = entries.filter((e) => dayTotals([e], dayKey).entryCount > 0);
-  const kcal = totals.nutrients.energyKcal;
+  const byMeal = mealTotals(entries, dayKey);
+  const targets = computeTargets(profile, now, reported?.kcal);
+
+  const row = (e: DiaryEntry) => (
+    <li key={e.id} className="border-b border-slate-200 dark:border-slate-800">
+      <button type="button" onClick={() => setOpenId(e.id)} className="min-h-14 w-full py-2 text-left">
+        <span className="block text-base">{e.rawText}</span>
+        <span className="block text-xs text-slate-600 dark:text-slate-400">
+          {timeOf(e.at)}
+          {isKnownValue(e.nutrients.energyKcal) && ` · ${fmtAmount(e.nutrients.energyKcal)} kcal`}
+          {e.items.some((i) => i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
+          {e.items.some((i) => i.source === 'off') && <OpenFoodFactsBadge />}
+          <CorrectedBadge keys={e.correctedKeys} />
+        </span>
+      </button>
+    </li>
+  );
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
@@ -109,35 +139,30 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
       <BackupNudge now={deps.now} countEntries={deps.store.countActiveEntries ?? countActiveEntries} />
 
       {loadError && <p role="alert" className="text-sm text-slate-900 dark:text-slate-100">The diary could not be read, so nothing is shown. Nothing has been lost.</p>}
-      {loaded && !loadError && totals.entryCount === 0 && <p className="text-base">Nothing logged on this day.</p>}
 
-      {totals.entryCount > 0 && (
-        <section aria-label="Day total" className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
-          <p className="text-sm text-slate-700 dark:text-slate-300">{`${totals.entryCount} ${totals.entryCount === 1 ? 'entry' : 'entries'}`}</p>
-          {isKnownValue(kcal) && totals.coverage.energyKcal === 'known' && <p className="text-lg font-semibold">{`${fmtAmount(kcal)} kcal`}</p>}
-          {isKnownValue(kcal) && totals.coverage.energyKcal !== 'known' && <CoverageNote nutrient="energyKcal" coverage="partial" value={kcal} />}
-          {!isKnownValue(kcal) && <CoverageNote nutrient="energyKcal" coverage="unknown" />}
-        </section>
+      {loaded && !loadError && (
+        <DayFigures
+          totals={totals}
+          targets={targets}
+          {...(profile?.activityLevel ? { activityLevel: profile.activityLevel } : {})}
+          {...(reported?.days !== undefined ? { reportedDays: reported.days } : {})}
+          emptyText="Nothing logged on this day."
+        />
       )}
 
-      <DayHealthForm dayKey={dayKey} profile={profile} now={now} />
+      {loaded && !loadError && MEAL_GROUPS.map((g) => {
+        const slot = byMeal[g];
+        // "Earlier" holds entries logged before slots existed; it is not a time of day, so it appears only when
+        // it has something in it.
+        if (g === 'earlier' && slot.entryCount === 0) return null;
+        return (
+          <MealSection key={g} group={g} totals={slot}>
+            <ul>{dayEntries.filter((e) => (g === 'earlier' ? mealTotals([e], dayKey).earlier.entryCount > 0 : e.meal === g)).map(row)}</ul>
+          </MealSection>
+        );
+      })}
 
-      <ul>
-        {dayEntries.map((e) => (
-          <li key={e.id} className="border-b border-slate-200 dark:border-slate-800">
-            <button type="button" onClick={() => setOpenId(e.id)} className="min-h-14 w-full py-2 text-left">
-              <span className="block text-base">{e.rawText}</span>
-              <span className="block text-xs text-slate-600 dark:text-slate-400">
-                {timeOf(e.at)}
-                {isKnownValue(e.nutrients.energyKcal) && ` · ${fmtAmount(e.nutrients.energyKcal)} kcal`}
-                {e.items.some((i) => i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
-                {e.items.some((i) => i.source === 'off') && <OpenFoodFactsBadge />}
-                <CorrectedBadge keys={e.correctedKeys} />
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <DayHealthForm dayKey={dayKey} profile={profile} now={now} />
     </main>
   );
 }

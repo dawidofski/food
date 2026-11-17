@@ -192,7 +192,10 @@ describe('the backup nudge: storage that refuses to work', () => {
     });
     diary();
     expect(await screen.findByRole('heading', { name: /^diary$/i })).toBeInTheDocument();
-    expect(await screen.findByText(/20 entries/i)).toBeInTheDocument();
+    // Repointed when the day's figures replaced the "N entries" block: the claim is that the day still renders
+    // when storage throws, so it is now pinned on the day's figures, which is what the diary shows instead.
+    expect(await screen.findByTestId('figures-provenance')).toBeInTheDocument();
+    expect(await screen.findByTestId('meal-breakfast')).toBeInTheDocument();
   });
 
   test('localStorage throwing on write leaves the diary readable and the dismiss working', async () => {
