@@ -34,12 +34,17 @@ export type FigureRead =
  * save time: unparseable text such as "1e" reads as '' in a number input, and that is not an emptied field.
  */
 export function readFigure(k: NutrientKey, typed: string, before: string, badInput: boolean): FigureRead {
-  if (badInput) return { kind: 'refused', message: `${sentence(k)} is not a number yet. Nothing has been changed.` };
+  return readNamedFigure(sentence(k), typed, before, badInput);
+}
+
+/** The same reading for a figure that is not a nutrient (a day's steps, say). `name` starts a sentence: "Steps". */
+export function readNamedFigure(name: string, typed: string, before: string, badInput: boolean): FigureRead {
+  if (badInput) return { kind: 'refused', message: `${name} is not a number yet. Nothing has been changed.` };
   const text = typed.trim();
   if (text === '') return before !== '' ? { kind: 'clear' } : { kind: 'unchanged' };
   const n = Number(text);
   if (!Number.isFinite(n) || n < 0) {
-    return { kind: 'refused', message: `${sentence(k)} needs a number that is zero or more. Nothing has been changed.` };
+    return { kind: 'refused', message: `${name} needs a number that is zero or more. Nothing has been changed.` };
   }
   if (text === before || (before !== '' && n === Number(before))) return { kind: 'unchanged' };
   return { kind: 'set', value: n };

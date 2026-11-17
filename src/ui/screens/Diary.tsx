@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { countActiveEntries } from '@/data/db';
+import { countActiveEntries, getProfile } from '@/data/db';
 import { last7DayKeys, localDayRange } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
 import { dayTotals } from '@/domain/totals';
 import { requestPersistenceOnce } from '@/state/persistentStorage';
 import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
+import type { Profile } from '@/types/profile';
+import DayHealthForm from '@/ui/components/DayHealthForm';
 import BackupNudge from '@/ui/components/BackupNudge';
 import CorrectedBadge from '@/ui/components/CorrectedBadge';
 import CoverageNote from '@/ui/components/CoverageNote';
@@ -34,6 +36,13 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    getProfile().then((p) => { if (live) setProfile(p); }, () => undefined);
+    return () => { live = false; };
+  }, []);
 
   /**
    * Ask the browser once to keep this app's data. Here rather than at start-up because the diary is a resting
@@ -110,6 +119,8 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
           {!isKnownValue(kcal) && <CoverageNote nutrient="energyKcal" coverage="unknown" />}
         </section>
       )}
+
+      <DayHealthForm dayKey={dayKey} profile={profile} now={now} />
 
       <ul>
         {dayEntries.map((e) => (
