@@ -59,25 +59,28 @@ export function energySourceSentence(
 }
 
 /**
- * Where the four share-derived limits came from when the person typed their own energy figure, and nothing else on the
- * screen accounts for them.
+ * WHICH energy the four share-derived limits were worked out from, when the person typed their own energy figure and
+ * nothing else on the screen accounts for them.
  *
  * `computeTargets` overlays only the keys the person typed, so with `overrides.energyKcal` set the saturated fat, added
- * sugars, trans fat and fibre limits keep the values `derive` computed — a resting rate times the activity factor,
- * goal-adjusted. The activity factor therefore still stands behind four figures on screen, and an unlabelled threshold
- * is not shown (invariant 2). The energy sentence above says the energy figure is the person's own, so the credit must
- * be attached to the limits and never to energy.
+ * sugars, trans fat and fibre limits keep the values `derive` computed. The energy sentence above says the energy figure
+ * is the person's own, so without this the four limits have no source at all (invariant 2).
  *
- * Undefined where there is nothing to say: a calculated energy target already names the factor in its own sentence, and
- * a reported burn means no activity factor was used at all.
+ * It says which energy and stops. It does NOT describe how that energy was reached: under a rate goal the figure is
+ * goal-adjusted, so "a resting energy multiplied by an activity factor" pointed at a number the limits are not shares of
+ * (2,413 where they were shares of 1,863), and it contradicted `ProfileSettings`, which says "shares of the energy your
+ * goal set" for the same state. The activity factor is still named, as a working figure, by the sentence that follows
+ * this one in the note. It also does NOT call the limits a share of the DISPLAYED energy target, because they are not:
+ * they are a share of the figure the person's own replaced. That mismatch is pre-existing, changes nutrition targets,
+ * and is recorded for its own decision rather than settled in a wording pass.
  *
- * It deliberately does NOT call the limits a share of the displayed energy target, because they are not: they are a
- * share of the figure the person's own replaced. That mismatch is pre-existing, changes nutrition targets, and is
- * recorded for its own decision rather than fixed in a wording pass.
+ * Still withheld when `expenditure` is 'reported', although the sentence no longer describes a factor. There the energy
+ * behind the limits is the mean of burn figures the PERSON reported, so "the energy the app calculated rather than from
+ * your own figure" would deny them a figure that is theirs, and would contradict the energy sentence's own "your own
+ * reported energy burn". The contrast this clause draws only holds where the app, and not the person, supplied the
+ * expenditure figure. That path's limits are reported separately and are parked with the mismatch above.
  */
-export function sharedLimitsFactorClause(basis: Targets['basis']): string | undefined {
+export function sharedLimitsSourceClause(basis: Targets['basis']): string | undefined {
   if (basis.energy !== 'custom' || basis.expenditure !== 'formula') return undefined;
-  // Not "your resting energy": on the general-adult basis it is a stand-in figure and attributing it to the person would
-  // be the untruth this branch has been careful to avoid.
-  return 'The saturated fat, added sugars, trans fat and fibre limits were worked out from the energy the app calculated rather than from your own figure, a resting energy multiplied by an activity factor.';
+  return 'The saturated fat, added sugars, trans fat and fibre limits were worked out from the energy the app calculated rather than from your own figure.';
 }
