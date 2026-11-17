@@ -474,4 +474,106 @@ describe('targets', () => {
       for (const bad of [0, -1, NaN, Infinity]) expect(computeTargets(p, ON, bad)).toEqual(computeTargets(p, ON));
     });
   });
+
+  /**
+   * Amendment A3 (2026-11-17): the five share-derived limits are shares of the energy target SHOWN, including when the
+   * person typed that target. Every expected figure below is computed by hand from the formulas in the design document
+   * and written as a literal, so the test cannot agree with a wrong implementation of them.
+   *
+   * profileAt(80, 'light') is 80 kg, 180 cm, age 35, male: a resting rate of 1,755 and a maintenance energy of 2,413.
+   * A lose goal of 0.5 kg/week takes 550 off that, giving 1,863 (clear of the 1,755 floor). The three energies in play
+   * are therefore 2,413 calculated, 1,863 goal-adjusted, and whatever the person typed.
+   */
+  describe('the share-derived limits follow a typed energy figure', () => {
+    // Shares of 2,500: 0.1/9 = 27.8 -> 28, 0.1/4 = 62.5 -> 63, 0.05/4 = 31.25 -> 31, 0.01/9 = 2.8 -> 3,
+    // 14 g per 1,000 kcal = 35, above the 30 g floor.
+    const SHARES_OF_2500 = { satFatG: 28, addedSugarsG: 63, addedSugarsIdealG: 31, transFatG: 3, fibreG: 35 };
+
+    test('with no goal, the five limits are shares of the typed figure and not of the calculated one', () => {
+      const t = computeTargets(profileAt(80, 'light', undefined, { overrides: { energyKcal: 2500 } }), ON);
+      expect(t.energyKcal).toBe(2500);
+      // Shares of 2,413 would be 27, 60, 30, 3 and 34.
+      expect(t.satFatG).toBe(28);
+      expect(t.addedSugarsG).toBe(63);
+      expect(t.addedSugarsIdealG).toBe(31);
+      expect(t.transFatG).toBe(3);
+      expect(t.fibreG).toBe(35);
+    });
+
+    test('with a goal, the five limits follow the typed figure and not the goal-adjusted one', () => {
+      // The state the owner saw: a typed figure sitting beside limits that were shares of the figure it replaced.
+      const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }, { overrides: { energyKcal: 2500 } }), ON);
+      expect(t.energyKcal).toBe(2500);
+      // Shares of the goal-adjusted 1,863 would be 21, 47, 23, 2 and 30. All five differ, so none can pass by accident.
+      expect(t.satFatG).toBe(28);
+      expect(t.addedSugarsG).toBe(63);
+      expect(t.addedSugarsIdealG).toBe(31);
+      expect(t.transFatG).toBe(3);
+      expect(t.fibreG).toBe(35);
+      expect(t.goalCapped).toBeUndefined();
+    });
+
+    test('a typed figure below the calculated one tightens them, which is the cost the amendment states', () => {
+      // Shares of 2,000: 22.2 -> 22, 50, 25, 2.2 -> 2; 14 g per 1,000 kcal would be 28, so the floor gives 30.
+      const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }, { overrides: { energyKcal: 2000 } }), ON);
+      expect(t.satFatG).toBe(22);
+      expect(t.addedSugarsG).toBe(50);
+      expect(t.addedSugarsIdealG).toBe(25);
+      expect(t.transFatG).toBe(2);
+      expect(t.fibreG).toBe(30);
+    });
+
+    test('the absolute figures are untouched by a typed energy figure', () => {
+      const p = profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 });
+      const t = computeTargets({ ...p, overrides: { energyKcal: 2500 } }, ON);
+      expect(t.proteinG).toBe(160); // 2.0 g/kg of 80 kg, from the goal's kind
+      expect(t.proteinFloorG).toBe(66); // EFSA 0.83 g/kg of 80 kg
+      expect(t.sodiumMg).toBe(2000); // WHO, an absolute amount
+      expect(t.rmrKcal).toBe(1755);
+      const without = computeTargets(p, ON);
+      expect(t.proteinG).toBe(without.proteinG);
+      expect(t.proteinFloorG).toBe(without.proteinFloorG);
+      expect(t.sodiumMg).toBe(without.sodiumMg);
+      expect(t.rmrKcal).toBe(without.rmrKcal);
+      expect(t.micronutrients).toEqual(without.micronutrients);
+    });
+
+    test("a limit the person typed themselves is not recalculated out from under them", () => {
+      const t = computeTargets(profileAt(80, 'light', undefined, { overrides: { energyKcal: 2500, satFatG: 20 } }), ON);
+      expect(t.satFatG).toBe(20); // their own figure, applied on top of the recomputed shares
+      expect(t.addedSugarsG).toBe(63); // the limits they did not type still follow the typed energy
+      expect(t.energyKcal).toBe(2500);
+    });
+
+    test('the fibre floor still holds at a low typed energy', () => {
+      const t = computeTargets(profileAt(80, 'light', undefined, { overrides: { energyKcal: 1200 } }), ON);
+      expect(t.fibreG).toBe(30); // 14 g per 1,000 kcal would be 17
+      expect(t.satFatG).toBe(13); // 0.1 x 1,200 / 9 = 13.3, so the share itself is not floored
+    });
+
+    test('a profile with no typed energy figure is completely unaffected', () => {
+      const plain = computeTargets(profileAt(80, 'light'), ON);
+      expect(plain).toMatchObject({ satFatG: 27, addedSugarsG: 60, addedSugarsIdealG: 30, transFatG: 3, fibreG: 34 });
+
+      const goal = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), ON);
+      expect(goal).toMatchObject({ satFatG: 21, addedSugarsG: 47, addedSugarsIdealG: 23, transFatG: 2, fibreG: 30 });
+
+      // A typed resting rate is not a typed energy target: it moves neither the energy target nor the five limits.
+      const rmrOnly = computeTargets(profileAt(80, 'light', undefined, { overrides: { rmrKcal: 1600 } }), ON);
+      expect(rmrOnly).toMatchObject({ satFatG: 27, addedSugarsG: 60, addedSugarsIdealG: 30, transFatG: 3, fibreG: 34 });
+      expect(rmrOnly.energyKcal).toBe(2413);
+
+      // A typed figure for something else moves nothing either.
+      const other = computeTargets(profileAt(80, 'light', undefined, { overrides: { sodiumMg: 2300 } }), ON);
+      expect(other).toMatchObject({ satFatG: 27, addedSugarsG: 60, addedSugarsIdealG: 30, transFatG: 3, fibreG: 34 });
+    });
+
+    test('the shares of 2,500 are the same whatever the energy target they replaced', () => {
+      // One formula, one result: the typed figure is the only input. Pinned against the three energies above.
+      for (const goal of [undefined, { kind: 'hold' } as Goal, { kind: 'lose', rateKgPerWeek: 0.5 } as Goal, { kind: 'gain', rateKgPerWeek: 0.25 } as Goal]) {
+        const t = computeTargets(profileAt(80, 'light', goal, { overrides: { energyKcal: 2500 } }), ON);
+        expect(t).toMatchObject(SHARES_OF_2500);
+      }
+    });
+  });
 });

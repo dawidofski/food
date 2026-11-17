@@ -196,12 +196,17 @@ describe('weight goal', () => {
     expect(line.textContent).toMatch(/sodium and the micronutrient reference amounts are fixed amounts and do not move/i);
   });
 
-  test('a rate with a typed energy figure still explains the moved limits, in its own words', async () => {
+  // Amendment A3: the typed figure now moves the limits too, so the line no longer credits the goal with them.
+  test('a rate with a typed energy figure says the limits follow that figure, and the goal no longer moves them', async () => {
     await open({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 }, overrides: { energyKcal: 2000 } });
-    const line = await screen.findByText(/worked out as shares of the energy your goal set/i);
-    expect(line.textContent).toMatch(/your goal has already moved them/i);
-    expect(line.textContent).toMatch(/your own energy figure replaces your energy target but not those limits/i);
+    const line = await screen.findByText(/shares of your energy target, which is your own figure/i);
+    expect(line.textContent).toMatch(/so your goal no longer moves them/i);
+    expect(line.textContent).toMatch(/fibre never falls below 30 g/i);
     expect(line.textContent).toMatch(/sodium and the micronutrient reference amounts are fixed amounts and do not move/i);
+    // The two claims the amendment made false: the goal did not set the energy behind them, and the typed figure does
+    // not leave them behind.
+    expect(line.textContent).not.toMatch(/shares of the energy your goal set|your goal has already moved them/i);
+    expect(line.textContent).not.toMatch(/but not those limits/i);
     expect(screen.queryByText(/move when your goal changes it/i)).toBeNull();
     expect(line.textContent).not.toMatch(/your own figures, not worked out/i);
   });
@@ -369,5 +374,36 @@ describe('where the energy figure came from', () => {
     await open({ ...ownerProfile, overrides: { energyKcal: 2500 } });
     await screen.findByText(/^Energy:/);
     expect(screen.queryByText(/replaces your reported energy burn/i)).toBeNull();
+  });
+});
+
+/**
+ * The override form promises that leaving a field empty uses "the calculated figure", and each placeholder names it.
+ * Amendment A3 made the five share-derived limits shares of a typed energy figure, so the figure a field would take if
+ * it were left empty now depends on the energy figure typed into another field.
+ */
+describe('the override placeholders name the figure the field would actually take', () => {
+  const placeholder = (key: string): string | null =>
+    (screen.getByLabelText(new RegExp(`${key} override`, 'i')) as HTMLInputElement).getAttribute('placeholder');
+
+  test('with no typed energy figure they are the calculated targets', async () => {
+    await open();
+    await screen.findByRole('heading', { name: /target overrides/i });
+    expect(placeholder('energy')).toBe('Calculated: 2413');
+    expect(placeholder('saturated fat')).toBe('Calculated: 27');
+    expect(placeholder('fibre')).toBe('Calculated: 34');
+  });
+
+  test('a typed energy figure moves the share-derived placeholders with it', async () => {
+    await open({ ...ownerProfile, overrides: { energyKcal: 2000 } });
+    await screen.findByRole('heading', { name: /target overrides/i });
+    // The energy field's own placeholder is still what the app would calculate if the field were cleared.
+    expect(placeholder('energy')).toBe('Calculated: 2413');
+    // Clearing saturated fat with 2,000 typed gives a share of 2,000 (22 g), not of the calculated 2,413 (27 g).
+    expect(placeholder('saturated fat')).toBe('Calculated: 22');
+    expect(placeholder('added sugars')).toBe('Calculated: 50');
+    expect(placeholder('fibre')).toBe('Calculated: 30'); // 14 g per 1,000 kcal would be 28: the floor holds
+    // Sodium is an absolute amount and does not move.
+    expect(placeholder('sodium')).toBe('Calculated: 2000');
   });
 });

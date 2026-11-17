@@ -330,7 +330,7 @@ function TargetSources({ profile, reported }: { profile: Profile; reported: Repo
     const ownNote = own.length > 0 ? ` Your own figures, not worked out by the app: ${own.join(', ')}.` : '';
     lines.push(
       (basis.energy === 'custom'
-        ? 'Saturated fat, added sugars, trans fat and fibre were worked out as shares of the energy your goal set, so your goal has already moved them (fibre never falls below 30 g). Your own energy figure replaces your energy target but not those limits. Sodium and the micronutrient reference amounts are fixed amounts and do not move.'
+        ? 'Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, which is your own figure, so your goal no longer moves them (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.'
         : 'Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, so they move when your goal changes it (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.') + ownNote,
     );
   }
@@ -488,6 +488,18 @@ function FlagList({
 
 function Overrides({ profile, save, reported }: { profile: Profile; save: SaveFn; reported: ReportedExpenditure | undefined }) {
   const calculated = computeTargets({ ...profile, overrides: undefined }, new Date(), reported?.kcal);
+  /**
+   * What the field's placeholder promises: the figure this target would take if THIS field were left empty, with every
+   * other typed figure still in force. The two differ now that amendment A3 makes the five share-derived limits shares
+   * of a typed energy figure — clearing the saturated-fat field with an energy figure typed gives a share of that
+   * figure, not of the energy the app would have calculated, and the placeholder must say the number the person will
+   * actually get. `calculated` above is still the no-overrides basis, used for whether the profile is generic.
+   */
+  const ifLeftEmpty = (key: OverrideKey): number => {
+    const rest = { ...(profile.overrides ?? {}) };
+    delete rest[key];
+    return computeTargets({ ...profile, overrides: rest }, new Date(), reported?.kcal)[key];
+  };
   const [vals, setVals] = useState<Record<OverrideKey, string>>(() => {
     const o = profile.overrides ?? {};
     return Object.fromEntries(OVERRIDES.map(({ key }) => [key, o[key] !== undefined ? String(o[key]) : ''])) as Record<OverrideKey, string>;
@@ -528,7 +540,7 @@ function Overrides({ profile, save, reported }: { profile: Profile; save: SaveFn
               type="number"
               inputMode="decimal"
               value={vals[key]}
-              placeholder={`Calculated: ${calculated[key]}`}
+              placeholder={`Calculated: ${ifLeftEmpty(key)}`}
               onChange={(e) => setVals((v) => ({ ...v, [key]: e.target.value }))}
               className={fieldClass}
             />

@@ -163,6 +163,26 @@ function applyGoal(maintenance: number, rmr: number, goal: Goal | undefined): { 
   return { energy, ...(capped ? { capped } : {}) };
 }
 
+/**
+ * The share-of-energy limits, from the energy target they are shares of.
+ *
+ * Amendment A3 (2026-11-17): these five follow the energy target SHOWN, whatever produced it — calculated,
+ * goal-adjusted, reported or typed by the person. `derive` and `computeTargets`'s override merge both read this one
+ * function, because a second copy of the arithmetic would drift from it. The expressions and their rounding are the
+ * definition, taken verbatim from design section 8.1.1, and the fibre floor applies after the share, so a low energy
+ * target does not drop the fibre target below 30 g.
+ */
+type EnergyShares = Pick<Targets, 'fibreG' | 'satFatG' | 'addedSugarsG' | 'addedSugarsIdealG' | 'transFatG'>;
+function sharesOfEnergy(energy: number): EnergyShares {
+  return {
+    fibreG: Math.max(30, Math.round((14 * energy) / 1000)),
+    satFatG: Math.round((0.1 * energy) / 9),
+    addedSugarsG: Math.round((0.1 * energy) / 4),
+    addedSugarsIdealG: Math.round((0.05 * energy) / 4),
+    transFatG: Math.round((0.01 * energy) / 9),
+  };
+}
+
 function derive(
   heightCm: number,
   weightKg: number,
@@ -204,15 +224,12 @@ function derive(
   return {
     rmrKcal: Math.round(rmr),
     energyKcal: energy,
-    // Protein is sourced (see the constants above). Fibre, below, is still the app's own working figure.
+    // Protein is sourced (see the constants above). The fibre rule inside `sharesOfEnergy` is still the app's own
+    // working figure.
     proteinG: Math.round(proteinPerKg * weightKg),
     proteinFloorG: Math.round(PROTEIN_EFSA_PRI_G_PER_KG * weightKg),
-    fibreG: Math.max(30, Math.round((14 * energy) / 1000)),
+    ...sharesOfEnergy(energy),
     sodiumMg: SODIUM_MG,
-    satFatG: Math.round((0.1 * energy) / 9),
-    addedSugarsG: Math.round((0.1 * energy) / 4),
-    addedSugarsIdealG: Math.round((0.05 * energy) / 4),
-    transFatG: Math.round((0.01 * energy) / 9),
     micronutrients: microsFor(sex),
     isGeneric,
     ...(adjusted.capped ? { goalCapped: adjusted.capped } : {}),
@@ -255,7 +272,11 @@ export function computeTargets(p: Profile | null, on: Date, reportedKcal?: numbe
   const basis = { ...base.basis };
   if (overrides.proteinG !== undefined) basis.protein = 'custom';
   if (overrides.energyKcal !== undefined || overrides.rmrKcal !== undefined) basis.energy = 'custom';
-  const merged: Targets = { ...base, ...overrides, basis, isGeneric: base.isGeneric };
+  // A3: the five share-derived limits are shares of the energy target SHOWN, so a typed energy figure moves them with
+  // it. The recomputed shares go on FIRST and the person's own overrides on top, so a limit they typed themselves is
+  // never recalculated out from under them. A typed resting rate is not a typed energy target and does not reach here.
+  const shares: Partial<EnergyShares> = overrides.energyKcal === undefined ? {} : sharesOfEnergy(overrides.energyKcal);
+  const merged: Targets = { ...base, ...shares, ...overrides, basis, isGeneric: base.isGeneric };
   // A typed energy figure replaces the goal's result, so "the goal was reduced" no longer describes it.
   if (overrides.energyKcal !== undefined) delete merged.goalCapped;
   return merged;

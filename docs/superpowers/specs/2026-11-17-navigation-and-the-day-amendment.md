@@ -190,3 +190,68 @@ day's figures; 6 before 7 because Trends must exist before §8.5's content moves
 Unchanged from §10, plus: the disclosure's open/closed state is a per-device convenience and may live in
 `localStorage` under the `fd.` prefix; the per-meal weekly averages reuse the existing trends gate rather than
 inventing a new minimum; and the slot order is breakfast, lunch, dinner, snacks, with Earlier last.
+
+---
+
+# A3. The share limits follow the energy target shown
+
+Added 2026-11-17, after the owner was shown the mismatch on his own screen and asked to decide it. This
+supersedes §8.1.1 of the governing design for the typed-energy case.
+
+## What was wrong
+
+§8.1.1 ruled that the share-of-energy limits — saturated fat, added sugars (both figures), trans fat and fibre —
+follow the **goal-adjusted** energy, while absolute figures (protein, sodium, micronutrients) never move. That
+was right as far as it went, but it was written before a person could type their own energy figure, and
+`computeTargets` overlays only the keys the person typed. So a typed figure replaced the energy target and left
+the five limits as shares of a number the same screen said had been replaced.
+
+Seen live, at a typed 2,000 kcal with a lose-0.5 kg/week goal: the energy target read **2,000** and the
+saturated-fat limit read **24 g**, which is 10% of **2,163** — the calculated, goal-adjusted figure. Nothing on
+screen was false, because the note said which energy the limits came from, but the two numbers sat together
+needing a paragraph to explain them.
+
+## The rule now
+
+**The share-derived limits are always shares of the energy target shown.** One sentence, no exceptions, nothing
+to explain. Where the energy target came from no longer changes how the limits relate to it:
+
+| Energy target | Where it comes from | The five limits |
+|---|---|---|
+| calculated | resting rate × activity factor | shares of it |
+| calculated, goal-adjusted | …less the goal offset | shares of it |
+| reported | the mean of the person's own burn figures, goal-adjusted | shares of it |
+| **typed** | **the person's own figure** | **shares of it** |
+
+Only the last row changes. The first three already behaved this way.
+
+**Absolute figures still never move**: protein stays per kilogram of body weight, sodium stays WHO's 2,000 mg,
+micronutrients stay the reference intakes. §8.1.1's distinction between share figures and absolute figures is
+unchanged and is the reason this amendment is small.
+
+**A limit the person typed themselves still wins.** Someone who sets both an energy figure and a saturated-fat
+figure keeps their saturated fat: the recomputed shares are applied first and the person's own overrides on top
+of them. Their own number is never recalculated out from under them.
+
+**The fibre floor stands.** It is `max(30, 14 g per 1,000 kcal)`, and the floor applies after the share, exactly
+as it does on every other path — a low energy target does not drop the fibre target below 30 g.
+
+## What this costs, stated plainly
+
+A low typed figure now tightens four limits, so warnings that did not fire before can fire. That is the
+behaviour the rule asks for — a limit that is 10% of an energy figure should be 10% of the figure being used —
+and it is the owner's decision, made with the numbers in front of him.
+
+The one formula must exist in a single place and be read by both the first calculation and the override merge.
+Two copies would drift, and a drifting share formula is the defect this project has spent four review rounds on.
+
+## The wording that must change with it
+
+Two sentences become false the moment this ships and must go in the same change:
+
+- The Missing screen's clause saying the limits "were worked out from the energy the app calculated rather than
+  from your own figure" — it is now the opposite, and the clause has nothing left to say, so it goes rather than
+  being reworded.
+- The Settings line "Your own energy figure replaces your energy target but not those limits" — it now replaces
+  both. The surrounding sentence about a goal having already moved them stays true where no energy figure was
+  typed.

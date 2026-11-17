@@ -346,49 +346,42 @@ describe('the screens and the warning engine agree about the energy figure', () 
       expect((screen.getByTestId('energy-source')).textContent).toBe('Energy: your own figure, not calculated by the app.');
     });
 
-    const LIMITS_CLAUSE =
-      'The saturated fat, added sugars, trans fat and fibre limits were worked out from the energy the app calculated rather than from your own figure.';
-
     /**
-     * `computeTargets` overlays `energyKcal` alone, so the four share-derived limits on this screen still rest on the
-     * activity factor. Dropping the credit would leave four figures on screen with no source at all; crediting it for
-     * the energy target would be false. Both halves are pinned here.
+     * Amendment A3 (2026-11-17). The share-derived limits are now shares of the energy target shown, so a typed figure
+     * of 2,000 gives a saturated-fat limit of 22 g whether or not a goal is set. The clause that used to say which other
+     * energy they came from is gone with the mismatch it described, and the activity factor is no longer credited here:
+     * it reached the energy target, the person replaced that, and nothing else on the screen came through it.
      *
-     * The profile is goal-adjusted on purpose. The clause says WHICH energy the limits came from and must not describe
-     * how that energy was reached: a rate goal moves it (2,413 maintenance becomes 1,863), so a "resting energy times an
-     * activity factor" derivation would point at 27 g while the limit printed on the bar is 21 g, and would contradict
-     * Settings, which says "shares of the energy your goal set" for this same state.
+     * The goal is on in the first case on purpose. It is the state the owner saw: the limits were shares of the
+     * goal-adjusted 1,863 (21 g) while the screen said the target was his own 2,000.
      */
-    test('a typed energy figure with a goal says which energy the limits came from, and claims no derivation', async () => {
+    test('a typed energy figure with a goal gives limits that are shares of it, not of the goal-adjusted figure', async () => {
       await putProfile({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 }, overrides: { energyKcal: 2000 } });
       await seedEntry();
       render(<Missing />);
       const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
-      expect(note).toContain(LIMITS_CLAUSE);
-      // The derivation the clause must not offer, in either order of words.
-      expect(note).not.toMatch(/resting energy multiplied by/i);
-      expect(note).not.toMatch(/multiplied by an activity factor/i);
-      // The limit the person actually reads, beside that clause: a share of the goal-adjusted 1,863, not of 2,413 (27 g).
-      expect(within(await screen.findByTestId('bar-satFatG')).getByText('limit 21 g')).toBeInTheDocument();
-      // The factor is still credited as a working figure by the sentence after the clause.
-      expect(note).toMatch(/The activity factor and the fibre rule are this app.s own working figures, not a published recommendation\./);
-      // Never as the source of the energy target: that phrase appears nowhere in the note on this path, and the sentence
-      // above the note says the energy figure is the person's own.
+      // The limit the person actually reads: a share of their own 2,000, not of the goal-adjusted 1,863 (21 g).
+      expect(within(await screen.findByTestId('bar-satFatG')).getByText('limit 22 g')).toBeInTheDocument();
+      // Nothing says which other energy the limits came from, because they came from the one on screen.
+      expect(note).not.toMatch(/saturated fat, added sugars, trans fat and fibre limits/i);
+      // The factor produced nothing left on screen, so crediting it would be an orphaned credit.
+      expect(note).not.toMatch(/activity factor/i);
+      expect(note).toMatch(/The fibre rule is this app.s own working figure, not a published recommendation\./);
+      // Never a claim that something moved the energy target: the person set it.
       expect(note).not.toMatch(/energy target/i);
       expect((screen.getByTestId('energy-source')).textContent).toBe('Energy: your own figure, not calculated by the app.');
     });
 
-    test('a typed energy figure with no goal says the same thing, against its own unadjusted limit', async () => {
+    test('a typed energy figure with no goal gives the same limit, because the same figure is shown', async () => {
       await putProfile({ ...ownerProfile, overrides: { energyKcal: 2000 } });
       await seedEntry();
       render(<Missing />);
       const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
-      expect(note).toContain(LIMITS_CLAUSE);
-      expect(note).not.toMatch(/multiplied by an activity factor/i);
-      // No goal, so the calculated energy is the 2,413 maintenance and the limit is 27 g. One clause covers both states
-      // precisely because it names no arithmetic.
-      expect(within(await screen.findByTestId('bar-satFatG')).getByText('limit 27 g')).toBeInTheDocument();
-      expect(note).toMatch(/The activity factor and the fibre rule are this app.s own working figures/);
+      // The calculated energy here is the 2,413 maintenance, which would give 27 g. The typed figure gives 22 g, and
+      // the goal case above gives 22 g too: where the energy came from no longer changes how the limits relate to it.
+      expect(within(await screen.findByTestId('bar-satFatG')).getByText('limit 22 g')).toBeInTheDocument();
+      expect(note).not.toMatch(/activity factor/i);
+      expect(note).toMatch(/The fibre rule is this app.s own working figure, not a published recommendation\./);
     });
 
     test('a typed energy figure with a reported burn credits no activity factor, because none was used', async () => {
