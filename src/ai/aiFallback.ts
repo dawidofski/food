@@ -4,7 +4,7 @@ import type { ParsedItem } from '@/domain/parseEntry';
 import { parseQuantity, type Quantity } from '@/domain/quantity';
 import { resolveItems } from '@/domain/resolveItems';
 import type { Resolution } from '@/types/diary';
-import type { AiSuggestion, InterpretOptions } from '@/ai/deepseek';
+import type { AiFailure, AiSuggestion, InterpretOptions } from '@/ai/deepseek';
 
 /** What the flow needs from the AI path, injectable so tests never touch the network or localStorage. */
 export type AiDeps = {
@@ -113,6 +113,7 @@ export async function applyAi(
   resolution: Resolution,
   lookup: FoodLookup,
   ai: AiDeps | undefined,
+  onFailure?: (f: AiFailure) => void,
 ): Promise<AiApplied | null> {
   if (!ai || !ai.isEnabled() || !ai.isOnline()) return null;
   const key = ai.getKey();
@@ -129,7 +130,7 @@ export async function applyAi(
   const added: ParsedItem[] = [];
   const readings: AiReading[] = [];
   for (const target of targets) {
-    const suggestions = await ai.interpret(target.phrase, { apiKey: key });
+    const suggestions = await ai.interpret(target.phrase, { apiKey: key, ...(onFailure ? { onFailure } : {}) });
     const accepted: ParsedItem[] = [];
     const reads: string[] = [];
     const described: string[] = [];

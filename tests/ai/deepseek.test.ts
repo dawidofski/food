@@ -124,7 +124,7 @@ describe('interpretEntry', () => {
     expect(body.messages[0].content).not.toContain(hostile);
     expect(body.response_format).toEqual({ type: 'json_object' });
     expect(body.temperature).toBe(0);
-    expect(body.model).toBe('deepseek-chat');
+    expect(body.model).toBe('deepseek-flash');
   });
 
   test('a hostile phrase that returns hostile output still yields only allow-listed fields', async () => {
@@ -154,5 +154,57 @@ describe('interpretEntry', () => {
     expect((init!.headers as Record<string, string>).authorization).toBe('Bearer test-key-123');
     expect(String(init!.body)).not.toContain('test-key-123');
     expect(String(url)).not.toContain('test-key-123');
+  });
+
+  describe('failure reporting', () => {
+    const run = async (text: string, o: Parameters<typeof interpretEntry>[1]) => {
+      const seen: string[] = [];
+      const out = await interpretEntry(text, { ...o, onFailure: (f) => seen.push(f) });
+      return { out, seen };
+    };
+
+    test('a 400 is reported as rejected, not retried, and still returns []', async () => {
+      const spy = vi.fn(async () => reply({ error: 'Model Not Exist' }, 400));
+      const { out, seen } = await run('x', opts(spy as unknown as typeof fetch));
+      expect(out).toEqual([]);
+      expect(seen).toEqual(['rejected']);
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    test('a timeout is reported as timeout', async () => {
+      const { out, seen } = await run('x', opts(mockHang(), 10));
+      expect(out).toEqual([]);
+      expect(seen).toEqual(['timeout']);
+    });
+
+    test('an empty key is reported as no-key without calling the network', async () => {
+      const spy = vi.fn(async () => reply({}, 200));
+      const { out, seen } = await run('x', { apiKey: '  ', fetchImpl: spy as unknown as typeof fetch });
+      expect(out).toEqual([]);
+      expect(seen).toEqual(['no-key']);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    test('a network error and an unrecovered 500 are reported as offline', async () => {
+      const boom = (async () => { throw new TypeError('Failed to fetch'); }) as typeof fetch;
+      expect((await run('x', opts(boom))).seen).toEqual(['offline']);
+      expect((await run('x', opts(mockStatus(500)))).seen).toEqual(['offline']);
+    });
+
+    test('non-json content and a wrong envelope are reported as bad-response', async () => {
+      expect((await run('x', opts(mockText('not json')))).seen).toEqual(['bad-response']);
+      expect((await run('x', opts((async () => reply({ nope: 1 })) as typeof fetch))).seen).toEqual(['bad-response']);
+    });
+
+    test('a well-formed success reports no failure', async () => {
+      const { out, seen } = await run('one frikandel', opts(mockOk([sausage])));
+      expect(out).toEqual([sausage]);
+      expect(seen).toEqual([]);
+    });
+
+    test('a throwing listener cannot make interpretEntry throw', async () => {
+      const out = await interpretEntry('x', { ...opts(mockStatus(400)), onFailure: () => { throw new Error('listener'); } });
+      expect(out).toEqual([]);
+    });
   });
 });

@@ -6,7 +6,7 @@ import {
 } from '@/domain/goalConversion';
 import { BODY_FAT_PCT_PLAUSIBLE, computeTargets, MAX_GOAL_RATE_KG_PER_WEEK } from '@/domain/targets';
 import { unrecognisedAllergenFlags } from '@/rules/catalogue/allergen';
-import type { Goal, Profile } from '@/types/profile';
+import type { Goal, OverridableTargetKey, Profile } from '@/types/profile';
 import { BodyDataForm, fieldClass, parseNumber, weightProblem } from './FirstRun';
 
 /**
@@ -268,7 +268,11 @@ function TargetSources({ profile }: { profile: Profile }) {
         'Your targets use general adult guidelines, not figures worked out for you, because no usable weight is logged. Add your weight in the weight log to personalise them.',
         ...(basis.protein === 'custom' ? [protein] : []),
         ...(basis.energy === 'custom' ? [energy] : []),
-        ...(kind !== undefined ? ['Your goal cannot move your energy target until a weight is logged.'] : []),
+        ...(kind === 'hold'
+        ? ['Your goal is to hold, so it would not move your energy target either way.']
+        : kind !== undefined
+          ? ['Your goal cannot move your energy target until a weight is logged.']
+          : []),
       ]
     : [protein, energy];
   if (t.isGeneric) return <SourceList lines={lines} />;
@@ -309,9 +313,20 @@ function TargetSources({ profile }: { profile: Profile }) {
     );
   }
 
-  if (hasRate && basis.energy !== 'custom') {
+  if (hasRate) {
+    // A typed figure for one of the derived limits is the person's own, so the "worked out as shares" sentence must not cover it.
+    const typed = (k: OverridableTargetKey): boolean => Number.isFinite(profile.overrides?.[k]);
+    const own = [
+      typed('satFatG') ? 'saturated fat' : null,
+      typed('addedSugarsG') || typed('addedSugarsIdealG') ? 'added sugars' : null,
+      typed('transFatG') ? 'trans fat' : null,
+      typed('fibreG') ? 'fibre' : null,
+    ].filter((n): n is string => n !== null);
+    const ownNote = own.length > 0 ? ` Your own figures, not worked out by the app: ${own.join(', ')}.` : '';
     lines.push(
-      'Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, so they move when your goal changes it (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.',
+      (basis.energy === 'custom'
+        ? 'Saturated fat, added sugars, trans fat and fibre were worked out as shares of the energy your goal set, so your goal has already moved them (fibre never falls below 30 g). Your own energy figure replaces your energy target but not those limits. Sodium and the micronutrient reference amounts are fixed amounts and do not move.'
+        : 'Saturated fat, added sugars, trans fat and fibre are worked out as shares of your energy target, so they move when your goal changes it (fibre never falls below 30 g). Sodium and the micronutrient reference amounts are fixed amounts and do not move.') + ownNote,
     );
   }
   return <SourceList lines={lines} />;

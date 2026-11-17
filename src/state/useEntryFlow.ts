@@ -11,7 +11,7 @@ import type { FoodLookup } from '@/domain/foodLookup';
 import { parseEntry, type ParsedItem } from '@/domain/parseEntry';
 import { resolveItems, resolveKnownFood } from '@/domain/resolveItems';
 import { applyAi, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
-import { interpretEntry } from '@/ai/deepseek';
+import { interpretEntry, type AiFailure } from '@/ai/deepseek';
 import { getApiKey, isAiEnabled } from '@/state/aiSettings';
 import { computeTargets } from '@/domain/targets';
 import { dayTotals, weekContext } from '@/domain/totals';
@@ -119,6 +119,8 @@ export type EntryFlow = {
   unresolved: ParsedItem[];
   /** While stage is 'aiReview': how the model read each unresolved phrase. Nothing runs until the person accepts it. */
   aiReadings: AiReading[];
+  /** True when the model was asked for this entry and the service refused (a rejected call), as opposed to answering with nothing. */
+  aiRefused: boolean;
   /** True when the food database could not be loaded, so nothing could be matched. */
   dataMissing: boolean;
   viewingAlternatives: boolean;
@@ -227,6 +229,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const [lines, setLines] = useState<ResolvedLine[]>([]);
   const [unresolved, setUnresolved] = useState<ParsedItem[]>([]);
   const [aiReadings, setAiReadings] = useState<AiReading[]>([]);
+  const [aiRefused, setAiRefused] = useState(false);
   const [dataMissing, setDataMissing] = useState(false);
   const [viewingAlternatives, setViewingAlternatives] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -253,6 +256,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     setLines([]);
     setUnresolved([]);
     setAiReadings([]);
+    setAiRefused(false);
     aiPending.current = null;
     setViewingAlternatives(false);
     setGenericTargets(false);
@@ -389,8 +393,12 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
           pendingResolution.current = { items, resolution };
           // Only the unresolved phrase leaves the device, and only when the person switched this on.
           // The reading is shown for correction BEFORE any rule runs; a failure here is silent.
-          const applied = await applyAi(text, items, resolution, d.lookup, d.ai).catch(() => null);
+          let refused = false;
+          const applied = await applyAi(text, items, resolution, d.lookup, d.ai, (f: AiFailure) => {
+            if (f === 'rejected') refused = true;
+          }).catch(() => null);
           if (my !== seq.current) return;
+          if (!applied) setAiRefused(refused);
           if (applied) {
             aiPending.current = applied;
             setLines(describeLines(applied.items, applied.resolution, d.lookup));
@@ -552,7 +560,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   }, []);
 
   return {
-    stage, cards, questions, failures, lines, unresolved, aiReadings, dataMissing, viewingAlternatives, outcome, error, lastText,
+    stage, cards, questions, failures, lines, unresolved, aiReadings, aiRefused, dataMissing, viewingAlternatives, outcome, error, lastText,
     genericTargets, storedCount, submit, submitKnownFood, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
   };
 }

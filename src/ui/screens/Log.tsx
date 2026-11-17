@@ -131,6 +131,11 @@ export default function Log({
           ) : (
             <p>I couldn&rsquo;t find a food in that. Nothing has been saved.</p>
           )}
+          {flow.aiRefused && (
+            <p data-testid="ai-refused" className="text-sm text-slate-700 dark:text-slate-300">
+              The AI helper was asked but the service refused the request, so it could not read this; adding it yourself still works.
+            </p>
+          )}
           {flow.lines.length > 0 && <ResolvedLines lines={flow.lines} />}
           <div className="flex flex-col gap-2">
             {flow.unresolved.map((u) => (

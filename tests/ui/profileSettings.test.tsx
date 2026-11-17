@@ -187,6 +187,37 @@ describe('weight goal', () => {
     expect(line.textContent).toMatch(/sodium and the micronutrient reference amounts are fixed amounts and do not move/i);
   });
 
+  test('a rate with a typed energy figure still explains the moved limits, in its own words', async () => {
+    await open({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 }, overrides: { energyKcal: 2000 } });
+    const line = await screen.findByText(/worked out as shares of the energy your goal set/i);
+    expect(line.textContent).toMatch(/your goal has already moved them/i);
+    expect(line.textContent).toMatch(/your own energy figure replaces your energy target but not those limits/i);
+    expect(line.textContent).toMatch(/sodium and the micronutrient reference amounts are fixed amounts and do not move/i);
+    expect(screen.queryByText(/move when your goal changes it/i)).toBeNull();
+    expect(line.textContent).not.toMatch(/your own figures, not worked out/i);
+  });
+
+  test("typed saturated-fat and added-sugar figures are named as the person's own", async () => {
+    await open({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 }, overrides: { satFatG: 20, addedSugarsG: 30 } });
+    const line = await screen.findByText(/shares of your energy target/i);
+    expect(line.textContent).toMatch(/Your own figures, not worked out by the app: saturated fat, added sugars\./);
+    expect(line.textContent).not.toMatch(/trans fat\.$|fibre\.$/);
+  });
+
+  test('no typed share figure, no "own figures" note', async () => {
+    await open({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 } });
+    const line = await screen.findByText(/shares of your energy target/i);
+    expect(line.textContent).not.toMatch(/your own figures/i);
+  });
+
+  test('on the general path a hold goal is not told it "cannot move" anything', async () => {
+    await open({ ...ownerProfile, weightLog: [], goal: { kind: 'hold' } });
+    const heading = await screen.findByRole('heading', { name: /where your targets come from/i });
+    const box = heading.parentElement as HTMLElement;
+    expect(box.textContent).toMatch(/Your goal is to hold, so it would not move your energy target either way\./);
+    expect(box.textContent).not.toMatch(/cannot move/i);
+  });
+
   test('no such sentence without a rate, because nothing moved', async () => {
     await open({ ...ownerProfile, goal: { kind: 'hold' } });
     await screen.findByText(/^Energy:/);

@@ -5,7 +5,7 @@ import { entriesBetween, eraseEverything } from '@/data/db';
 import { localDayKey, localDayRange } from '@/domain/dayBoundary';
 import type { FoodLookup } from '@/domain/foodLookup';
 import type { AiDeps } from '@/ai/aiFallback';
-import type { AiSuggestion } from '@/ai/deepseek';
+import type { AiSuggestion, InterpretOptions } from '@/ai/deepseek';
 import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
 import Log from '@/ui/screens/Log';
 import Settings from '@/ui/screens/Settings';
@@ -29,7 +29,7 @@ const lookup: FoodLookup = {
 };
 
 const aiOf = (suggestions: AiSuggestion[], over: Partial<AiDeps> = {}) => {
-  const interpret = vi.fn(async (_t: string, _o: unknown) => suggestions);
+  const interpret = vi.fn(async (_t: string, _o: InterpretOptions) => suggestions);
   const ai: AiDeps = { isEnabled: () => true, getKey: () => 'test-key', isOnline: () => true, interpret, ...over };
   return { ai, interpret };
 };
@@ -130,6 +130,25 @@ describe('the AI fallback in the add flow', () => {
     const { ai } = aiOf([], { interpret: async () => { throw new Error('boom'); } });
     await typeAndSubmit('one frikandel', depsWith(ai));
     expect(await screen.findByText(/don.t know/i)).toBeInTheDocument();
+  });
+
+  test('a refused call says so and that manual entry still works, never "no match"', async () => {
+    const { ai } = aiOf([], { interpret: async (_t, o) => { o.onFailure?.('rejected'); return []; } });
+    await typeAndSubmit('one frikandel', depsWith(ai));
+    const note = await screen.findByTestId('ai-refused');
+    expect(note).toHaveTextContent(/service refused/i);
+    expect(note).toHaveTextContent(/adding it yourself still works/i);
+    expect(note.textContent).not.toMatch(/no match/i);
+  });
+
+  test('an empty answer or a timeout is not presented as a refusal', async () => {
+    for (const f of [undefined, 'timeout'] as const) {
+      cleanup();
+      const { ai } = aiOf([], { interpret: async (_t, o) => { if (f) o.onFailure?.(f); return []; } });
+      await typeAndSubmit('one frikandel', depsWith(ai));
+      expect(await screen.findByText(/don.t know/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('ai-refused')).not.toBeInTheDocument();
+    }
   });
 
   test.each([

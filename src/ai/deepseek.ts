@@ -17,10 +17,22 @@
 
 export type AiSuggestion = { description: string; quantity: number; unit: string };
 
-export type InterpretOptions = { apiKey: string; fetchImpl?: typeof fetch; timeoutMs?: number };
+/**
+ * Why a call returned nothing. 'rejected' is a non-retryable HTTP refusal (a bad key, no balance, an
+ * unknown model name). 'offline' covers a network error and a 429/5xx that the one retry did not cure.
+ */
+export type AiFailure = 'no-key' | 'offline' | 'rejected' | 'timeout' | 'bad-response';
+
+export type InterpretOptions = {
+  apiKey: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  /** Told once why the call produced nothing. Optional: without it every failure is still just []. */
+  onFailure?: (f: AiFailure) => void;
+};
 
 export const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
-export const DEEPSEEK_MODEL = 'deepseek-chat';
+export const DEEPSEEK_MODEL = 'deepseek-flash';
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_PHRASE = 200;
 const MAX_DESCRIPTION = 100;
@@ -59,7 +71,7 @@ function buildBody(phrase: string): string {
   });
 }
 
-type Attempt = { kind: 'ok'; text: string } | { kind: 'retry' } | { kind: 'fail' };
+type Attempt = { kind: 'ok'; text: string } | { kind: 'retry'; why: 'timeout' | 'offline' } | { kind: 'fail' };
 
 async function attempt(body: string, apiKey: string, fetchImpl: typeof fetch, timeoutMs: number): Promise<Attempt> {
   const controller = new AbortController();
@@ -68,7 +80,7 @@ async function attempt(body: string, apiKey: string, fetchImpl: typeof fetch, ti
   const deadline = new Promise<Attempt>((resolve) => {
     timer = setTimeout(() => {
       controller.abort();
-      resolve({ kind: 'retry' });
+      resolve({ kind: 'retry', why: 'timeout' });
     }, timeoutMs);
   });
   const work = (async (): Promise<Attempt> => {
@@ -80,10 +92,10 @@ async function attempt(body: string, apiKey: string, fetchImpl: typeof fetch, ti
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     });
-    if (res.status === 429 || res.status >= 500) return { kind: 'retry' };
+    if (res.status === 429 || res.status >= 500) return { kind: 'retry', why: 'offline' };
     if (!res.ok) return { kind: 'fail' }; // 401, 402, 4xx: retrying cannot help
     return { kind: 'ok', text: (await res.text()).slice(0, MAX_RESPONSE_CHARS) };
-  })().catch((): Attempt => ({ kind: 'retry' }));
+  })().catch((): Attempt => ({ kind: 'retry', why: 'offline' }));
   try {
     return await Promise.race([work, deadline]);
   } finally {
@@ -130,21 +142,44 @@ function validate(raw: unknown): AiSuggestion[] {
 }
 
 export async function interpretEntry(text: string, opts: InterpretOptions): Promise<AiSuggestion[]> {
+  const report = (f: AiFailure): void => {
+    try {
+      opts.onFailure?.(f);
+    } catch {
+      // A faulty listener must not turn a quiet failure into a thrown one.
+    }
+  };
   try {
     const phrase = text.trim().slice(0, MAX_PHRASE);
-    if (opts.apiKey.trim() === '' || phrase === '') return [];
+    if (opts.apiKey.trim() === '') {
+      report('no-key');
+      return [];
+    }
+    if (phrase === '') return [];
     const fetchImpl = opts.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
     const body = buildBody(phrase);
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     let result = await attempt(body, opts.apiKey, fetchImpl, timeoutMs);
     if (result.kind === 'retry') result = await attempt(body, opts.apiKey, fetchImpl, timeoutMs); // one retry
-    if (result.kind !== 'ok') return [];
+    if (result.kind !== 'ok') {
+      report(result.kind === 'fail' ? 'rejected' : result.why);
+      return [];
+    }
 
     const content = contentOf(parseJson(result.text));
-    if (content === undefined) return [];
-    return validate(parseJson(content));
+    if (content === undefined) {
+      report('bad-response');
+      return [];
+    }
+    const parsed = parseJson(content);
+    if (parsed === undefined) {
+      report('bad-response');
+      return [];
+    }
+    return validate(parsed);
   } catch {
+    report('bad-response');
     return [];
   }
 }
