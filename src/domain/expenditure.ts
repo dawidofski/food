@@ -7,9 +7,12 @@ export const WINDOW_DAYS = 7;
 
 /**
  * The app's own choice and not a published figure: a whole-day burn above this is not a real day, so it is left out of the
- * average rather than pulling someone's energy target up. It is deliberately well above the form's "check for an extra
- * digit" flag (`BURN_IMPLAUSIBLY_HIGH_KCAL`, guarded by a test), which only asks for a second look and lets the person keep a figure; this one is for a figure no
- * day produces, such as a hand-edited backup, which skips the form.
+ * average rather than pulling someone's energy target up.
+ *
+ * Nothing the person can keep is ever dropped here, because `DayHealthForm` REFUSES a figure above this ceiling outright
+ * instead of offering to keep it. Its own "check for an extra digit" flag sits lower and only asks for a second look, so
+ * everything it lets through is averaged. This guard is therefore for a figure that never passed the form at all — a
+ * hand-edited backup, say.
  */
 export const REPORTED_BURN_CEILING_KCAL = 20000;
 

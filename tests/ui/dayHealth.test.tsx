@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { eraseEverything, getHealthDay, putHealthDay } from '@/data/db';
+import { eraseEverything, getHealthDay, healthDaysBetween, putHealthDay } from '@/data/db';
+import { REPORTED_BURN_CEILING_KCAL, reportedExpenditure } from '@/domain/expenditure';
 import { computeTargets } from '@/domain/targets';
 import Diary from '@/ui/screens/Diary';
 import { last7DayKeys } from '@/domain/dayBoundary';
@@ -103,7 +104,7 @@ describe('daily health form', () => {
     const note = await screen.findByTestId('burn-below-resting');
     expect(note).toHaveTextContent(/active/i);
     expect(note).toHaveTextContent(/whole day/i);
-    expect(note).toHaveTextContent(String(rmr));
+    expect(note).toHaveTextContent(rmr.toLocaleString('en-US'));
     expect(await getHealthDay(DAY)).toBeUndefined(); // nothing saved until confirmed
     fireEvent.click(screen.getByRole('button', { name: /keep 600 kcal/i }));
     await waitFor(async () => expect((await getHealthDay(DAY))?.energyBurnedKcal).toBe(600));
@@ -127,13 +128,13 @@ describe('daily health form', () => {
 
   test('an implausibly high burn figure is flagged, and can still be confirmed', async () => {
     await open();
-    type(burn(), '25000');
+    type(burn(), '11000');
     save();
     const note = await screen.findByTestId('burn-implausibly-high');
-    expect(note).toHaveTextContent(/25000/);
+    expect(note).toHaveTextContent(/11,000/);
     expect(await getHealthDay(DAY)).toBeUndefined();
-    fireEvent.click(screen.getByRole('button', { name: /keep 25000 kcal/i }));
-    await waitFor(async () => expect((await getHealthDay(DAY))?.energyBurnedKcal).toBe(25000));
+    fireEvent.click(screen.getByRole('button', { name: /keep 11,000 kcal/i }));
+    await waitFor(async () => expect((await getHealthDay(DAY))?.energyBurnedKcal).toBe(11000));
   });
 
   test('changing the figure after a flag withdraws the flag', async () => {
@@ -197,7 +198,8 @@ describe('what the burn field and its flags say', () => {
   test('the burn note names the profile\'s own resting rate and no fixed figure', async () => {
     await open();
     const text = screen.getByTestId('burn-note').textContent ?? '';
-    expect(text).toContain(`about ${rmr} kcal too low`);
+    expect(text).toContain(`about ${rmr.toLocaleString('en-US')} kcal too low`);
+    expect(text).toMatch(/about 1,\d{3} kcal too low/); // a thousands separator, like every other figure in the app
     expect(text).not.toContain('1,800');
   });
 
@@ -222,5 +224,65 @@ describe('what the burn field and its flags say', () => {
     save();
     await screen.findByTestId('burn-implausibly-high');
     expect(await getHealthDay(DAY)).toBeUndefined();
+  });
+
+  test('the flag says the 10,000 kcal mark is the app\'s own figure, not a published one', async () => {
+    await open();
+    type(burn(), '11000');
+    save();
+    const note = await screen.findByTestId('burn-implausibly-high');
+    expect(note).toHaveTextContent(/10,000 kcal for one day, which is far above a usual day \(that mark is this app.s own working figure, not a published one\)/);
+  });
+});
+
+// Finding 6: the form invited the person to keep a figure the domain would then drop from every average.
+describe('a figure the app would never use is refused, not offered to keep', () => {
+  test(`above ${REPORTED_BURN_CEILING_KCAL} kcal the form refuses and offers no way to keep it`, async () => {
+    await open();
+    type(burn(), String(REPORTED_BURN_CEILING_KCAL + 1));
+    save();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/20,000 kcal or less.*left out of your energy average/);
+    expect(await getHealthDay(DAY)).toBeUndefined();
+    expect(screen.queryByRole('button', { name: /^keep /i })).toBeNull();
+    expect(screen.queryByTestId('burn-implausibly-high')).toBeNull();
+  });
+
+  test('a figure exactly at the ceiling is only flagged, and keeping it still works', async () => {
+    await open();
+    type(burn(), String(REPORTED_BURN_CEILING_KCAL));
+    save();
+    await screen.findByTestId('burn-implausibly-high');
+    fireEvent.click(screen.getByRole('button', { name: /^keep /i }));
+    await waitFor(async () => expect((await getHealthDay(DAY))?.energyBurnedKcal).toBe(REPORTED_BURN_CEILING_KCAL));
+  });
+
+  test('a flagged figure the person keeps reaches the mean the energy target is built from', async () => {
+    for (const d of ['2026-11-13', '2026-11-14', '2026-11-15']) await putHealthDay({ date: d, energyBurnedKcal: 2600 });
+    await open();
+    type(burn(), '11000'); // over the flag, under the ceiling: flagged, never refused
+    save();
+    await screen.findByTestId('burn-implausibly-high');
+    fireEvent.click(screen.getByRole('button', { name: /keep 11,000 kcal/i }));
+    await waitFor(async () => expect((await getHealthDay(DAY))?.energyBurnedKcal).toBe(11000));
+    const window = await healthDaysBetween('2026-11-10', DAY);
+    expect(reportedExpenditure(window, NOW)).toBe(Math.round((2600 * 3 + 11000) / 4)); // 4700: the kept figure is in it
+  });
+
+  test('the flag is announced and takes the focus the vanished submit button had', async () => {
+    await open();
+    type(burn(), '11000');
+    save();
+    const note = await screen.findByTestId('burn-implausibly-high');
+    expect(note).toHaveAttribute('role', 'alert');
+    expect(document.activeElement).toBe(note);
+  });
+
+  test('the below-resting flag is announced and focused the same way', async () => {
+    await open();
+    type(burn(), '600');
+    save();
+    const note = await screen.findByTestId('burn-below-resting');
+    expect(note).toHaveAttribute('role', 'alert');
+    expect(document.activeElement).toBe(note);
   });
 });

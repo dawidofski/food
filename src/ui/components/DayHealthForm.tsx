@@ -1,15 +1,24 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { getHealthDay, putHealthDay } from '@/data/db';
+import { REPORTED_BURN_CEILING_KCAL } from '@/domain/expenditure';
 import { computeTargets } from '@/domain/targets';
 import type { HealthDay } from '@/types/health';
 import type { Profile } from '@/types/profile';
 import { figureText, readNamedFigure, type FigureRead } from '@/ui/components/figureForm';
+import { fmtAmount } from '@/ui/components/NutrientBar';
 
 /**
  * The app's own choice and not a published figure: a whole-day burn above this is far above a usual day and more likely a slip (an extra digit). It only asks for a
  * second look; it never refuses.
  */
 export const BURN_IMPLAUSIBLY_HIGH_KCAL = 10000;
+
+/**
+ * Above the domain's ceiling the form REFUSES rather than flagging, so the invitation to keep a figure is only ever
+ * offered for a figure the app will actually average. Keeping a figure the domain then drops would leave someone looking
+ * at "Saved." while their energy target quietly ignored it.
+ */
+const burnTooHigh = `Energy burned needs a number of ${fmtAmount(REPORTED_BURN_CEILING_KCAL)} kcal or less (this app's own working figure). A figure above that is left out of your energy average, so it cannot be kept. Nothing has been changed.`;
 
 const field = 'min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-950 px-3 text-base';
 const btn = 'min-h-12 rounded-lg border-2 border-slate-900 dark:border-slate-100 px-4 text-base font-medium';
@@ -54,6 +63,13 @@ function Fields({ dayKey, initial, profile, now }: { dayKey: string; initial: He
   const [flag, setFlag] = useState<Flag | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const rmr = restingRate(profile, now);
+  // The submit button the person just pressed is unmounted when a flag appears, which drops focus to <body>. Focus moves
+  // to the flag itself rather than to "Keep": the keep button sends an odd figure through on an unlucky Enter, and the
+  // flag is the thing that needs reading. `role="alert"` on the same element announces it.
+  const flagRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (flag !== null) flagRef.current?.focus();
+  }, [flag]);
 
   const edit = (set: (v: string) => void) => (v: string) => { set(v); setFlag(null); setStatus(null); setError(null); };
 
@@ -72,6 +88,12 @@ function Fields({ dayKey, initial, profile, now }: { dayKey: string; initial: He
       return;
     }
     const [, burnRead] = reads[2]!;
+    // Checked before the flags and whether or not the person confirmed: a figure the domain would drop is never on offer.
+    if (burnRead.kind === 'set' && burnRead.value > REPORTED_BURN_CEILING_KCAL) {
+      setFlag(null);
+      setError(burnTooHigh);
+      return;
+    }
     if (!confirmed && burnRead.kind === 'set') {
       if (rmr !== undefined && burnRead.value < rmr) { setError(null); setFlag({ kind: 'low', value: burnRead.value }); return; }
       if (burnRead.value > BURN_IMPLAUSIBLY_HIGH_KCAL) { setError(null); setFlag({ kind: 'high', value: burnRead.value }); return; }
@@ -118,16 +140,16 @@ function Fields({ dayKey, initial, profile, now }: { dayKey: string; initial: He
           <label htmlFor="dh-burn" className="block text-sm font-medium">Energy burned (kcal), the whole day, not active calories</label>
           <input id="dh-burn" name="dh-burn" type="number" inputMode="decimal" step="any" value={burn} onChange={(ev) => edit(setBurn)(ev.target.value)} className={field} aria-describedby={flag ? 'dh-burn-note dh-burn-flag' : 'dh-burn-note'} />
           <p id="dh-burn-note" data-testid="burn-note" className={note}>
-            {`Copy the total energy burned for the day, not the active figure. They differ by roughly a resting metabolism.${rmr !== undefined ? ` Typing the active one would put the figure about ${rmr} kcal too low.` : ""}`}
+            {`Copy the total energy burned for the day, not the active figure. They differ by roughly a resting metabolism.${rmr !== undefined ? ` Typing the active one would put the figure about ${fmtAmount(rmr)} kcal too low.` : ""}`}
           </p>
           {flag?.kind === 'low' && rmr !== undefined && (
-            <p id="dh-burn-flag" data-testid="burn-below-resting" className={flagBox}>
-              {`${flag.value} kcal is below your resting rate of about ${rmr} kcal, which a whole day does not normally come in under. This looks like the active-energy figure rather than the whole day's. Your resting rate is only an estimate, so a real day can come in under it; if this figure is right, keep it.`}
+            <p ref={flagRef} tabIndex={-1} role="alert" id="dh-burn-flag" data-testid="burn-below-resting" className={flagBox}>
+              {`${fmtAmount(flag.value)} kcal is below your resting rate of about ${fmtAmount(rmr)} kcal, which a whole day does not normally come in under. This looks like the active-energy figure rather than the whole day's. Your resting rate is only an estimate, so a real day can come in under it; if this figure is right, keep it.`}
             </p>
           )}
           {flag?.kind === 'high' && (
-            <p id="dh-burn-flag" data-testid="burn-implausibly-high" className={flagBox}>
-              {`${flag.value} kcal is more than ${BURN_IMPLAUSIBLY_HIGH_KCAL} kcal for one day, which is far above a usual day. Check for an extra digit. If it is right, keep it.`}
+            <p ref={flagRef} tabIndex={-1} role="alert" id="dh-burn-flag" data-testid="burn-implausibly-high" className={flagBox}>
+              {`${fmtAmount(flag.value)} kcal is more than ${fmtAmount(BURN_IMPLAUSIBLY_HIGH_KCAL)} kcal for one day, which is far above a usual day (that mark is this app’s own working figure, not a published one). Check for an extra digit. If it is right, keep it.`}
             </p>
           )}
         </div>
@@ -136,7 +158,7 @@ function Fields({ dayKey, initial, profile, now }: { dayKey: string; initial: He
         {flag ? (
           <div className="flex gap-2">
             <button type="button" className={`${btn} flex-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`} onClick={(ev) => run(ev.currentTarget.form!, true)}>
-              {`Keep ${flag.value} kcal`}
+              {`Keep ${fmtAmount(flag.value)} kcal`}
             </button>
             <button type="button" className={`${btn} flex-1`} onClick={() => setFlag(null)}>Change it</button>
           </div>
