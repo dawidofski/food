@@ -257,9 +257,10 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
         )}
         {targets.isGeneric && <p className="text-xs text-slate-600 dark:text-slate-400">Targets use general adult guidelines until your profile is set up.</p>}
         <p data-testid="own-targets-note" className="text-xs text-slate-600 dark:text-slate-400">
-          The energy, protein and fibre targets are this app&rsquo;s own working figures, not a published recommendation (protein is 1.2 g
-          per kg of body weight; fibre is 14 g per 1,000 kcal, at least 30 g). For comparison, WHO advises at least 25 g of fibre a day and
-          the usual RDA for protein is 0.8 g per kg. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any
+          The energy and fibre targets are this app&rsquo;s own working figures, not a published recommendation (fibre is 14 g per 1,000
+          kcal, at least 30 g; WHO advises at least 25 g of fibre a day). Protein comes from two sources: EFSA&rsquo;s reference intake of 0.83 g
+          per kg of body weight, and for people who exercise, the International Society of Sports Nutrition&rsquo;s range of 1.4 to 2.0 g
+          per kg. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any
           target in Settings.
         </p>
       </section>

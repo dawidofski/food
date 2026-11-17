@@ -1,5 +1,5 @@
 import type { NutrientKey } from '@/types/nutrients';
-import type { ActivityLevel, Profile, Sex, Targets } from '@/types/profile';
+import type { ActivityLevel, Goal, Profile, Sex, Targets } from '@/types/profile';
 
 export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -28,6 +28,24 @@ const GENERIC = {
 };
 
 const SODIUM_MG = 2000; // WHO
+
+/**
+ * Protein, grams per kilogram of body weight per day. Both figures are read verbatim from their sources and recorded
+ * in the design document's verification log.
+ *
+ * EFSA_PRI: EFSA Panel on Dietetic Products, Nutrition and Allergies, "Scientific Opinion on Dietary Reference Values for
+ * protein", EFSA Journal 2012;10(2):2557, https://doi.org/10.2903/j.efsa.2012.2557: "the PRI for adults of all ages was
+ * estimated to be 0.83 g protein/kg body weight per day". It is the floor for everyone, and the target for someone who
+ * is sedentary, because the range below is stated for exercising individuals and the app must not assume anyone trains.
+ *
+ * ISSN range: Jager et al., "International Society of Sports Nutrition Position Stand: protein and exercise", J Int Soc
+ * Sports Nutr 2017;14:20, Position 2: "an overall daily protein intake in the range of 1.4-2.0 g protein/kg body
+ * weight/day". Its basis is stated to be body weight. A weight-loss goal takes the top of the range; every other case
+ * takes the middle.
+ */
+const PROTEIN_EFSA_PRI_G_PER_KG = 0.83;
+const PROTEIN_ISSN_MID_G_PER_KG = 1.7;
+const PROTEIN_ISSN_TOP_G_PER_KG = 2.0;
 
 type MicroRef = Partial<Record<NutrientKey, number>>;
 
@@ -105,16 +123,22 @@ function derive(
   sex: Sex,
   activity: ActivityLevel,
   isGeneric: boolean,
+  goal?: Goal,
 ): Targets {
   const rmr = 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
   const energy = Math.round(rmr * ACTIVITY_FACTORS[activity]);
+  const exercises = activity !== 'sedentary';
+  const proteinPerKg = !exercises
+    ? PROTEIN_EFSA_PRI_G_PER_KG
+    : goal?.kind === 'lose'
+      ? PROTEIN_ISSN_TOP_G_PER_KG
+      : PROTEIN_ISSN_MID_G_PER_KG;
   return {
     rmrKcal: Math.round(rmr),
     energyKcal: energy,
-    // The app's own working figures, not a published recommendation (see the verification log and the note on the
-    // Missing screen): protein 1.2 g/kg, fibre the larger of 30 g and 14 g per 1,000 kcal.
-    proteinG: Math.round(1.2 * weightKg),
-    proteinFloorG: Math.round(0.8 * weightKg),
+    // Protein is sourced (see the constants above). Fibre, below, is still the app's own working figure.
+    proteinG: Math.round(proteinPerKg * weightKg),
+    proteinFloorG: Math.round(PROTEIN_EFSA_PRI_G_PER_KG * weightKg),
     fibreG: Math.max(30, Math.round((14 * energy) / 1000)),
     sodiumMg: SODIUM_MG,
     satFatG: Math.round((0.1 * energy) / 9),
@@ -123,6 +147,7 @@ function derive(
     transFatG: Math.round((0.01 * energy) / 9),
     micronutrients: microsFor(sex),
     isGeneric,
+    basis: { protein: exercises ? 'issn-range' : 'efsa-pri', energy: 'mifflin', expenditure: 'formula' },
   };
 }
 
@@ -142,7 +167,7 @@ export function computeTargets(p: Profile | null, on: Date): Targets {
     age >= 0 &&
     sex !== undefined && Object.hasOwn(SEX_CONSTANT, sex) &&
     activityLevel !== undefined && Object.hasOwn(ACTIVITY_FACTORS, activityLevel)
-      ? derive(heightCm, weight, age, sex, activityLevel, false)
+      ? derive(heightCm, weight, age, sex, activityLevel, false, p.goal)
       : undefined;
   // Belt and braces: any non-finite derived target falls back to generic.
   const base =

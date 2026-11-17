@@ -471,3 +471,30 @@ only item here where the model reads numbers. Fences, all required:
 - **Weekly summaries of the diary.** Settings currently promises that "your diary, your profile, your targets and
   your totals are never sent". A summary breaks that promise. Not rejected on principle — it is the owner's data
   — but it would need its own switch and its own disclosure, and is out of scope here.
+
+## Verification log
+
+### Protein targets (honest-targets plan, Task 4)
+
+Replaces `1.2 × weightKg` and `0.8 × weightKg`, which had no source. Both figures below were read verbatim from
+their sources during the design (section 6). Nothing was re-read from a secondary summary.
+
+**Floor, and the target for a sedentary adult: 0.83 g per kg of body weight per day.**
+EFSA Panel on Dietetic Products, Nutrition and Allergies, "Scientific Opinion on Dietary Reference Values for
+protein", *EFSA Journal* 2012;10(2):2557, https://doi.org/10.2903/j.efsa.2012.2557. Verbatim: "the PRI for adults of
+all ages was estimated to be 0.83 g protein/kg body weight per day". Basis: body weight. Limit: one figure for all
+adults; age, sex and pregnancy are not modelled.
+
+**Target for an adult who is not sedentary: 1.4 to 2.0 g per kg of body weight per day.**
+Jäger et al., "International Society of Sports Nutrition Position Stand: protein and exercise", *J Int Soc Sports
+Nutr* 2017;14:20, Position 2. Verbatim: "an overall daily protein intake in the range of 1.4–2.0 g protein/kg body
+weight/day". Basis: body weight. The range is stated for exercising individuals, so a `sedentary` activity level
+never receives it. Positioning within the range is the app's choice, not the paper's: 1.7 (the middle) when holding,
+gaining or no goal is stated; 2.0 (the top) when the goal is to lose weight, for the reason given in section 6.
+
+**What was checked in the app:** for 80 kg the floor is 66 g, a sedentary target 66 g, an exercising target 136 g
+(1.7) or 160 g (2.0, losing). `Targets.basis.protein` is `'efsa-pri'` or `'issn-range'` accordingly. The
+Missing screen's note was corrected, because it still stated 1.2 g/kg.
+
+**Known limit:** an incomplete profile falls back to a generic basis whose activity level is `light`, so it receives
+the exercising range even though nobody said they exercise.

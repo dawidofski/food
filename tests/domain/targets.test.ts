@@ -1,8 +1,29 @@
 import { describe, expect, test } from 'vitest';
-import { ageOn, computeTargets, currentWeightKg } from '@/domain/targets';
+import { ACTIVITY_FACTORS, ageOn, computeTargets, currentWeightKg } from '@/domain/targets';
+import type { ActivityLevel, Goal, Profile } from '@/types/profile';
 import { ownerProfile } from '../fixtures/profile';
 
 const ON = new Date('2026-11-15');
+
+const ACTIVITY_LEVELS = Object.keys(ACTIVITY_FACTORS) as ActivityLevel[];
+
+/**
+ * A complete, valid profile with a single weight entry. Synthetic values only. `extra` takes any other Profile field
+ * (a body-fat percentage later) so callers need no new helper.
+ */
+function profileAt(weightKg: number, activityLevel: ActivityLevel, goal?: Goal, extra: Partial<Profile> = {}): Profile {
+  return {
+    heightCm: 180,
+    dob: '1991-06-15',
+    sex: 'male',
+    activityLevel,
+    weightLog: [{ date: '2026-11-01', kg: weightKg }],
+    flaggedAllergens: [],
+    conditions: [],
+    ...(goal === undefined ? {} : { goal }),
+    ...extra,
+  };
+}
 
 describe('targets', () => {
   test('ageOn derives age from date of birth, not a stored number', () => {
@@ -31,8 +52,8 @@ describe('targets', () => {
     expect(t.addedSugarsIdealG).toBe(30);
     expect(t.transFatG).toBe(3);
     expect(t.fibreG).toBe(34);
-    expect(t.proteinG).toBe(96);
-    expect(t.proteinFloorG).toBe(64);
+    expect(t.proteinG).toBe(136); // light activity, no goal: ISSN 1.7 g/kg of 80 kg
+    expect(t.proteinFloorG).toBe(66); // EFSA 0.83 g/kg of 80 kg
     expect(t.isGeneric).toBe(false);
   });
 
@@ -71,7 +92,7 @@ describe('targets', () => {
         { date: '2026-11-01', kg: 76 },
       ],
     };
-    expect(computeTargets(p, ON).proteinG).toBe(91);
+    expect(computeTargets(p, ON).proteinG).toBe(129); // 1.7 g/kg of 76 kg
   });
 
   test('currentWeightKg uses the latest-dated entry even when unsorted', () => {
@@ -127,6 +148,55 @@ describe('targets', () => {
         calciumMg: 950, ironMg: 11, magnesiumMg: 350, zincMg: 11.7, vitaminCMg: 110, vitaminDUg: 15,
         vitaminB12Ug: 4, folateUg: 330, potassiumMg: 3500,
       });
+    });
+  });
+
+  describe('protein', () => {
+    test('the floor is EFSA PRI for any adult', () => {
+      // 0.83 g/kg. For an 80 kg adult: 66 g.
+      expect(computeTargets(profileAt(80, 'sedentary'), ON).proteinFloorG).toBe(66);
+    });
+
+    test('a sedentary adult target is the EFSA PRI, not a sports figure', () => {
+      const t = computeTargets(profileAt(80, 'sedentary'), ON);
+      expect(t.proteinG).toBe(66);
+      expect(t.basis.protein).toBe('efsa-pri');
+    });
+
+    test('an adult who exercises gets the ISSN range, positioned at its middle when holding', () => {
+      // 1.7 g/kg of 80 kg = 136 g.
+      const t = computeTargets(profileAt(80, 'moderate', { kind: 'hold' }), ON);
+      expect(t.proteinG).toBe(136);
+      expect(t.basis.protein).toBe('issn-range');
+    });
+
+    test('no goal and a gain goal sit at the same point as holding', () => {
+      expect(computeTargets(profileAt(80, 'moderate'), ON).proteinG).toBe(136);
+      expect(computeTargets(profileAt(80, 'moderate', { kind: 'gain' }), ON).proteinG).toBe(136);
+    });
+
+    test('losing weight moves protein to the top of the range whose basis is stated', () => {
+      // 2.0 g/kg of 80 kg = 160 g. NOT a larger figure: see the spec, section 6. A rate is not required.
+      expect(computeTargets(profileAt(80, 'moderate', { kind: 'lose' }), ON).proteinG).toBe(160);
+    });
+
+    test('a sedentary person losing weight is not given a sports figure', () => {
+      const t = computeTargets(profileAt(80, 'sedentary', { kind: 'lose' }), ON);
+      expect(t.proteinG).toBe(66);
+      expect(t.basis.protein).toBe('efsa-pri');
+    });
+
+    test('the floor never exceeds the target', () => {
+      for (const a of ACTIVITY_LEVELS) {
+        const t = computeTargets(profileAt(80, a), ON);
+        expect(t.proteinFloorG).toBeLessThanOrEqual(t.proteinG);
+      }
+    });
+
+    test('basis names where energy and expenditure come from', () => {
+      const t = computeTargets(profileAt(80, 'moderate'), ON);
+      expect(t.basis.energy).toBe('mifflin');
+      expect(t.basis.expenditure).toBe('formula');
     });
   });
 });

@@ -7,6 +7,17 @@ export type Sex = 'male' | 'female' | 'unspecified';
 /** What the person is aiming for. Absent means no goal has been stated, which is NOT the same as `hold`. */
 export type Goal = { kind: 'lose' | 'hold' | 'gain'; rateKgPerWeek?: number };
 
+/** Where each part of the targets comes from. Later tasks and plans read this to say so to the person. */
+export type TargetBasis = {
+  protein: 'efsa-pri' | 'issn-range';
+  energy: 'mifflin' | 'katch-mcardle';
+  /**
+   * Only 'formula' is produced in this plan. 'reported' and 'observed' are reserved for a later plan's daily health data
+   * and weight page; their presence here is NOT a finished feature, so nothing may claim one of them yet.
+   */
+  expenditure: 'formula' | 'reported' | 'observed';
+};
+
 export type Targets = {
   energyKcal: number;
   rmrKcal: number;
@@ -22,6 +33,7 @@ export type Targets = {
   micronutrients: Partial<Record<NutrientKey, number>>;
   /** True when the targets come from the generic fallback basis, not the person's profile. */
   isGeneric: boolean;
+  basis: TargetBasis;
 };
 
 export type Profile = {
