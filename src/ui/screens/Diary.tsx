@@ -7,6 +7,7 @@ import { requestPersistenceOnce } from '@/state/persistentStorage';
 import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
 import BackupNudge from '@/ui/components/BackupNudge';
+import CorrectedBadge from '@/ui/components/CorrectedBadge';
 import CoverageNote from '@/ui/components/CoverageNote';
 import { fmtAmount } from '@/ui/components/NutrientBar';
 import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
@@ -119,6 +120,7 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
                 {isKnownValue(e.nutrients.energyKcal) && ` · ${fmtAmount(e.nutrients.energyKcal)} kcal`}
                 {e.items.some((i) => i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
                 {e.items.some((i) => i.source === 'off') && <OpenFoodFactsBadge />}
+                <CorrectedBadge keys={e.correctedKeys} />
               </span>
             </button>
           </li>

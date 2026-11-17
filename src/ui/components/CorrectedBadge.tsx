@@ -11,7 +11,12 @@ function list(names: string[]): string {
  * unchanged, because most of a corrected entry still comes from its original source. Absent or empty means no correction.
  */
 export default function CorrectedBadge({ keys }: { keys: NutrientKey[] | undefined }) {
-  const names = [...new Set(keys ?? [])].map((k) => NUTRIENT_LABEL[k].name);
+  // A key this build does not know (a backup from a newer version) is skipped, never allowed to throw: the row must render.
+  const labels: Partial<Record<string, { name: string }>> = NUTRIENT_LABEL;
+  const names = [...new Set(keys ?? [])].flatMap((k) => {
+    const name = labels[k]?.name;
+    return name ? [name] : [];
+  });
   if (names.length === 0) return null;
   return (
     <span

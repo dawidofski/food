@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { addEntry, allEntriesIncludingTombstones, entriesBetween, eraseEverything, putProfile } from '@/data/db';
 import { loadFoods, resetFoodRepository } from '@/data/foodRepository';
@@ -64,6 +64,17 @@ async function press(name: RegExp | string) {
 }
 
 describe('diary', () => {
+  test('the diary marks a corrected entry and leaves an uncorrected one unmarked', async () => {
+    await seed({ rawText: 'corrected toast', correctedKeys: ['sodiumMg'] });
+    await seed({ rawText: 'plain toast' });
+    render(<Diary deps={realDeps} />);
+    const marked = await screen.findByRole('button', { name: /corrected toast/i });
+    expect(within(marked).getByTestId('corrected')).toHaveTextContent('Corrected');
+    expect(within(marked).getByTestId('corrected').getAttribute('title')).toContain('sodium');
+    const plain = await screen.findByRole('button', { name: /plain toast/i });
+    expect(within(plain).queryByTestId('corrected')).toBeNull();
+  });
+
   test('editing an entry re-runs the warning gate', async () => {
     const original = await seed({ rawText: 'an apple' });
     render(<Diary deps={realDeps} />);

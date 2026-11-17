@@ -54,4 +54,27 @@ describe('corrected badge', () => {
     expect(title).not.toContain('protein');
     expect(title).toMatch(/other figures are unchanged/i);
   });
+
+  const titleFor = (keys: NutrientKey[]) => {
+    cleanup();
+    row(entry(keys));
+    return screen.getByTestId('corrected').getAttribute('title');
+  };
+
+  test('the sentence reads right for one figure and for three', () => {
+    expect(titleFor(['proteinG'])).toBe("You corrected protein by hand. The entry's other figures are unchanged.");
+    expect(titleFor(['proteinG', 'fatG', 'sodiumMg'])).toBe(
+      "You corrected protein, fat and sodium by hand. The entry's other figures are unchanged.",
+    );
+  });
+
+  test('a key this build does not know is skipped rather than crashing the row', () => {
+    expect(titleFor(['proteinG', 'mysteryG' as NutrientKey])).toBe(
+      "You corrected protein by hand. The entry's other figures are unchanged.",
+    );
+    cleanup();
+    row(entry(['mysteryG' as NutrientKey]));
+    expect(screen.getByText('an apple')).toBeInTheDocument();
+    expect(screen.queryByTestId('corrected')).toBeNull();
+  });
 });
