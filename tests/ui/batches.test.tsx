@@ -1,12 +1,13 @@
 import 'fake-indexeddb/auto';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { addEntry, entriesBetween, eraseEverything, getBatch, getProfile } from '@/data/db';
+import { addEntry, allEntriesIncludingTombstones, entriesBetween, eraseEverything, getBatch, getProfile } from '@/data/db';
 import { buildBatch, rebuildBatch, refreshBatches, saveBatch, withBatches } from '@/domain/batches';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
 import { catalogue } from '@/rules/catalogue';
 import type { FlowDeps } from '@/state/useEntryFlow';
 import BatchBuilder from '@/ui/screens/BatchBuilder';
+import EntryDetail from '@/ui/screens/EntryDetail';
 import Log from '@/ui/screens/Log';
 import { fixtureLookup, pastaLines } from '../fixtures/batchFoods';
 
@@ -47,6 +48,32 @@ describe('logging a portion', () => {
     expect(entry!.resolution).toBe('batch');
     expect(entry!.items[0]!.source).toBe('batch');
     expect(entry!.nutrients.energyKcal).toBeCloseTo(batch.nutrientsPerPortion.energyKcal!, 6);
+  });
+
+  test('correcting a logged portion\'s figures does not take a second portion off the counter', async () => {
+    const { batch } = buildBatch({ ...base, ingredientLines: baconLines }, fixtureLookup);
+    await saveBatch(batch);
+    await logPortion();
+    const gate = await screen.findByTestId('warning-gate');
+    await act(async () => { fireEvent.click(within(gate).getByRole('button', { name: /add anyway/i })); });
+    await waitFor(async () => expect((await getBatch(batch.id))!.portionsRemaining).toBe(3));
+    const [logged] = await todays();
+    cleanup();
+
+    render(<EntryDetail entry={logged!} deps={deps} onClose={() => {}} onChanged={() => {}} />);
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /correct the figures/i })); });
+    fireEvent.change(screen.getByLabelText(/^energy/i), { target: { value: '321' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /save figures/i })); });
+    const gate2 = await screen.findByTestId('warning-gate');
+    await act(async () => { fireEvent.click(within(gate2).getByRole('button', { name: /add anyway/i })); });
+    await waitFor(async () => expect((await allEntriesIncludingTombstones()).length).toBe(2));
+
+    const all = await allEntriesIncludingTombstones();
+    const active = all.filter((e) => e.state === 'active');
+    expect(active).toHaveLength(1);
+    expect(active[0]!.nutrients.energyKcal).toBe(321);
+    expect(active[0]!.items[0]!.source).toBe('batch'); // the revision still points at the batch...
+    expect((await getBatch(batch.id))!.portionsRemaining).toBe(3); // ...but costs it nothing
   });
 
   test('cancelling at the gate leaves the counter alone', async () => {
@@ -223,6 +250,29 @@ describe('correcting a batch\'s figures by hand', () => {
     await logPortion();
     await waitFor(async () => expect(await todays()).toHaveLength(1));
     expect((await todays())[0]!.items[0]!.selfReported).toBe(true);
+  });
+
+  test('a typed 0 is a figure: it marks the batch self-reported and is stored as a known zero', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    expect(batch.nutrientsPerPortion.sodiumMg).toBeDefined();
+    await saveBatch(batch);
+    await open();
+    type(/^sodium/i, '0');
+    await save();
+    await waitFor(async () => expect((await getBatch(batch.id))!.nutrientsPerPortion.sodiumMg).toBe(0));
+    const after = (await getBatch(batch.id))!;
+    expect(after.coverage.sodiumMg).toBe('known');
+    expect(after.selfReported).toBe(true);
+  });
+
+  test('a partial figure is shown with a note saying it is a floor, and the field keeps the figure', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    await saveBatch({ ...batch, nutrientsPerPortion: { ...batch.nutrientsPerPortion, sodiumMg: 207.33333333333334 }, coverage: { ...batch.coverage, sodiumMg: 'partial' } });
+    await open();
+    expect(field(/^sodium/i).value).toBe('207.33');
+    expect(document.getElementById('batch-fig-sodiumMg-partial')).toHaveTextContent('This is at least 207 mg so far; some items had no sodium data. It is a floor, not the full figure.');
+    await save(); // untouched: the rounded display is not an edit
+    expect((await getBatch(batch.id))!.nutrientsPerPortion.sodiumMg).toBe(207.33333333333334);
   });
 
   test('saving with nothing changed leaves the batch unmarked', async () => {

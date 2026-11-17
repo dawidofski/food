@@ -43,7 +43,7 @@ export function applyCorrection(
       coverage[key] = 'unknown';
       corrected.delete(key);
     } else if (isKnownValue(v) && v >= 0) {
-      nutrients[key] = v;
+      nutrients[key] = v + 0; // + 0 turns a typed -0 into 0, which would otherwise print as "-0"
       coverage[key] = 'known';
       corrected.add(key);
     }

@@ -7,6 +7,7 @@ import { addEntry, allEntriesIncludingTombstones, entriesBetween, eraseEverythin
 import { loadFoods, resetFoodRepository } from '@/data/foodRepository';
 import { localDayKey, localDayRange } from '@/domain/dayBoundary';
 import type { FoodLookup } from '@/domain/foodLookup';
+import { dayTotals } from '@/domain/totals';
 import { catalogue } from '@/rules/catalogue';
 import { allergenRule } from '@/rules/catalogue/allergen';
 import type { Rule, WarningCard as Card } from '@/rules/types';
@@ -618,6 +619,10 @@ describe('correctEntry', () => {
     expect(revision.coverage.sodiumMg).toBe('unknown');
     expect(revision.nutrients.energyKcal).toBe(100);
     expect(revision.correctedKeys).toBeUndefined();
+    // And the day reports it as not fully known: no figure, and never 'known'.
+    const day = dayTotals(await allEntriesIncludingTombstones(), localDayKey(revision.at));
+    expect('sodiumMg' in day.nutrients).toBe(false);
+    expect(day.coverage.sodiumMg).not.toBe('known');
   });
 
   test('a correction that crosses a ceiling shows that card in the gate', async () => {

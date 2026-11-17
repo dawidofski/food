@@ -227,7 +227,6 @@ describe('export and import', () => {
     ['a string', 'energyKcal'],
     ['null', null],
     ['an object', { energyKcal: true }],
-    ['a list holding an unknown key', ['energyKcal', 'caloriez']],
     ['a list holding a non-text item', ['energyKcal', 5]],
     ['a list holding null', [null]],
   ])('a correctedKeys that is %s rejects the file, leaving the store unchanged', async (_n, bad) => {
@@ -238,6 +237,17 @@ describe('export and import', () => {
       const before = await snapshot();
       await expect(importAll(file(JSON.stringify(g)), mode)).rejects.toThrow(/corrected/);
       expect(await snapshot()).toEqual(before);
+    }
+  });
+
+  test('an unknown string key in correctedKeys is accepted and kept: a backup from a newer version still imports', async () => {
+    await seedEverything();
+    for (const mode of ['replace', 'merge'] as const) {
+      const g = JSON.parse(await (await exportAll()).text());
+      g.entries.push({ ...entry(`future-${mode}`), correctedKeys: ['energyKcal', 'caloriez'] });
+      await importAll(file(JSON.stringify(g)), mode);
+      const back = (await allEntriesIncludingTombstones()).find((e) => e.id === `future-${mode}`);
+      expect(back?.correctedKeys).toEqual(['energyKcal', 'caloriez']);
     }
   });
 

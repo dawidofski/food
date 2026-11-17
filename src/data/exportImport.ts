@@ -4,7 +4,6 @@ import {
 } from '@/data/db';
 import { API_KEY_LS } from '@/state/aiSettings';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
-import { NUTRIENT_KEYS } from '@/types/nutrients';
 import type { Profile } from '@/types/profile';
 
 /**
@@ -143,10 +142,12 @@ function entry(v: unknown, i: number): DiaryEntry {
   arr(o.warningsShown, `${w} warnings`);
   oneOf(o.userAction, ['added', 'addedAfterAlternatives', 'cancelled'], `${w} action`);
   oneOf(o.state, ['active', 'deleted', 'superseded'], `${w} state`);
-  // Absent means no correction. A present value must be a list of known nutrient keys: a bad one rejects the file,
-  // it is never dropped, because a silent drop would lose which figures are the person's own.
+  // Absent means no correction. A present value must be a list of strings; anything else is a damaged file.
+  // An UNKNOWN string key is accepted: a backup from a newer version may name a figure this build lacks. Such a key
+  // cannot produce a wrong figure, only an unnamed one, and the badge and the entry screen both skip it. Refusing the
+  // person's only backup over that would be out of proportion (nutrients, coverage and refs take unknown keys too).
   if (o.correctedKeys !== undefined) {
-    for (const k of arr(o.correctedKeys, `${w} correctedKeys`)) oneOf(k, NUTRIENT_KEYS, `${w} correctedKeys`);
+    for (const k of arr(o.correctedKeys, `${w} correctedKeys`)) str(k, `${w} correctedKeys`);
   }
   for (const k of ['supersededBy', 'revisionOf']) if (o[k] !== undefined) str(o[k], `${w} ${k}`);
   return v as DiaryEntry;

@@ -67,6 +67,53 @@ describe('correcting figures from the entry screen', () => {
     expect(field(/sodium/i).value).toBe('150');
   });
 
+  const confirmGate = async () => {
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /add anyway/i })); });
+  };
+
+  test('typing 0 stores a known zero; it does not clear the figure', async () => {
+    const e = await seed();
+    await openForm(e);
+    type(/sodium/i, '0');
+    await save();
+    await confirmGate();
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const revision = (await allEntriesIncludingTombstones()).find((x) => x.id !== e.id)!;
+    expect(revision.nutrients.sodiumMg).toBe(0);
+    expect(revision.coverage.sodiumMg).toBe('known');
+    expect(revision.correctedKeys).toContain('sodiumMg');
+  });
+
+  test('a typed -0 is stored as 0, never as -0', async () => {
+    const e = await seed();
+    await openForm(e);
+    type(/sodium/i, '-0');
+    await save();
+    await confirmGate();
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const revision = (await allEntriesIncludingTombstones()).find((x) => x.id !== e.id)!;
+    expect(Object.is(revision.nutrients.sodiumMg, 0)).toBe(true);
+  });
+
+  test('a scaled figure is shown rounded, and saving it untouched changes nothing', async () => {
+    const e = await seed({ nutrients: { energyKcal: 106.80000000000001, sodiumMg: 150 } });
+    await openForm(e);
+    expect(field(/energy/i).value).toBe('106.8');
+    await save();
+    expect(screen.queryByTestId('warning-gate')).toBeNull();
+    expect(await allEntriesIncludingTombstones()).toHaveLength(1);
+  });
+
+  test('a partial figure keeps its number in the field and says it is a floor; a known one has no note', async () => {
+    const e = await seed({ nutrients: { energyKcal: 100, sodiumMg: 25 }, coverage: { energyKcal: 'known', sodiumMg: 'partial' } });
+    await openForm(e);
+    expect(field(/sodium/i).value).toBe('25');
+    const notes = screen.getAllByTestId('partial-figure-note');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent('This is at least 25 mg so far; some items had no sodium data. It is a floor, not the full figure.');
+    expect(field(/sodium/i)).toHaveAccessibleDescription(/at least 25 mg so far/i);
+  });
+
   test('a field the app does not know is blank, not zero', async () => {
     await openForm(await seed());
     for (const n of [/protein/i, /fibre/i, /saturated fat/i, /added sugars/i]) expect(field(n).value).toBe('');

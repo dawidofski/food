@@ -9,6 +9,7 @@ import type { DiaryEntry, Level } from '@/types/diary';
 import type { NutrientKey } from '@/types/nutrients';
 import CoverageNote, { NUTRIENT_LABEL } from '@/ui/components/CoverageNote';
 import { fmtAmount } from '@/ui/components/NutrientBar';
+import { FIGURES_LEAD, PartialFigureNote, figureText, isPartialFigure, partialNoteId, readFigure } from '@/ui/components/figureForm';
 import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 import CorrectedBadge from '@/ui/components/CorrectedBadge';
@@ -41,10 +42,7 @@ function removalText(entry: DiaryEntry, isToday: boolean): string {
   return `This will remove ${list} from ${day}’s totals.`;
 }
 
-const fieldText = (entry: DiaryEntry, k: NutrientKey): string => {
-  const v = entry.nutrients[k];
-  return isKnownValue(v) ? String(v) : '';
-};
+const fieldText = (entry: DiaryEntry, k: NutrientKey): string => figureText(entry.nutrients[k]);
 
 /** Names of the figures the person corrected by hand. A key this build does not know is skipped, never thrown on. */
 function correctedNames(keys: NutrientKey[] | undefined): string[] {
@@ -100,24 +98,12 @@ export default function EntryDetail({
     // Only fields that changed are sent: an untouched field changes nothing, and a figure not shown here is never mentioned.
     const correction: Correction = {};
     for (const k of SHOWN) {
-      const text = (figures[k] ?? '').trim();
-      // Unparseable text (such as "1e") reads as '' in a number input: that is not an emptied field, so it must not clear a figure.
       // Read from the DOM now, never cached: a flag mirrored into state goes stale when the DOM changes without a React event.
-      if ((e.currentTarget.elements.namedItem(`fig-${k}`) as HTMLInputElement | null)?.validity.badInput) {
-        setFigureError(`${NUTRIENT_LABEL[k].name[0]!.toUpperCase()}${NUTRIENT_LABEL[k].name.slice(1)} is not a number yet. Nothing has been changed.`);
-        return;
-      }
-      const before = fieldText(entry, k);
-      if (text === '') {
-        if (before !== '') correction[k] = null;
-        continue;
-      }
-      const n = Number(text);
-      if (!Number.isFinite(n) || n < 0) {
-        setFigureError(`${NUTRIENT_LABEL[k].name[0]!.toUpperCase()}${NUTRIENT_LABEL[k].name.slice(1)} needs a number that is zero or more. Nothing has been changed.`);
-        return;
-      }
-      if (text !== before && !(before !== '' && n === Number(before))) correction[k] = n;
+      const badInput = (e.currentTarget.elements.namedItem(`fig-${k}`) as HTMLInputElement | null)?.validity.badInput ?? false;
+      const read = readFigure(k, figures[k] ?? '', fieldText(entry, k), badInput);
+      if (read.kind === 'refused') { setFigureError(read.message); return; }
+      if (read.kind === 'clear') correction[k] = null;
+      else if (read.kind === 'set') correction[k] = read.value;
     }
     setFigureError(null);
     if (Object.keys(correction).length === 0) { setMode('view'); return; }
@@ -201,9 +187,7 @@ export default function EntryDetail({
 
       {mode === 'figures' && (
         <form onSubmit={onSaveFigures} className="space-y-3">
-          <p className="text-sm text-slate-700 dark:text-slate-300">
-            Type the figures you know. A blank field means the figure is unknown, not zero; emptying a field makes that figure unknown.
-          </p>
+          <p className="text-sm text-slate-700 dark:text-slate-300">{FIGURES_LEAD}</p>
           {SHOWN.map((k) => (
             <div key={k}>
               <label htmlFor={`fig-${k}`} className="block text-sm font-medium capitalize">{`${NUTRIENT_LABEL[k].name} (${NUTRIENT_LABEL[k].unit})`}</label>
@@ -215,7 +199,9 @@ export default function EntryDetail({
                 value={figures[k] ?? ''}
                 onChange={(e) => setFigures((f) => ({ ...f, [k]: e.target.value }))}
                 className={fieldClass}
+                {...(isPartialFigure(entry.coverage, k, entry.nutrients[k]) ? { 'aria-describedby': partialNoteId(`fig-${k}`) } : {})}
               />
+              <PartialFigureNote k={k} coverage={entry.coverage} value={entry.nutrients[k]} inputId={`fig-${k}`} />
             </div>
           ))}
           <p className="text-sm text-slate-700 dark:text-slate-300">

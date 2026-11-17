@@ -14,6 +14,7 @@ import type { Batch } from '@/types/diary';
 import type { NutrientKey } from '@/types/nutrients';
 import { NUTRIENT_LABEL } from '@/ui/components/CoverageNote';
 import CoverageNote from '@/ui/components/CoverageNote';
+import { FIGURES_LEAD, PartialFigureNote, figureText, isPartialFigure, partialNoteId, readFigure } from '@/ui/components/figureForm';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 import { fieldClass } from './FirstRun';
 
@@ -322,12 +323,7 @@ function NUTRIENT_PARTIALS(b: Batch): (keyof Batch['coverage'])[] {
   );
 }
 
-const fieldText = (b: Batch, k: NutrientKey): string => {
-  const v = b.nutrientsPerPortion[k];
-  return isKnownValue(v) ? String(v) : '';
-};
-
-const sentence = (k: NutrientKey): string => `${NUTRIENT_LABEL[k].name[0]!.toUpperCase()}${NUTRIENT_LABEL[k].name.slice(1)}`;
+const fieldText = (b: Batch, k: NutrientKey): string => figureText(b.nutrientsPerPortion[k]);
 
 /** The batch's per-portion figures, typed by hand. Same field pattern and wording as an entry's figures. */
 function BatchFigures({ batch, onSaved, onCancel }: { batch: Batch; onSaved: () => void; onCancel: () => void }) {
@@ -341,23 +337,12 @@ function BatchFigures({ batch, onSaved, onCancel }: { batch: Batch; onSaved: () 
     // Only fields that changed are sent: an untouched field changes nothing.
     const correction: Correction = {};
     for (const k of SHOWN) {
-      const text = (figures[k] ?? '').trim();
-      // "1e" reads as '' in a number input; that is not an emptied field. Read from the DOM now, never from a cached flag.
-      if ((e.currentTarget.elements.namedItem(`batch-fig-${k}`) as HTMLInputElement | null)?.validity.badInput) {
-        setError(`${sentence(k)} is not a number yet. Nothing has been changed.`);
-        return;
-      }
-      const before = fieldText(batch, k);
-      if (text === '') {
-        if (before !== '') correction[k] = null;
-        continue;
-      }
-      const n = Number(text);
-      if (!Number.isFinite(n) || n < 0) {
-        setError(`${sentence(k)} needs a number that is zero or more. Nothing has been changed.`);
-        return;
-      }
-      if (text !== before && !(before !== '' && n === Number(before))) correction[k] = n;
+      // Read from the DOM now, never from a cached flag.
+      const badInput = (e.currentTarget.elements.namedItem(`batch-fig-${k}`) as HTMLInputElement | null)?.validity.badInput ?? false;
+      const read = readFigure(k, figures[k] ?? '', fieldText(batch, k), badInput);
+      if (read.kind === 'refused') { setError(read.message); return; }
+      if (read.kind === 'clear') correction[k] = null;
+      else if (read.kind === 'set') correction[k] = read.value;
     }
     setError(null);
     if (Object.keys(correction).length === 0) { onCancel(); return; }
@@ -377,9 +362,7 @@ function BatchFigures({ batch, onSaved, onCancel }: { batch: Batch; onSaved: () 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="space-y-3" aria-label="Correct the figures">
       <h2 className="text-lg font-semibold">{`Correct the figures of ${batch.name}`}</h2>
-      <p className="text-sm text-slate-700 dark:text-slate-300">
-        Type the figures you know. A blank field means the figure is unknown, not zero; emptying a field makes that figure unknown.
-      </p>
+      <p className="text-sm text-slate-700 dark:text-slate-300">{FIGURES_LEAD}</p>
       <p className="text-sm text-slate-700 dark:text-slate-300">These are the figures for one portion.</p>
       {SHOWN.map((k) => (
         <div key={k}>
@@ -387,7 +370,9 @@ function BatchFigures({ batch, onSaved, onCancel }: { batch: Batch; onSaved: () 
           <input
             id={`batch-fig-${k}`} type="number" inputMode="decimal" step="any" value={figures[k] ?? ''}
             onChange={(e) => setFigures((f) => ({ ...f, [k]: e.target.value }))} className={fieldClass}
+            {...(isPartialFigure(batch.coverage, k, batch.nutrientsPerPortion[k]) ? { 'aria-describedby': partialNoteId(`batch-fig-${k}`) } : {})}
           />
+          <PartialFigureNote k={k} coverage={batch.coverage} value={batch.nutrientsPerPortion[k]} inputId={`batch-fig-${k}`} />
         </div>
       ))}
       <p className="text-sm text-slate-700 dark:text-slate-300">
