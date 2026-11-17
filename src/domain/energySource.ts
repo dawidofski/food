@@ -19,8 +19,14 @@ export function energySourceSentence(
   basis: Targets['basis'],
   activityLevel: ActivityLevel | undefined,
   reportedDays: number | undefined,
+  isGeneric = false,
 ): string {
   if (basis.energy === 'custom') return 'Energy: your own figure, not calculated by the app.';
+  // The general-adult basis: nothing about this person is known, so the 'light' factor stands in and no goal or reported
+  // burn is applied. It must not be worded as "your" activity level.
+  if (isGeneric) {
+    return `Energy: resting energy for a general adult from the Mifflin-St Jeor equation, multiplied by a light activity factor of ${ACTIVITY_FACTORS.light} (this app's own working figure, not your activity level).`;
+  }
   const resting =
     basis.energy === 'katch-mcardle'
       ? 'the Katch-McArdle equation, using your body-fat percentage'

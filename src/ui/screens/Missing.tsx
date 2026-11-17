@@ -284,10 +284,11 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
           })
         )}
         {targets.isGeneric && <p className="text-xs text-slate-600 dark:text-slate-400">Targets use general adult guidelines until your profile is set up.</p>}
-        {!targets.isGeneric && <p data-testid="energy-source" className="text-xs text-slate-600 dark:text-slate-400">{energySourceSentence(targets.basis, profile?.activityLevel, reported?.days)}</p>}
+        <p data-testid="energy-source" className="text-xs text-slate-600 dark:text-slate-400">{energySourceSentence(targets.basis, profile?.activityLevel, reported?.days, targets.isGeneric)}</p>
         <p data-testid="own-targets-note" className="text-xs text-slate-600 dark:text-slate-400">
-          Any goal offset is added to the energy target; the fibre target is 14 g per 1,000 kcal, at least 30 g. The activity factors, the
-          goal offset and the fibre rule are this app&rsquo;s own working figures, not a published recommendation. WHO advises at least 25 g
+          {targets.isGeneric
+            ? 'The fibre target is 14 g per 1,000 kcal, at least 30 g. The activity factor and the fibre rule are this app’s own working figures, not a published recommendation.'
+            : 'Any goal offset is added to the energy target; the fibre target is 14 g per 1,000 kcal, at least 30 g. The activity factors, the goal offset and the fibre rule are this app’s own working figures, not a published recommendation.'} WHO advises at least 25 g
           of fibre a day. Protein comes from two sources: EFSA&rsquo;s reference intake of 0.83 g
           per kg of body weight, and for people who exercise, the International Society of Sports Nutrition&rsquo;s range of 1.4 to 2.0 g
           per kg, within which this app uses the middle, 1.7 g, and the top, 2.0 g, when your goal is to lose weight. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any

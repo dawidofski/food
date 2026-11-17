@@ -261,14 +261,14 @@ function TargetSources({ profile, reported }: { profile: Profile; reported: Repo
           ? 'Protein: 2.0 g per kg of body weight, the top of the 1.4 to 2.0 g per kg range in the ISSN position stand (Jager et al., 2017). The app takes the top of the range for a weight-loss goal.'
           : 'Protein: 1.7 g per kg of body weight, within the 1.4 to 2.0 g per kg range in the ISSN position stand (Jager et al., 2017). The app chose the middle of that range.';
   // One sentence, shared with the Missing screen, that reads the resting basis and the expenditure basis together.
-  const energy = energySourceSentence(basis, profile.activityLevel, reported?.days);
+  const energy = energySourceSentence(basis, profile.activityLevel, reported?.days, t.isGeneric);
   // With no usable weight the targets are the general-adult basis, not the person's: attributing a cited figure to them, or a
   // goal offset, would be false. Only a figure the person typed is still theirs.
   const lines: string[] = t.isGeneric
     ? [
         'Your targets use general adult guidelines, not figures worked out for you, because no usable weight is logged. Add your weight in the weight log to personalise them.',
         ...(basis.protein === 'custom' ? [protein] : []),
-        ...(basis.energy === 'custom' ? [energy] : []),
+        energy,
         ...(kind === 'hold'
         ? ['Your goal is to hold, so it would not move your energy target either way.']
         : kind !== undefined

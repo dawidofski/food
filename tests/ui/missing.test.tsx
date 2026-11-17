@@ -172,11 +172,37 @@ describe('the energy and fibre targets are labelled as the app\'s own', () => {
     const note = await screen.findByTestId('own-targets-note');
     expect(note.textContent).toMatch(/own working figures[^.]*not a published recommendation/i);
     expect(note.textContent).toMatch(/WHO advises at least 25 g of fibre/i);
+    expect(note.textContent).toMatch(/Any goal offset is added to the energy target/);
     expect(note.textContent).toMatch(/goal offset and the fibre rule are this app.s own working figures/i);
     expect(note.textContent).toMatch(/EFSA[^.]*0\.83 g/);
     expect(note.textContent).toMatch(/International Society of Sports Nutrition[^.]*1\.4 to 2\.0 g/);
     expect(note.textContent).toMatch(/this app uses the middle, 1\.7 g, and the top, 2\.0 g, when your goal is to lose weight/);
     expect(note.textContent).not.toMatch(/1\.2 g/);
+  });
+});
+
+describe('for general targets the screen accounts for the energy figure and claims no goal offset', () => {
+  test('a profile with no usable weight names the equation and the activity factor, and never says an offset is applied', async () => {
+    await putProfile({ ...ownerProfile, weightLog: [], goal: { kind: 'lose', rateKgPerWeek: 0.5 } });
+    render(<Missing />);
+    const source = (await screen.findByTestId('energy-source')).textContent ?? '';
+    expect(source).toMatch(/Mifflin-St Jeor equation/);
+    expect(source).toMatch(/light activity factor of 1\.375 \(this app.s own working figure/);
+    expect(source).not.toMatch(/offset|goal/i);
+    const note = screen.getByTestId('own-targets-note').textContent ?? '';
+    expect(note).toMatch(/activity factor and the fibre rule are this app.s own working figures/i);
+    expect(note).not.toMatch(/goal offset/i);
+    expect(screen.getByText(/general adult guidelines until your profile is set up/i)).toBeTruthy();
+  });
+
+  test('Settings says the same sentence for the same general targets', async () => {
+    await putProfile({ ...ownerProfile, weightLog: [], goal: { kind: 'lose', rateKgPerWeek: 0.5 } });
+    render(<Missing />);
+    const onMissing = (await screen.findByTestId('energy-source')).textContent;
+    cleanup();
+    render(<ProfileSettings />);
+    const line = await screen.findByText(/^Energy:/);
+    expect(line.textContent).toBe(onMissing);
   });
 });
 
