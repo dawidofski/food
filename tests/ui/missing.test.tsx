@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { addEntry, eraseEverything, putProfile } from '@/data/db';
 import type { DiaryEntry } from '@/types/diary';
 import type { ClassificationFlags } from '@/types/nutrients';
-import Missing from '@/ui/screens/Missing';
+import { directionOf } from '@/domain/targetDirection';
+import Missing, { MICRO_ORDER } from '@/ui/screens/Missing';
 import { ownerProfile } from '../fixtures/profile';
 
 beforeEach(async () => {
@@ -192,13 +193,13 @@ describe('a ceiling is never framed as a target, and a floor below the target is
     }
   });
 
-  test('protein shows the EFSA floor as a second mark below its target, labelled as a floor', async () => {
+  test('protein shows the EFSA floor as a second mark below its target, labelled as the EFSA reference intake', async () => {
     await putProfile({ ...ownerProfile, activityLevel: 'moderate' }); // 80 kg: target 1.7 g/kg = 136 g, floor 0.83 g/kg = 66 g
     await seedEntry({ nutrients: { ...fullDay.nutrients }, coverage: { ...fullDay.coverage } });
     render(<Missing />);
     const bar = await screen.findByTestId('bar-proteinG');
     expect(bar.querySelector('[data-mark="second"]')).not.toBeNull();
-    expect(bar.textContent).toMatch(/EFSA minimum for adults, 0\.83 g per kg: 66 g/);
+    expect(bar.textContent).toMatch(/EFSA reference intake for adults, 0\.83 g per kg: 66 g/);
     expect(bar.textContent).toMatch(/target 136 g/);
   });
 
@@ -221,22 +222,17 @@ describe('a ceiling is never framed as a target, and a floor below the target is
     expect(bar.querySelector('[data-mark="second"]')).toBeNull();
   });
 
-  test('characterisation: the weekly gap list names floors only, never a ceiling', async () => {
-    await putProfile(ownerProfile);
-    for (let i = 0; i < 5; i++) {
-      await seedEntry({
-        at: daysAgo(i),
-        nutrients: { energyKcal: 500, sodiumMg: 5000, satFatG: 60, addedSugarsG: 200, calciumMg: 100, ironMg: 1 },
-        coverage: { energyKcal: 'known', sodiumMg: 'known', satFatG: 'known', addedSugarsG: 'known', calciumMg: 'known', ironMg: 'known' },
-      });
-    }
+  test('no second mark when an overridden protein target sits within a gram of the floor', async () => {
+    await putProfile({ ...ownerProfile, activityLevel: 'moderate', overrides: { proteinG: 67 } }); // floor is 66 g
+    await seedEntry({ nutrients: { ...fullDay.nutrients }, coverage: { ...fullDay.coverage } });
     render(<Missing />);
-    await screen.findByTestId('gap-calciumMg');
-    const gapsSection = screen.getByRole('heading', { name: /worth a look/i }).closest('section')!;
-    expect(gapsSection.querySelectorAll('[data-testid^="gap-"]').length).toBeGreaterThan(0);
-    expect(within(gapsSection).queryByTestId('gap-sodiumMg')).toBeNull();
-    expect(within(gapsSection).queryByTestId('gap-satFatG')).toBeNull();
-    expect(within(gapsSection).queryByTestId('gap-addedSugarsG')).toBeNull();
-    expect(gapsSection.textContent).not.toMatch(/sodium|saturated fat|added sugar/i);
+    const bar = await screen.findByTestId('bar-proteinG');
+    expect(bar.textContent).toMatch(/target 67 g/);
+    expect(bar.querySelector('[data-mark="second"]')).toBeNull();
+  });
+
+  test('characterisation: the weekly gap list covers floors only (structural, independent of any data)', () => {
+    expect(MICRO_ORDER.length).toBeGreaterThan(0);
+    for (const key of MICRO_ORDER) expect(directionOf(key), key).toBe('floor');
   });
 });

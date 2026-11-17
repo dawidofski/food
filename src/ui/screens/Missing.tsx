@@ -33,19 +33,21 @@ export const defaultMissingDeps: MissingDeps = {
   store: { entriesBetween, getProfile, putProfile },
 };
 
+/** A second tick is drawn only when it sits clearly apart from the main one: at least 5% of the main figure below it. A typed override can land a gram away. */
+const clearOf = (second: number, main: number): boolean => main - second >= main * 0.05;
+
 type SecondMark = { value: number; label: string };
 
 /**
  * `second` is a lower figure drawn on the same bar. Protein's is EFSA's floor beneath the target; added sugars' is WHO's
- * stricter conditional figure beneath the limit. It is left out when it would sit on the main mark (a floor equal to the
- * target says nothing new).
+ * stricter conditional figure beneath the limit. It is left out when it would sit on the main mark.
  */
 const TODAY_BARS: { key: NutrientKey; target: (t: Targets) => number; second?: (t: Targets) => SecondMark | undefined }[] = [
   { key: 'energyKcal', target: (t) => t.energyKcal },
   {
     key: 'proteinG',
     target: (t) => t.proteinG,
-    second: (t) => (t.proteinFloorG < t.proteinG ? { value: t.proteinFloorG, label: 'EFSA minimum for adults, 0.83 g per kg' } : undefined),
+    second: (t) => (clearOf(t.proteinFloorG, t.proteinG) ? { value: t.proteinFloorG, label: 'EFSA reference intake for adults, 0.83 g per kg' } : undefined),
   },
   { key: 'fibreG', target: (t) => t.fibreG },
   { key: 'sodiumMg', target: (t) => t.sodiumMg },
@@ -53,11 +55,11 @@ const TODAY_BARS: { key: NutrientKey; target: (t: Targets) => number; second?: (
   {
     key: 'addedSugarsG',
     target: (t) => t.addedSugarsG,
-    second: (t) => (t.addedSugarsIdealG < t.addedSugarsG ? { value: t.addedSugarsIdealG, label: "WHO's stricter, conditional advice, 5% of energy" } : undefined),
+    second: (t) => (clearOf(t.addedSugarsIdealG, t.addedSugarsG) ? { value: t.addedSugarsIdealG, label: "WHO's stricter, conditional advice, 5% of energy" } : undefined),
   },
 ];
 
-const MICRO_ORDER: NutrientKey[] = [
+export const MICRO_ORDER: NutrientKey[] = [
   'calciumMg', 'ironMg', 'magnesiumMg', 'zincMg', 'vitaminCMg', 'vitaminDUg', 'vitaminB12Ug', 'folateUg', 'potassiumMg',
 ];
 
