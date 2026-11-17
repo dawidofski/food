@@ -1,6 +1,7 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
 import type { OffProduct } from '@/types/food';
+import type { HealthDay } from '@/types/health';
 import type { Profile } from '@/types/profile';
 
 /**
@@ -20,16 +21,18 @@ interface FoodDiaryDB extends DBSchema {
   batches: { key: string; value: Batch };
   /** Products scanned from a barcode and read from Open Food Facts, keyed by barcode. A cache, not history. */
   offProducts: { key: string; value: OffProduct };
+  /** What the owner types in from Samsung Health, one row per local day. Not food, so not in `entries`. */
+  healthDays: { key: string; value: HealthDay };
 }
 
 const DB_NAME = 'food-diary';
 /**
- * 2 adds `offProducts`. Raise this for EVERY store added: `upgrade` runs only when the stored version is below it,
+ * 2 adds `offProducts`; 3 adds `healthDays`. Raise this for EVERY store added: `upgrade` runs only when the stored version is below it,
  * and `create` below is written to add whatever is missing, so an old database gains the new store and a fresh one
  * gets everything. The repair path in `open()` relies on `create` being safe to call on a database that already
  * holds some of the stores.
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 /** Every localStorage key this app writes MUST go through `lsKey`, so `eraseEverything` can find it. */
 export const LS_PREFIX = 'fd.';
 export const lsKey = (name: string): string => `${LS_PREFIX}${name}`;
@@ -37,7 +40,7 @@ const PROFILE_KEY = lsKey('profile');
 
 let dbPromise: Promise<IDBPDatabase<FoodDiaryDB>> | null = null;
 
-const STORES = ['entries', 'customFoods', 'batches', 'offProducts'] as const;
+const STORES = ['entries', 'customFoods', 'batches', 'offProducts', 'healthDays'] as const;
 
 /** Adds whatever is missing, so it serves a fresh database, a version upgrade and the repair in `open()` alike. */
 function create(d: IDBPDatabase<FoodDiaryDB>): void {
@@ -50,6 +53,7 @@ function create(d: IDBPDatabase<FoodDiaryDB>): void {
   if (!d.objectStoreNames.contains('customFoods')) d.createObjectStore('customFoods', { keyPath: 'id' });
   if (!d.objectStoreNames.contains('batches')) d.createObjectStore('batches', { keyPath: 'id' });
   if (!d.objectStoreNames.contains('offProducts')) d.createObjectStore('offProducts', { keyPath: 'barcode' });
+  if (!d.objectStoreNames.contains('healthDays')) d.createObjectStore('healthDays', { keyPath: 'date' });
 }
 
 function missingStores(d: IDBPDatabase<FoodDiaryDB>): string[] {
@@ -111,6 +115,11 @@ function db(): Promise<IDBPDatabase<FoodDiaryDB>> {
     dbPromise = opening;
   }
   return dbPromise;
+}
+
+/** The open connection, for stores kept in their own modules. */
+export function diaryDb(): Promise<IDBPDatabase<FoodDiaryDB>> {
+  return db();
 }
 
 function newId(): string {
@@ -411,12 +420,13 @@ async function eraseStores(): Promise<void> {
   }
 
   const d = await db();
-  const tx = d.transaction(['entries', 'customFoods', 'batches', 'offProducts'], 'readwrite');
+  const tx = d.transaction(['entries', 'customFoods', 'batches', 'offProducts', 'healthDays'], 'readwrite');
   await Promise.all([
     tx.objectStore('entries').clear(),
     tx.objectStore('customFoods').clear(),
     tx.objectStore('batches').clear(),
     tx.objectStore('offProducts').clear(),
+    tx.objectStore('healthDays').clear(),
     tx.done,
   ]);
   if (!swept) throw sweepError;
