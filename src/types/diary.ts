@@ -1,4 +1,4 @@
-import type { ClassificationFlags, Coverage, NutrientSet } from './nutrients';
+import type { ClassificationFlags, Coverage, NutrientKey, NutrientSet } from './nutrients';
 import type { ParsedItem } from '@/domain/parseEntry';
 
 /**
@@ -61,6 +61,11 @@ export type DiaryEntry = {
    * when no item had FPED data, which means unknown, never zero.
    */
   fped?: { vegCupEq: number; fruitCupEq: number; wholeGrainOzEq: number };
+  /**
+   * Which figures the person typed by hand, so the entry can say which numbers are theirs. An array rather than a
+   * boolean for that reason. Absent = none corrected. A key leaves the list when the person clears that figure.
+   */
+  correctedKeys?: NutrientKey[];
   warningsShown: { ruleId: string; level: Level }[];
   /** 'cancelled' entries are kept for the learning history but were never eaten: never counted in totals. */
   userAction: 'added' | 'addedAfterAlternatives' | 'cancelled';
