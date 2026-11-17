@@ -9,6 +9,7 @@ import { offProductMeta, refreshOffFoods, withOpenFoodFacts } from '@/data/offCa
 import { last7DayKeys, localDayRange } from '@/domain/dayBoundary';
 import type { FoodLookup } from '@/domain/foodLookup';
 import { parseEntry, type ParsedItem } from '@/domain/parseEntry';
+import { applyCorrection, type Correction } from '@/domain/corrections';
 import { resolveItems, resolveKnownFood } from '@/domain/resolveItems';
 import { applyAi, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
 import { interpretEntry, type AiFailure } from '@/ai/deepseek';
@@ -22,6 +23,7 @@ import { evaluate } from '@/rules/engine';
 import type { Context, FoodIdentity, Rule, RuleFailure, SafetyQuestion, WarningCard } from '@/rules/types';
 import type { DiaryEntry, FoodRef, FoodSource, Resolution } from '@/types/diary';
 import type { DatasetFood } from '@/types/food';
+import type { NutrientKey } from '@/types/nutrients';
 import type { Profile } from '@/types/profile';
 
 export type FlowStage = 'idle' | 'resolving' | 'needsHelp' | 'aiReview' | 'questions' | 'gate' | 'committed';
@@ -105,6 +107,11 @@ type Session = {
   viaAi: boolean;
   /** Set when this entry corrects an existing one: it is stored as a revision, keeping the original time. */
   revises?: Revises;
+  /**
+   * Set only by a correction: what the revision keeps from the entry as it was, because the food is not being
+   * re-read. The entry's own resolution kind, its own entry-level fped and its corrected-figures list.
+   */
+  kept?: { resolution: DiaryEntry['resolution']; fped: DiaryEntry['fped']; correctedKeys: NutrientKey[] };
 };
 
 /** The entry being corrected. `at` is when the food was eaten, which a correction does not change. */
@@ -140,6 +147,12 @@ export type EntryFlow = {
    * near-miss can substitute a different product for the one in the person's hand. From here on it is an
    * ordinary entry: the same rules, the same warning gate, the same confirmation. Nothing is added silently.
    */
+  /**
+   * Corrects an entry's own figures by hand. The entry's foods are NOT re-read: its items, classification and fped
+   * are carried unchanged and only the figures change. The result goes through the same warning gate as any entry,
+   * and is stored as a revision (original time kept) only once the gate is passed. Cancelling writes nothing.
+   */
+  correctEntry: (entry: DiaryEntry, c: Correction) => Promise<void>;
   submitKnownFood: (food: DatasetFood, grams: number, text: string, source?: FoodSource) => Promise<void>;
   answer: (answerKey: string, yes: boolean) => void;
   addAnyway: () => Promise<void>;
@@ -245,6 +258,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const pendingResolution = useRef<{ items: ParsedItem[]; resolution: Resolution; viaAi?: boolean } | null>(null);
   const aiPending = useRef<AiApplied | null>(null);
   const revisesRef = useRef<Revises | null>(null);
+  const keptRef = useRef<Session['kept'] | null>(null);
   const depsRef = useRef(deps);
   depsRef.current = deps;
 
@@ -272,7 +286,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       id: globalThis.crypto.randomUUID(),
       at: s.revises ? s.revises.at : d.now().toISOString(),
       rawText: s.text,
-      resolution: s.resolution.refs.some((r) => r.source === 'batch') ? 'batch' : s.viaAi ? 'ai' : 'local',
+      resolution: s.kept?.resolution ?? (s.resolution.refs.some((r) => r.source === 'batch') ? 'batch' : s.viaAi ? 'ai' : 'local'),
       items: s.resolution.refs.map((r) => (r.source === 'batch' && batchHasCustomIngredient(r.foodId) ? { ...r, selfReported: true } : r)),
       nutrients: s.resolution.nutrients,
       coverage: s.resolution.coverage,
@@ -285,8 +299,10 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
       userAction: action,
       state: 'active',
     };
-    const fped = sumFped(s.resolution.refs);
+    // A correction keeps the entry's own fped: the food is unchanged, so nothing is recomputed from the refs.
+    const fped = s.kept ? s.kept.fped : sumFped(s.resolution.refs);
     if (fped) entry.fped = fped;
+    if (s.kept && s.kept.correctedKeys.length > 0) entry.correctedKeys = s.kept.correctedKeys;
     try {
       if (s.revises) {
         const { id: _id, ...fields } = entry;
@@ -368,6 +384,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const run = useCallback(
     async (text: string, resolutionOverride?: { items: ParsedItem[]; resolution: Resolution }, viaAi = false) => {
       const revises = revisesRef.current;
+      const kept = keptRef.current;
       const my = ++seq.current;
       const d = depsRef.current;
       setLastText(text);
@@ -446,7 +463,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
           });
         }
         const s: Session = {
-          text, resolution, lines: lns, foods, answers: {}, viewedAlternatives: false, viaAi, carried, ...(revises ? { revises } : {}),
+          text, resolution, lines: lns, foods, answers: {}, viewedAlternatives: false, viaAi, carried, ...(revises ? { revises } : {}), ...(kept ? { kept } : {}),
           base: {
             pending: resolution,
             foods,
@@ -474,6 +491,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     async (text: string, opts?: { revises?: Revises }) => {
       if (text.trim() === '') return;
       revisesRef.current = opts?.revises ?? null;
+      keptRef.current = null;
       pendingResolution.current = null;
       await run(text);
     },
@@ -483,9 +501,31 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   const submitKnownFood = useCallback(
     async (food: DatasetFood, grams: number, text: string, source: FoodSource = 'off') => {
       revisesRef.current = null;
+      keptRef.current = null;
       pendingResolution.current = null;
       const items: ParsedItem[] = [{ rawFragment: text, quantity: { grams }, foodQuery: food.name }];
       await run(text, { items, resolution: resolveKnownFood(source, food, grams) });
+    },
+    [run],
+  );
+
+  const correctEntry = useCallback(
+    async (entry: DiaryEntry, c: Correction) => {
+      // Not parsed: the foods stay exactly as the entry was committed, so no other database match can be substituted.
+      const applied = applyCorrection(entry, c);
+      const resolution: Resolution = {
+        refs: entry.items,
+        nutrients: applied.nutrients,
+        coverage: applied.coverage,
+        classification: entry.classification,
+        needsHelp: [],
+        confidence: 1,
+      };
+      revisesRef.current = { id: entry.id, at: entry.at };
+      keptRef.current = { resolution: entry.resolution, fped: entry.fped, correctedKeys: applied.correctedKeys };
+      pendingResolution.current = null;
+      // No parsed items: nothing is re-judged as an unusual serving, since the portion is not what changes.
+      await run(entry.rawText, { items: [], resolution });
     },
     [run],
   );
@@ -561,6 +601,6 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   return {
     stage, cards, questions, failures, lines, unresolved, aiReadings, aiRefused, dataMissing, viewingAlternatives, outcome, error, lastText,
-    genericTargets, storedCount, submit, submitKnownFood, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
+    genericTargets, storedCount, submit, submitKnownFood, correctEntry, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
   };
 }

@@ -10,7 +10,9 @@ import type { FoodLookup } from '@/domain/foodLookup';
 import { catalogue } from '@/rules/catalogue';
 import { allergenRule } from '@/rules/catalogue/allergen';
 import type { Rule, WarningCard as Card } from '@/rules/types';
-import { defaultDeps, type FlowDeps } from '@/state/useEntryFlow';
+import type { Correction } from '@/domain/corrections';
+import { defaultDeps, useEntryFlow, type EntryFlow, type FlowDeps } from '@/state/useEntryFlow';
+import type { DiaryEntry } from '@/types/diary';
 import Log from '@/ui/screens/Log';
 import WarningCard from '@/ui/components/WarningCard';
 import type { DatasetFood } from '@/types/food';
@@ -467,5 +469,133 @@ describe('the alternatives button', () => {
     const alt = { label: 'x', reason: 'a reason long enough', citation: citation('WHO') };
     await typeAndSubmit('an apple', fakeDeps([apple], [rule({ id: 'has', level: () => 'HIGH', alternatives: [alt] })]));
     expect(await screen.findByRole('button', { name: /healthier alternatives/i })).toBeInTheDocument();
+  });
+});
+
+// ---- correcting an entry's figures goes through the gate ----
+
+describe('correctEntry', () => {
+  let flowRef: EntryFlow | null = null;
+  function Harness({ deps }: { deps: FlowDeps }) {
+    const flow = useEntryFlow(deps);
+    flowRef = flow;
+    return (
+      <div>
+        <div data-testid="stage">{flow.stage}</div>
+        <ul>{flow.cards.map((c) => <li key={c.ruleId} data-testid="card">{c.ruleId}</li>)}</ul>
+        <button onClick={() => void flow.addAnyway()}>go ahead</button>
+        <button onClick={() => void flow.cancel()}>abandon</button>
+      </div>
+    );
+  }
+  const mount = () => render(<Harness deps={{ ...realDeps, rules: catalogue }} />);
+
+  const seedEntry = async (over: Partial<DiaryEntry> = {}): Promise<DiaryEntry> => {
+    const e: DiaryEntry = {
+      id: globalThis.crypto.randomUUID(), at: new Date().toISOString(), rawText: 'a slice of toast', resolution: 'local',
+      items: [{ source: 'dataset', foodId: 'not-in-the-database', grams: 40, classification: flags }],
+      nutrients: { energyKcal: 100, sodiumMg: 150 }, coverage: { energyKcal: 'known', sodiumMg: 'known' },
+      classification: flags, warningsShown: [], userAction: 'added', state: 'active', ...over,
+    };
+    await addEntry(e);
+    return e;
+  };
+  const correct = async (e: DiaryEntry, c: Correction) => {
+    await act(async () => { await flowRef!.correctEntry(e, c); });
+  };
+
+  beforeEach(async () => { await putProfile(ownerProfile); });
+
+  test('a correction opens the gate before anything is stored', async () => {
+    const e = await seedEntry();
+    mount();
+    await correct(e, { sodiumMg: 6000 });
+    await waitFor(() => expect(screen.getByTestId('stage').textContent).toBe('gate'));
+    expect(screen.getAllByTestId('card').length).toBeGreaterThan(0);
+    const all = await allEntriesIncludingTombstones();
+    expect(all).toHaveLength(1);
+    expect(all[0]!.state).toBe('active');
+    expect(all[0]!.nutrients.sodiumMg).toBe(150);
+  });
+
+  test('confirming stores a revision and supersedes the original', async () => {
+    const e = await seedEntry();
+    mount();
+    await correct(e, { sodiumMg: 6000 });
+    await click(/go ahead/i);
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const all = await allEntriesIncludingTombstones();
+    const original = all.find((x) => x.id === e.id)!;
+    const revision = all.find((x) => x.id !== e.id)!;
+    expect(revision.revisionOf).toBe(e.id);
+    expect(original.state).toBe('superseded');
+    expect(revision.state).toBe('active');
+    expect(revision.nutrients.sodiumMg).toBe(6000);
+    expect(revision.nutrients.energyKcal).toBe(100);
+    expect(revision.correctedKeys).toEqual(['sodiumMg']);
+    // The food is carried, not re-read: same items, same text, same kind of resolution.
+    expect(revision.items).toEqual(e.items);
+    expect(revision.rawText).toBe(e.rawText);
+    expect(revision.classification).toEqual(e.classification);
+  });
+
+  test('cancelling the gate leaves the original active and writes no revision', async () => {
+    const e = await seedEntry();
+    mount();
+    await correct(e, { sodiumMg: 6000 });
+    await click(/abandon/i);
+    await waitFor(() => expect(screen.getByTestId('stage').textContent).toBe('idle'));
+    const all = await allEntriesIncludingTombstones();
+    expect(all).toHaveLength(1);
+    expect(all[0]).toEqual(e);
+  });
+
+  test('a correction to a past day keeps that day', async () => {
+    const past = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const e = await seedEntry({ at: past });
+    mount();
+    await correct(e, { energyKcal: 120 });
+    await waitFor(() => expect(['gate', 'committed']).toContain(screen.getByTestId('stage').textContent));
+    if (screen.getByTestId('stage').textContent === 'gate') await click(/go ahead/i);
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const revision = (await allEntriesIncludingTombstones()).find((x) => x.id !== e.id)!;
+    expect(revision.at).toBe(e.at);
+    expect(localDayKey(new Date(revision.at))).toBe(localDayKey(new Date(past)));
+  });
+
+  test('correcting an already-corrected entry chains instead of corrupting', async () => {
+    const e = await seedEntry();
+    mount();
+    await correct(e, { energyKcal: 120 });
+    await waitFor(() => expect(['gate', 'committed']).toContain(screen.getByTestId('stage').textContent));
+    if (screen.getByTestId('stage').textContent === 'gate') await click(/go ahead/i);
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(2));
+    const first = (await allEntriesIncludingTombstones()).find((x) => x.id !== e.id)!;
+    expect(first.correctedKeys).toEqual(['energyKcal']);
+
+    await act(async () => { flowRef!.dismissOutcome(); });
+    await correct(first, { sodiumMg: 6000 });
+    await click(/go ahead/i);
+    await waitFor(async () => expect(await allEntriesIncludingTombstones()).toHaveLength(3));
+    const all = await allEntriesIncludingTombstones();
+    const second = all.find((x) => x.revisionOf === first.id)!;
+    expect(second).toBeDefined();
+    expect(all.find((x) => x.id === first.id)!.state).toBe('superseded');
+    expect(all.find((x) => x.id === e.id)!.state).toBe('superseded');
+    // Both corrections travel with the revision.
+    expect(second.correctedKeys).toEqual(['energyKcal', 'sodiumMg']);
+    expect(second.nutrients.energyKcal).toBe(120);
+    // The day counts one entry, not three.
+    expect(await entriesToday()).toHaveLength(1);
+  });
+
+  test('a correction that crosses a ceiling shows that card in the gate', async () => {
+    const e = await seedEntry();
+    mount();
+    // The uncorrected figure (150 mg) is under any sodium ceiling, so the gate would be silent without the correction.
+    await correct(e, { sodiumMg: 9000 });
+    await waitFor(() => expect(screen.getByTestId('stage').textContent).toBe('gate'));
+    // The entry and daily sodium cards merge into one; whichever survives, a sodium card is what the person sees.
+    expect(screen.getAllByTestId('card').map((c) => c.textContent)).toEqual([expect.stringMatching(/^sodium-/)]);
   });
 });
