@@ -8,6 +8,8 @@ import {
   deleteEntry,
   entriesBetween,
   eraseEverything,
+  getHealthDay,
+  putHealthDay,
   LS_PREFIX,
   getBatch,
   getCustomFood,
@@ -201,6 +203,14 @@ describe('beyond the brief', () => {
     await eraseEverything();
     expect(await allCustomFoods()).toEqual([]);
     expect(await allBatches()).toEqual([]);
+  });
+
+  // Characterisation test: Task 1 already made the erase clear healthDays; this pins it beside the other stores.
+  test('eraseEverything removes daily health figures too', async () => {
+    await putHealthDay({ date: '2026-11-10', steps: 8000 });
+    expect(await getHealthDay('2026-11-10')).toEqual({ date: '2026-11-10', steps: 8000 });
+    await eraseEverything();
+    expect(await getHealthDay('2026-11-10')).toBeUndefined();
   });
 
   test('getProfile returns null on corrupt stored JSON', async () => {

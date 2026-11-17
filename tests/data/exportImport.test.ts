@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   addEntry, allBatches, allCustomFoods, allEntriesIncludingTombstones, deleteEntry, eraseEverything, getProfile,
-  lsKey, putBatch, putCustomFood, putProfile, reviseEntry,
+  getHealthDay, healthDaysBetween, lsKey, putBatch, putHealthDay, putCustomFood, putProfile, reviseEntry,
 } from '@/data/db';
 import { exportAll, importAll } from '@/data/exportImport';
 import { setApiKey } from '@/state/aiSettings';
@@ -51,8 +51,10 @@ async function seedEverything(): Promise<number> {
   await putCustomFood(food);
   await putBatch(batch);
   await putProfile(ownerProfile);
+  await putHealthDay({ date: '2026-11-10', sleepScore: 82, steps: 9100, energyBurnedKcal: 2450 });
+  await putHealthDay({ date: '2026-11-11', steps: 0 }); // a real zero, not unknown
   localStorage.setItem(lsKey('ai.enabled'), '1');
-  return (await allEntriesIncludingTombstones()).length + 2; // entries + 1 custom food + 1 batch
+  return (await allEntriesIncludingTombstones()).length + 4; // entries + 1 custom food + 1 batch + 2 health days
 }
 
 const file = (text: string | Blob) => new File([text], 'diary.json');
@@ -60,6 +62,7 @@ const snapshot = async () => ({
   entries: await allEntriesIncludingTombstones(),
   foods: await allCustomFoods(),
   batches: await allBatches(),
+  healthDays: await healthDaysBetween('0000-01-01', '9999-12-31'),
   profile: await getProfile(),
   ls: { ...localStorage },
 });
@@ -116,7 +119,7 @@ describe('export and import', () => {
     const parsed = JSON.parse(await blob.text());
     parsed.entries.push(entry('extra'));
     const r = await importAll(file(JSON.stringify(parsed)), 'merge');
-    expect(r).toEqual({ added: 1, skipped: 6 });
+    expect(r).toEqual({ added: 1, skipped: 8 });
     const entries = await allEntriesIncludingTombstones();
     expect(entries.map((e) => e.id)).toContain('extra');
     expect(entries.find((e) => e.id === 'e1')?.state).toBe('deleted'); // not resurrected by the file
@@ -271,6 +274,85 @@ describe('export and import', () => {
   });
 });
 
+describe('daily health data in a backup', () => {
+  test('health days round-trip through export and import, a real zero staying a zero and an absent figure staying absent', async () => {
+    await seedEverything();
+    const blob = await exportAll();
+    await eraseEverything();
+    await importAll(file(blob), 'replace');
+    expect(await getHealthDay('2026-11-10')).toEqual({ date: '2026-11-10', sleepScore: 82, steps: 9100, energyBurnedKcal: 2450 });
+    const second = await getHealthDay('2026-11-11');
+    expect(second).toEqual({ date: '2026-11-11', steps: 0 });
+    expect(second).not.toHaveProperty('sleepScore');
+  });
+
+  test('replace mode clears health days that are not in the file, and merge keeps the local day over the file', async () => {
+    await seedEverything();
+    const blob = await exportAll();
+    await putHealthDay({ date: '2026-11-12', steps: 500 }); // only local
+    await putHealthDay({ date: '2026-11-10', steps: 1 }); // differs from the file
+    const merged = await importAll(file(blob), 'merge');
+    expect(merged).toEqual({ added: 0, skipped: 8 }); // both file days exist locally, so nothing is added
+    expect((await getHealthDay('2026-11-10'))?.steps).toBe(1);
+    expect(await getHealthDay('2026-11-12')).toBeDefined();
+    await importAll(file(blob), 'replace');
+    expect(await getHealthDay('2026-11-12')).toBeUndefined();
+    expect((await getHealthDay('2026-11-10'))?.steps).toBe(9100);
+  });
+
+  // Characterisation test: eraseEverything already cleared healthDays (Task 1). This pins it.
+  test('erasing everything removes health days', async () => {
+    await seedEverything();
+    await eraseEverything();
+    expect(await healthDaysBetween('0000-01-01', '9999-12-31')).toEqual([]);
+  });
+
+  test('a backup written before this feature imports with no health days and no error', async () => {
+    await seedEverything();
+    const g = JSON.parse(await (await exportAll()).text());
+    delete g.healthDays;
+    await putHealthDay({ date: '2026-11-12', steps: 500 });
+    const r = await importAll(file(JSON.stringify(g)), 'replace');
+    expect(r).toEqual({ added: 6, skipped: 0 });
+    expect(await healthDaysBetween('0000-01-01', '9999-12-31')).toEqual([]);
+    expect((await allEntriesIncludingTombstones()).length).toBe(4);
+  });
+
+  test('an unknown top-level field is still accepted, so a backup from a later version imports', async () => {
+    await seedEverything();
+    const g = JSON.parse(await (await exportAll()).text());
+    g.somethingNewer = { x: 1 };
+    await expect(importAll(file(JSON.stringify(g)), 'replace')).resolves.toBeDefined();
+  });
+
+  test.each([
+    ['an explicit null figure names the record and the field', { date: '2026-11-13', steps: null }, /health day 3 \(2026-11-13\) steps is empty \(null\)/],
+    ['a misspelt figure names the key instead of clearing the day', { date: '2026-11-13', step: 4000 }, /health day 3 \(2026-11-13\) has "step"/],
+    ['a negative figure', { date: '2026-11-13', steps: -1 }, /steps must not be negative/],
+    ['a sleep score above 100', { date: '2026-11-13', sleepScore: 101 }, /sleepScore must be between 0 and 100/],
+    ['a figure that is text', { date: '2026-11-13', steps: '4000' }, /steps must be a finite number/],
+    ['a date that is not a real day', { date: '2026-02-30', steps: 1 }, /health day 3 \(2026-02-30\) date must be a real date/],
+    ['a record with no figures', { date: '2026-11-13' }, /has no figures/],
+    ['the same day twice', { date: '2026-11-10', steps: 1 }, /more than once/],
+  ])('%s', async (_n, bad, message) => {
+    await seedEverything();
+    const g = JSON.parse(await (await exportAll()).text());
+    g.healthDays.push(bad);
+    const before = await snapshot();
+    await expect(importAll(file(JSON.stringify(g)), 'replace')).rejects.toThrow(message);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  test('healthDays that is not a list rejects the file', async () => {
+    await seedEverything();
+    const g = JSON.parse(await (await exportAll()).text());
+    g.healthDays = { '2026-11-10': { steps: 1 } };
+    const before = await snapshot();
+    await expect(importAll(file(JSON.stringify(g)), 'merge')).rejects.toThrow(/health days must be a list/);
+    expect(await snapshot()).toEqual(before);
+  });
+});
+
 describe('a malformed import changes nothing', () => {
   const good = async () => JSON.parse(await (await exportAll()).text());
   const cases: [string, (g: any) => unknown][] = [
@@ -289,6 +371,8 @@ describe('a malformed import changes nothing', () => {
     ['a profile with an invalid sex', (g) => ({ ...g, profile: { ...ownerProfile, sex: 'robot' } })],
     ['a profile with an impossible birth date', (g) => ({ ...g, profile: { ...ownerProfile, dob: '2026-13-45' } })],
     ['a settings value that is not text', (g) => ({ ...g, settings: { [lsKey('x')]: 5 } })],
+    ['a health day with a null step count', (g) => ({ ...g, healthDays: [...g.healthDays, { date: '2026-11-13', steps: null }] })],
+    ['a health day with a misspelt key', (g) => ({ ...g, healthDays: [...g.healthDays, { date: '2026-11-13', step: 4000 }] })],
     ['a settings key outside the app prefix', (g) => ({ ...g, settings: { 'other.key': '1' } })],
   ];
   const textOf = (m: unknown) => (typeof m === 'string' ? m : JSON.stringify(m));

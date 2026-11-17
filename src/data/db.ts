@@ -404,6 +404,11 @@ export async function getHealthDay(dayKey: string): Promise<HealthDay | undefine
   return (await db()).get('healthDays', dayKey);
 }
 
+/** Every stored day, oldest first. For the backup. */
+export async function allHealthDays(): Promise<HealthDay[]> {
+  return (await db()).getAll('healthDays');
+}
+
 /** Inclusive, oldest first. Day keys are zero-padded, so key order is date order. */
 export async function healthDaysBetween(fromDayKey: string, toDayKey: string): Promise<HealthDay[]> {
   if (fromDayKey > toDayKey) return [];
@@ -488,35 +493,37 @@ async function eraseStores(): Promise<void> {
 
 // ---- import (one transaction) ----
 
-export type ImportRows = { entries: DiaryEntry[]; customFoods: CustomFood[]; batches: Batch[] };
+export type ImportRows = { entries: DiaryEntry[]; customFoods: CustomFood[]; batches: Batch[]; healthDays: HealthDay[] };
 
 /**
- * Writes already-validated rows to all three stores in ONE transaction, so an import lands whole or
+ * Writes already-validated rows to all four stores in ONE transaction, so an import lands whole or
  * not at all. `replace` clears each store first; `merge` adds only ids that are not present and
  * leaves every existing row exactly as it is (a local tombstone is never resurrected by a file).
  * This is the one path that may write a non-active entry, because a backup must restore history
  * as it was. `at` is normalised so the index invariant holds.
  */
 export async function writeImportedRows(rows: ImportRows, mode: 'merge' | 'replace'): Promise<{ added: number; skipped: number }> {
-  const tx = (await db()).transaction(['entries', 'customFoods', 'batches'], 'readwrite');
+  const tx = (await db()).transaction(['entries', 'customFoods', 'batches', 'healthDays'], 'readwrite');
   const done = tx.done.catch(() => undefined);
   let added = 0;
   let skipped = 0;
   try {
     if (mode === 'replace') {
-      await Promise.all([tx.objectStore('entries').clear(), tx.objectStore('customFoods').clear(), tx.objectStore('batches').clear()]);
+      await Promise.all([tx.objectStore('entries').clear(), tx.objectStore('customFoods').clear(), tx.objectStore('batches').clear(), tx.objectStore('healthDays').clear()]);
     }
-    const put = async <T extends { id: string }>(store: { getKey(k: string): Promise<unknown>; put(v: T): Promise<unknown> }, row: T) => {
-      if (mode === 'merge' && (await store.getKey(row.id)) !== undefined) {
+    const put = async <T>(store: { getKey(k: string): Promise<unknown>; put(v: T): Promise<unknown> }, row: T, key: string) => {
+      if (mode === 'merge' && (await store.getKey(key)) !== undefined) {
         skipped++;
         return;
       }
       await store.put(row);
       added++;
     };
-    for (const e of rows.entries) await put(tx.objectStore('entries'), { ...e, at: normaliseAt(e.at) });
-    for (const f of rows.customFoods) await put(tx.objectStore('customFoods'), f);
-    for (const b of rows.batches) await put(tx.objectStore('batches'), b);
+    for (const e of rows.entries) await put(tx.objectStore('entries'), { ...e, at: normaliseAt(e.at) }, e.id);
+    for (const f of rows.customFoods) await put(tx.objectStore('customFoods'), f, f.id);
+    for (const b of rows.batches) await put(tx.objectStore('batches'), b, b.id);
+    // Keyed by day: in merge a local day is kept as it is, as every other local row is.
+    for (const h of rows.healthDays) await put(tx.objectStore('healthDays'), h, h.date);
   } catch (err) {
     safeAbort(tx);
     await done;

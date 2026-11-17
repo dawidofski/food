@@ -1,16 +1,17 @@
 import {
-  LS_PREFIX, allBatches, allCustomFoods, allEntriesIncludingTombstones, getProfile, lsKey, writeImportedRows,
+  LS_PREFIX, allBatches, allCustomFoods, allEntriesIncludingTombstones, allHealthDays, getProfile, lsKey, writeImportedRows,
   type ImportRows,
 } from '@/data/db';
 import { API_KEY_LS } from '@/state/aiSettings';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
+import type { HealthDay } from '@/types/health';
 import type { Profile } from '@/types/profile';
 
 /**
  * Export and import: the person's only backup, since the browser can clear its own storage.
  *
  * The file is one JSON document holding every entry (tombstones and superseded revisions included, so
- * history survives), every custom food and batch, the profile and the settings. The DeepSeek key is
+ * history survives), every custom food and batch, every day's health figures, the profile and the settings. The DeepSeek key is
  * deliberately NOT exported: a backup file gets emailed and synced, and a secret does not belong in it.
  *
  * Import is validate-then-write. The whole file is parsed and every record checked BEFORE anything is
@@ -29,6 +30,8 @@ type ExportFile = {
   entries: DiaryEntry[];
   customFoods: CustomFood[];
   batches: Batch[];
+  /** Absent in a backup written before daily health data existed, which reads as none. The version is NOT bumped for it. */
+  healthDays: HealthDay[];
   profile: Profile | null;
   /** localStorage `fd.*` keys other than the profile and the API key. */
   settings: Record<string, string>;
@@ -58,6 +61,7 @@ export async function exportAll(): Promise<Blob> {
     entries: await allEntriesIncludingTombstones(),
     customFoods: await allCustomFoods(),
     batches: await allBatches(),
+    healthDays: await allHealthDays(),
     profile: await getProfile(),
     settings: readSettings(),
   };
@@ -190,6 +194,33 @@ function batch(v: unknown, i: number): Batch {
   return v as Batch;
 }
 
+const HEALTH_FIGURES = ['sleepScore', 'steps', 'energyBurnedKcal'] as const;
+
+function healthDay(v: unknown, i: number): HealthDay {
+  const o = obj(v, `health day ${i + 1}`);
+  const w = typeof o.date === 'string' ? `health day ${i + 1} (${o.date})` : `health day ${i + 1}`;
+  const date = isoDay(o.date, `${w} date`);
+  // A misspelt figure (`step` for `steps`) must not read as a day with no figures: that is "clear this day", and
+  // the figure would be quietly gone. Unlike a top-level field, an unknown key here is a mistake in a record this
+  // build owns, so it rejects the file.
+  for (const k of Object.keys(o)) {
+    if (k !== 'date' && !(HEALTH_FIGURES as readonly string[]).includes(k)) fail(w, `has "${k}", which is not a health figure (expected ${HEALTH_FIGURES.join(', ')})`);
+  }
+  const row: HealthDay = { date };
+  for (const k of HEALTH_FIGURES) {
+    const x = o[k];
+    if (x === undefined) continue;
+    // null is not "unknown" in this file: a figure that is not known is left out, never written as null or 0.
+    if (x === null) fail(`${w} ${k}`, 'is empty (null); leave the field out if the figure is not known');
+    const n = num(x, `${w} ${k}`);
+    if (n < 0) fail(`${w} ${k}`, 'must not be negative');
+    if (k === 'sleepScore' && n > 100) fail(`${w} ${k}`, 'must be between 0 and 100');
+    row[k] = n;
+  }
+  if (HEALTH_FIGURES.every((k) => row[k] === undefined)) fail(w, 'has no figures; leave the day out instead');
+  return row;
+}
+
 const GOAL_KINDS = ['lose', 'hold', 'gain'];
 
 function profile(v: unknown): Profile {
@@ -231,6 +262,13 @@ function unique(rows: { id: string }[], what: string): void {
     seen.add(r.id);
   }
 }
+function uniqueDays(rows: HealthDay[]): void {
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (seen.has(r.date)) fail('health days', `has the day "${r.date}" more than once`);
+    seen.add(r.date);
+  }
+}
 
 type Parsed = { rows: ImportRows; profile: Profile | null; settings: Record<string, string> };
 
@@ -252,6 +290,9 @@ export function parseExport(text: string): Parsed {
   unique(entries, 'entries');
   unique(customFoods, 'custom foods');
   unique(batches, 'batches');
+  // An older backup has no healthDays key: that reads as none. A present key must be a list.
+  const healthDays = o.healthDays === undefined ? [] : arr(o.healthDays, 'health days').map(healthDay);
+  uniqueDays(healthDays);
   const prof = o.profile === null || o.profile === undefined ? null : profile(o.profile);
   const settings: Record<string, string> = {};
   for (const [k, v] of Object.entries(obj(o.settings ?? {}, 'settings'))) {
@@ -259,7 +300,7 @@ export function parseExport(text: string): Parsed {
     if (EXCLUDED_LS.has(k)) fail(`setting "${k}"`, 'is not something a backup may carry');
     settings[k] = str(v, `setting "${k}"`);
   }
-  return { rows: { entries, customFoods, batches }, profile: prof, settings };
+  return { rows: { entries, customFoods, batches, healthDays }, profile: prof, settings };
 }
 
 // ---- import ----
@@ -280,7 +321,7 @@ function lsRestore(snap: Map<string, string>): void {
 /**
  * Validates the whole file, then writes. `merge` adds what is missing and keeps every local row, the
  * local profile and local settings; `replace` makes the store match the file. Counts cover entries,
- * custom foods and batches together. Throws, having changed nothing, if the file is not valid or a
+ * custom foods, batches and health days together. Throws, having changed nothing, if the file is not valid or a
  * store refuses the write.
  */
 export async function importAll(file: File, mode: 'merge' | 'replace'): Promise<{ added: number; skipped: number }> {
