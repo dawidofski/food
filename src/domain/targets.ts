@@ -1,6 +1,6 @@
-import { KCAL_PER_KG } from '@/domain/goalConversion';
+import { dailyKcalForRate } from '@/domain/goalConversion';
 import type { NutrientKey } from '@/types/nutrients';
-import type { ActivityLevel, Goal, Profile, Sex, Targets } from '@/types/profile';
+import type { ActivityLevel, Goal, GoalCap, Profile, Sex, Targets } from '@/types/profile';
 
 export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -147,16 +147,20 @@ export const MAX_GOAL_RATE_KG_PER_WEEK = 1;
  * who never stated one would put them in a deficit they did not ask for. (Protein moves on the goal's kind alone.)
  * The energy target never falls below the resting rate, whatever the rate asked for.
  */
-function applyGoal(maintenance: number, rmr: number, goal: Goal | undefined): { energy: number; capped: boolean } {
+function applyGoal(maintenance: number, rmr: number, goal: Goal | undefined): { energy: number; capped?: GoalCap } {
   const rate = goal?.rateKgPerWeek;
-  if ((goal?.kind !== 'lose' && goal?.kind !== 'gain') || !isPositive(rate)) return { energy: maintenance, capped: false };
+  if ((goal?.kind !== 'lose' && goal?.kind !== 'gain') || !isPositive(rate)) return { energy: maintenance };
   const usedRate = Math.min(rate, MAX_GOAL_RATE_KG_PER_WEEK);
-  const offset = Math.round((usedRate * KCAL_PER_KG) / 7);
-  if (goal.kind === 'gain') return { energy: maintenance + offset, capped: usedRate < rate };
+  const offset = dailyKcalForRate(usedRate);
+  if (goal.kind === 'gain') return { energy: maintenance + offset, ...(usedRate < rate ? { capped: 'max-rate' as const } : {}) };
   const floor = Math.round(rmr);
   const energy = Math.max(maintenance - offset, floor);
-  // Capped when the rate was reduced, or when the floor, not the rate, set the target (and so the deficit is smaller).
-  return { energy, capped: usedRate < rate || energy !== maintenance - offset };
+  // Which limit applied: the rate was reduced, and/or the floor, not the rate, set the target. A target that lands exactly
+  // on the floor without being raised to it is not floor-limited.
+  const rateCapped = usedRate < rate;
+  const floorCapped = maintenance - offset < floor;
+  const capped: GoalCap | undefined = rateCapped && floorCapped ? 'both' : rateCapped ? 'max-rate' : floorCapped ? 'floor' : undefined;
+  return { energy, ...(capped ? { capped } : {}) };
 }
 
 function derive(
@@ -177,7 +181,7 @@ function derive(
       : 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
   const maintenance = Math.round(rmr * ACTIVITY_FACTORS[activity]);
   // A deficit computed from a stranger's expenditure is meaningless, so the generic basis is not goal-adjusted.
-  const adjusted = isGeneric ? { energy: maintenance, capped: false } : applyGoal(maintenance, rmr, goal);
+  const adjusted = isGeneric ? { energy: maintenance } : applyGoal(maintenance, rmr, goal);
   // Everything expressed by its source as a share of energy INTAKE follows the adjusted energy (a tighter intake carries
   // a tighter absolute allowance). Sodium and the micronutrients are absolute amounts and never move.
   const energy = adjusted.energy;
@@ -204,7 +208,7 @@ function derive(
     transFatG: Math.round((0.01 * energy) / 9),
     micronutrients: microsFor(sex),
     isGeneric,
-    ...(adjusted.capped ? { goalCapped: true as const } : {}),
+    ...(adjusted.capped ? { goalCapped: adjusted.capped } : {}),
     basis: { protein: exercises ? 'issn-range' : 'efsa-pri', energy: bf !== undefined ? 'katch-mcardle' : 'mifflin', expenditure: 'formula' },
   };
 }

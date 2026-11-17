@@ -306,7 +306,15 @@ describe('targets', () => {
     test('the energy target never falls below the resting rate, and says when it was capped', () => {
       const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 5 }), on);
       expect(t.energyKcal).toBeGreaterThanOrEqual(t.rmrKcal);
-      expect(t.goalCapped).toBe(true);
+      expect(t.goalCapped).toBe('both'); // 5 kg/week exceeds the maximum AND the deficit would pass the floor
+    });
+
+    test('the cap names only the limit that applied, including when the capped target lands exactly on the floor', () => {
+      // Active, 59 kg, 10 % body fat: maintenance 2617, resting 1517, so the maximum rate (1,100 kcal) lands exactly ON the floor.
+      const p = profileAt(59, 'active', { kind: 'lose', rateKgPerWeek: 3 }, { bodyFatPct: 10 });
+      const t = computeTargets(p, on);
+      expect(t.energyKcal).toBe(t.rmrKcal);
+      expect(t.goalCapped).toBe('max-rate'); // the floor did not bite: nothing was raised to it
     });
 
     test('a modest deficit is not flagged as capped', () => {
@@ -319,21 +327,21 @@ describe('targets', () => {
       const hold = computeTargets(profileAt(150, 'veryActive', { kind: 'hold' }), on).energyKcal;
       const t = computeTargets(profileAt(150, 'veryActive', { kind: 'lose', rateKgPerWeek: 3 }), on);
       expect(hold - t.energyKcal).toBe(Math.round((MAX_GOAL_RATE_KG_PER_WEEK * 7700) / 7));
-      expect(t.goalCapped).toBe(true);
+      expect(t.goalCapped).toBe('max-rate');
     });
 
     test('a rate within the maximum is still capped when the resting-rate floor truncates the deficit', () => {
       const t = computeTargets(profileAt(80, 'sedentary', { kind: 'lose', rateKgPerWeek: 0.5 }), on);
       expect(t.rmrKcal).toBe(1755);
       expect(t.energyKcal).toBe(t.rmrKcal); // 2106 - 550 = 1556, clamped to the floor
-      expect(t.goalCapped).toBe(true);
+      expect(t.goalCapped).toBe('floor');
     });
 
     test('a gain rate above the maximum is reduced to it, and says so', () => {
       const hold = computeTargets(profileAt(80, 'light', { kind: 'hold' }), on).energyKcal;
       const t = computeTargets(profileAt(80, 'light', { kind: 'gain', rateKgPerWeek: 3 }), on);
       expect(t.energyKcal - hold).toBe(1100);
-      expect(t.goalCapped).toBe(true);
+      expect(t.goalCapped).toBe('max-rate');
     });
 
     test('a goal does not adjust generic targets', () => {

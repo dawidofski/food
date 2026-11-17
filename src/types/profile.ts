@@ -4,6 +4,9 @@ export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'ver
 
 export type Sex = 'male' | 'female' | 'unspecified';
 
+/** Which limit reduced a requested rate: the app's maximum rate, the resting-energy floor, or both. */
+export type GoalCap = 'max-rate' | 'floor' | 'both';
+
 /** What the person is aiming for. Absent means no goal has been stated, which is NOT the same as `hold`. */
 export type Goal = { kind: 'lose' | 'hold' | 'gain'; rateKgPerWeek?: number };
 
@@ -36,7 +39,7 @@ export type Targets = {
   /** True when the targets come from the generic fallback basis, not the person's profile. */
   isGeneric: boolean;
   /** True when the goal's requested weekly rate was reduced (to the app's maximum rate, or so energy stays at the resting rate). */
-  goalCapped?: true;
+  goalCapped?: GoalCap;
   basis: TargetBasis;
 };
 

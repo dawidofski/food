@@ -39,6 +39,7 @@ describe('weight goal', () => {
     choose(/^lose/i);
     type(/rate \(kg a week\)/i, '0.5');
     expect(screen.getByText(/0\.5 kg a week needs a deficit of about 550 kcal a day/i)).toBeInTheDocument();
+    expect(screen.queryByText(/is about 0\.5 kg a week/i)).toBeNull();
     expect((screen.getByLabelText(/daily deficit \(kcal\)/i) as HTMLInputElement).value).toBe('550');
     expect(screen.getByText(/7,700 kcal per kg/i)).toBeInTheDocument();
   });
@@ -113,6 +114,52 @@ describe('weight goal', () => {
     type(/rate \(kg a week\)/i, '1');
     await click(/save goal/i);
     expect(await screen.findByText(/could not give you the rate you asked for/i)).toHaveTextContent(/resting/i);
+  });
+
+  test('the cap and the floor biting together name both limits, each as its own rule', async () => {
+    await open({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 5 } });
+    const line = await screen.findByText(/could not give you the rate you asked for/i);
+    expect(line.textContent).toMatch(/maximum is 1 kg a week \(its own choice, not a published figure\)/);
+    expect(line.textContent).toMatch(/does not set a target below your resting energy of \d+ kcal a day \(its own rule, not a published figure\)/);
+    expect(line.textContent).not.toMatch(/ {2}/);
+  });
+
+  test('a capped target that lands exactly on the resting energy names only the maximum rate', async () => {
+    // Active, 59 kg, 10 % body fat: the maximum rate lands exactly on the resting energy, so the floor did not apply.
+    await open({
+      ...ownerProfile, activityLevel: 'active', bodyFatPct: 10, weightLog: [{ date: '2026-01-01', kg: 59 }],
+      goal: { kind: 'lose', rateKgPerWeek: 3 },
+    });
+    const line = await screen.findByText(/could not give you the rate you asked for/i);
+    expect(line.textContent).toMatch(/maximum is 1 kg a week/);
+    expect(line.textContent).not.toMatch(/resting energy|below/i);
+    expect(line.textContent).not.toMatch(/ {2}/);
+  });
+
+  test('a floor-only cap names only the floor', async () => {
+    await open({ ...ownerProfile, weightLog: [{ date: '2026-01-01', kg: 50 }], activityLevel: 'sedentary', goal: { kind: 'lose', rateKgPerWeek: 1 } });
+    const line = await screen.findByText(/could not give you the rate you asked for/i);
+    expect(line.textContent).toMatch(/does not set a target below your resting energy/);
+    expect(line.textContent).not.toMatch(/maximum is/);
+  });
+
+  test('lose with no rate on a sedentary profile does not claim protein moved', async () => {
+    await open({ ...ownerProfile, activityLevel: 'sedentary', goal: { kind: 'lose' } });
+    const line = await screen.findByText(/without a rate/i);
+    expect(line.textContent).toMatch(/energy target stays at maintenance/);
+    expect(line.textContent).not.toMatch(/raises your protein/);
+  });
+
+  test('hold says energy stays at maintenance', async () => {
+    await open({ ...ownerProfile, goal: { kind: 'hold' } });
+    expect(await screen.findByText('Your goal is to hold, so your energy target stays at maintenance.')).toBeInTheDocument();
+  });
+
+  test('a stored out-of-range body-fat value is described truthfully and not used', async () => {
+    await open({ ...ownerProfile, bodyFatPct: 95 });
+    await screen.findByText(/^Energy:/);
+    expect(document.body.textContent).not.toMatch(/NaN/);
+    expect(screen.getByText(/\(95 %\) is outside 3 to 60 %/)).toBeInTheDocument();
   });
 
   test("a manual override wins and is labelled as the person's own figure", async () => {

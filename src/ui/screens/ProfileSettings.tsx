@@ -117,7 +117,8 @@ function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: bo
   const [rateNum, setRateNum] = useState<number | undefined>(g?.rateKgPerWeek);
   const [rateText, setRateText] = useState(g?.rateKgPerWeek !== undefined ? formatRate(g.rateKgPerWeek) : '');
   const [kcalText, setKcalText] = useState(g?.rateKgPerWeek !== undefined ? String(dailyKcalForRate(g.rateKgPerWeek)) : '');
-  const [bfText, setBfText] = useState(profile.bodyFatPct !== undefined ? String(profile.bodyFatPct) : '');
+  const [bfText, setBfText] = useState(typeof profile.bodyFatPct === 'number' && Number.isFinite(profile.bodyFatPct) ? String(profile.bodyFatPct) : '');
+  const [lastEdited, setLastEdited] = useState<'rate' | 'kcal'>('rate');
   const [error, setError] = useState<string | null>(null);
 
   if (!hasBody) {
@@ -133,6 +134,7 @@ function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: bo
   const word = offsetKind ? offsetWord(offsetKind) : 'deficit';
 
   const onRate = (raw: string) => {
+    setLastEdited('rate');
     setRateText(raw);
     if (raw.trim() === '') {
       setRateNum(undefined);
@@ -144,6 +146,7 @@ function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: bo
     setKcalText(Number.isFinite(n) && n > 0 ? String(dailyKcalForRate(n)) : '');
   };
   const onKcal = (raw: string) => {
+    setLastEdited('kcal');
     setKcalText(raw);
     if (raw.trim() === '') {
       setRateNum(undefined);
@@ -208,8 +211,9 @@ function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: bo
             </div>
             {rateNum !== undefined && Number.isFinite(rateNum) && rateNum > 0 && (
               <>
-                <p className="text-sm">{rateToDailyPhrase(offsetKind, rateNum)}</p>
-                <p className="text-sm">{dailyToRatePhrase(offsetKind, dailyKcalForRate(rateNum))}</p>
+                <p className="text-sm">
+                  {lastEdited === 'kcal' ? dailyToRatePhrase(offsetKind, parseNumber(kcalText)) : rateToDailyPhrase(offsetKind, rateNum)}
+                </p>
               </>
             )}
             <p className={hint}>
@@ -259,7 +263,10 @@ function TargetSources({ profile }: { profile: Profile }) {
 
   const lines: string[] = [protein, energy];
   if (basis.energy === 'mifflin' && profile.bodyFatPct !== undefined) {
-    lines.push(`The body-fat percentage you gave (${profile.bodyFatPct} %) is outside ${BODY_FAT_MIN} to ${BODY_FAT_MAX} %, so it was not used and resting energy comes from the Mifflin-St Jeor equation.`);
+    const given = Number.isFinite(profile.bodyFatPct)
+      ? `The body-fat percentage stored in your profile (${profile.bodyFatPct} %) is outside ${BODY_FAT_MIN} to ${BODY_FAT_MAX} %`
+      : 'The body-fat value stored in your profile is not a usable number';
+    lines.push(`${given}, so it was not used and resting energy comes from the Mifflin-St Jeor equation. Enter it again to correct it.`);
   }
 
   if (basis.energy === 'custom') {
@@ -272,16 +279,19 @@ function TargetSources({ profile }: { profile: Profile }) {
       `Choosing ${kind} without a rate ${proteinMoved ? 'raises your protein target to 2.0 g per kg. Your' : 'does not move energy: your'} energy target stays at maintenance, because the app will not invent a ${offsetWord(kind)} you did not ask for. Add a rate to set one.`,
     );
   } else if (hasRate && t.goalCapped) {
-    const why: string[] = [];
-    if (rate > MAX_GOAL_RATE_KG_PER_WEEK) {
-      why.push(`The app's own maximum is ${MAX_GOAL_RATE_KG_PER_WEEK} kg a week (its own choice, not a published figure), so a faster rate is reduced to that.`);
+    const cap = t.goalCapped;
+    const parts = ['We could not give you the rate you asked for.'];
+    if (cap === 'max-rate' || cap === 'both') {
+      parts.push(`The app's own maximum is ${MAX_GOAL_RATE_KG_PER_WEEK} kg a week (its own choice, not a published figure), so a faster rate is reduced to that.`);
     }
-    if (kind === 'lose' && t.energyKcal <= t.rmrKcal) {
-      why.push(`A deficit that deep would take your energy below your resting energy of ${t.rmrKcal} kcal a day, so the target stops there.`);
+    if (cap === 'floor' || cap === 'both') {
+      parts.push(`The app does not set a target below your resting energy of ${t.rmrKcal} kcal a day (its own rule, not a published figure), so the target stops there.`);
     }
-    lines.push(`We could not give you the rate you asked for. ${why.join(' ')} Your energy target is ${t.energyKcal} kcal a day.`);
+    parts.push(`Your energy target is ${t.energyKcal} kcal a day.`);
+    lines.push(parts.join(' '));
   } else if (hasRate) {
-    const n = dailyKcalForRate(rate);
+    // What the target actually moved by, read from the computed energy rather than recomputed from the rate.
+    const n = Math.abs(t.energyKcal - computeTargets({ ...profile, goal: undefined, overrides: undefined }, new Date()).energyKcal);
     lines.push(
       kind === 'lose'
         ? `Your goal takes ${n} kcal a day off your maintenance energy. ${CONVERSION_NOTE}`
