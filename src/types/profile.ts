@@ -17,8 +17,9 @@ export type TargetBasis = {
   /** 'custom' when the person set the energy or resting figure themselves. */
   energy: 'mifflin' | 'katch-mcardle' | 'custom';
   /**
-   * Only 'formula' is produced in this plan. 'reported' and 'observed' are reserved for a later plan's daily health data
-   * and weight page; their presence here is NOT a finished feature, so nothing may claim one of them yet.
+   * 'formula' is the activity-multiplier guess; 'reported' is the mean of the person's own whole-day energy burn
+   * (`reportedExpenditure`). 'observed' is reserved for a later plan's weight page and is NOT a finished feature, so
+   * nothing may claim it yet.
    */
   expenditure: 'formula' | 'reported' | 'observed';
 };

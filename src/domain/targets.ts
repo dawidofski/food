@@ -172,6 +172,7 @@ function derive(
   isGeneric: boolean,
   goal?: Goal,
   bodyFatPct?: number,
+  reportedKcal?: number,
 ): Targets {
   // Katch-McArdle: 370 + 21.6 x lean kg, when a plausible body-fat percentage is known; otherwise Mifflin-St Jeor.
   const bf = usableBodyFatPct(bodyFatPct);
@@ -179,7 +180,10 @@ function derive(
     bf !== undefined
       ? 370 + 21.6 * (weightKg * (1 - bf / 100))
       : 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
-  const maintenance = Math.round(rmr * ACTIVITY_FACTORS[activity]);
+  // A reported burn is the person's own measured whole-day figure and replaces the activity-multiplier guess. A stranger's
+  // is meaningless, so the generic basis ignores it, the same gate the goal and protein use.
+  const reported = !isGeneric && isPositive(reportedKcal) ? Math.round(reportedKcal) : undefined;
+  const maintenance = reported ?? Math.round(rmr * ACTIVITY_FACTORS[activity]);
   // A deficit computed from a stranger's expenditure is meaningless, so the generic basis is not goal-adjusted.
   const adjusted = isGeneric ? { energy: maintenance } : applyGoal(maintenance, rmr, goal);
   // Everything expressed by its source as a share of energy INTAKE follows the adjusted energy (a tighter intake carries
@@ -209,7 +213,7 @@ function derive(
     micronutrients: microsFor(sex),
     isGeneric,
     ...(adjusted.capped ? { goalCapped: adjusted.capped } : {}),
-    basis: { protein: exercises ? 'issn-range' : 'efsa-pri', energy: bf !== undefined ? 'katch-mcardle' : 'mifflin', expenditure: 'formula' },
+    basis: { protein: exercises ? 'issn-range' : 'efsa-pri', energy: bf !== undefined ? 'katch-mcardle' : 'mifflin', expenditure: reported !== undefined ? 'reported' : 'formula' },
   };
 }
 
@@ -217,7 +221,11 @@ function genericTargets(): Targets {
   return derive(GENERIC.heightCm, GENERIC.weightKg, GENERIC.age, GENERIC.sex, GENERIC.activityLevel, true);
 }
 
-export function computeTargets(p: Profile | null, on: Date): Targets {
+/**
+ * `reportedKcal` is the person's own whole-day energy burn (see `reportedExpenditure`). It is optional for good: callers
+ * with no health data legitimately pass nothing, and the formula is used exactly as before.
+ */
+export function computeTargets(p: Profile | null, on: Date, reportedKcal?: number): Targets {
   if (p === null) return genericTargets();
   const weight = currentWeightKg(p);
   const age = p.dob === undefined ? NaN : ageOn(p.dob, on);
@@ -229,7 +237,7 @@ export function computeTargets(p: Profile | null, on: Date): Targets {
     age >= 0 &&
     sex !== undefined && Object.hasOwn(SEX_CONSTANT, sex) &&
     activityLevel !== undefined && Object.hasOwn(ACTIVITY_FACTORS, activityLevel)
-      ? derive(heightCm, weight, age, sex, activityLevel, false, p.goal, p.bodyFatPct)
+      ? derive(heightCm, weight, age, sex, activityLevel, false, p.goal, p.bodyFatPct, reportedKcal)
       : undefined;
   // Belt and braces: any non-finite derived target falls back to generic.
   const base =

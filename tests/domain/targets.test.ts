@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { ACTIVITY_FACTORS, MAX_GOAL_RATE_KG_PER_WEEK, ageOn, computeTargets, currentWeightKg } from '@/domain/targets';
+import { dailyKcalForRate } from '@/domain/goalConversion';
 import type { ActivityLevel, Goal, Profile } from '@/types/profile';
 import { ownerProfile } from '../fixtures/profile';
 
@@ -387,6 +388,68 @@ describe('targets', () => {
       expect(lose.fibreG).toBe(30);
       expect(lose.sodiumMg).toBe(hold.sodiumMg);
       expect(lose.micronutrients).toEqual(hold.micronutrients);
+    });
+  });
+
+  describe('a reported energy burn', () => {
+    test('replaces the activity multiplier and names itself in the basis', () => {
+      const t = computeTargets(profileAt(80, 'light'), ON, 2600);
+      expect(t.energyKcal).toBe(2600);
+      expect(t.basis.expenditure).toBe('reported');
+    });
+
+    test('no reported figure leaves every target exactly as it is today', () => {
+      const p = profileAt(80, 'light');
+      expect(computeTargets(p, ON, undefined)).toEqual(computeTargets(p, ON));
+      expect(computeTargets(p, ON).basis.expenditure).toBe('formula');
+    });
+
+    test('generic targets ignore a reported figure', () => {
+      for (const p of [null, emptyProfile]) {
+        const t = computeTargets(p, ON, 4000);
+        expect(t).toEqual(computeTargets(p, ON));
+        expect(t.basis.expenditure).toBe('formula');
+      }
+    });
+
+    test('a goal offset still applies on top of the reported figure', () => {
+      const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), ON, 2600);
+      expect(t.energyKcal).toBe(2600 - Math.round(dailyKcalForRate(0.5)));
+      expect(t.basis.expenditure).toBe('reported');
+      const gain = computeTargets(profileAt(80, 'light', { kind: 'gain', rateKgPerWeek: 0.25 }), ON, 2600);
+      expect(gain.energyKcal).toBe(2600 + dailyKcalForRate(0.25));
+    });
+
+    test('the resting-rate floor still holds when the reported figure is low', () => {
+      const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), ON, 1800);
+      expect(t.energyKcal).toBe(t.rmrKcal);
+      expect(t.goalCapped).toBe('floor');
+    });
+
+    test('share-derived figures follow the adjusted energy', () => {
+      const t = computeTargets(profileAt(80, 'light'), ON, 3000);
+      expect(t.satFatG).toBe(Math.round((0.1 * 3000) / 9));
+      expect(t.addedSugarsG).toBe(Math.round((0.1 * 3000) / 4));
+      expect(t.fibreG).toBe(Math.round((14 * 3000) / 1000));
+    });
+
+    test('protein and the resting rate do not move with it', () => {
+      const p = profileAt(80, 'light');
+      const a = computeTargets(p, ON);
+      const b = computeTargets(p, ON, 3500);
+      expect(b.rmrKcal).toBe(a.rmrKcal);
+      expect(b.proteinG).toBe(a.proteinG);
+    });
+
+    test('a typed energy override still wins and the basis stays custom', () => {
+      const t = computeTargets(profileAt(80, 'light', undefined, { overrides: { energyKcal: 2100 } }), ON, 2600);
+      expect(t.energyKcal).toBe(2100);
+      expect(t.basis.energy).toBe('custom');
+    });
+
+    test('a non-positive or non-finite figure is not used', () => {
+      const p = profileAt(80, 'light');
+      for (const bad of [0, -1, NaN, Infinity]) expect(computeTargets(p, ON, bad)).toEqual(computeTargets(p, ON));
     });
   });
 });
