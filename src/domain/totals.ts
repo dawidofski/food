@@ -1,6 +1,6 @@
 import { isKnownValue, sumNutrients } from '@/domain/nutrients';
 import { last7DayKeys, localDayKey } from '@/domain/dayBoundary';
-import type { DiaryEntry } from '@/types/diary';
+import { MEAL_SLOTS, type DiaryEntry, type MealSlot } from '@/types/diary';
 import type { ClassificationFlags } from '@/types/nutrients';
 import { NUTRIENT_KEYS, type Coverage, type NutrientKey, type NutrientSet } from '@/types/nutrients';
 
@@ -170,6 +170,37 @@ function buildDay(entries: DiaryEntry[], dayKey: string): DayTotals {
 /** Totals for one local day. Entries from other days, cancelled entries and tombstones are ignored. */
 export function dayTotals(entries: DiaryEntry[], dayKey: string): DayTotals {
   return buildDay(entries, dayKey);
+}
+
+/** The day's meal slots, plus the group for entries that never got one. */
+export type MealGroup = MealSlot | 'earlier';
+
+/** Slot order, with `earlier` last because it holds history rather than a time of day. */
+export const MEAL_GROUPS: readonly MealGroup[] = [...MEAL_SLOTS, 'earlier'];
+
+const KNOWN_SLOTS: ReadonlySet<string> = new Set<string>(MEAL_SLOTS);
+
+/**
+ * One `DayTotals` per meal group, so a slot inherits every honesty rule the day already has: an absent key is
+ * unknown rather than zero, an entry whose own figure is a floor makes its slot's figure partial, and the
+ * energy-covered share is computed over that slot's entries alone.
+ *
+ * An entry with no `meal`, or with a value this build does not recognise, goes under `earlier`. The second case
+ * matters: a value can reach the store without passing the importer, which rejects one (a hand-edited database,
+ * or a row written by a later build), and an entry belonging to no group would simply not be drawn — food the
+ * person logged, missing from their day. Never guess a slot from `at`; absence means they did not choose one.
+ *
+ * Every group is always present. A group with no entries has `entryCount: 0` and no nutrient keys at all.
+ */
+export function mealTotals(entries: DiaryEntry[], dayKey: string): Record<MealGroup, DayTotals> {
+  const grouped = new Map<MealGroup, DiaryEntry[]>(MEAL_GROUPS.map((g) => [g, []]));
+  for (const e of entries) {
+    const group: MealGroup = e.meal !== undefined && KNOWN_SLOTS.has(e.meal) ? e.meal : 'earlier';
+    grouped.get(group)?.push(e);
+  }
+  const out = {} as Record<MealGroup, DayTotals>;
+  for (const g of MEAL_GROUPS) out[g] = buildDay(grouped.get(g) ?? [], dayKey);
+  return out;
 }
 
 /** The 7-day context ending on the local day of `on` (the caller supplies `on`; nothing here reads the clock). */
