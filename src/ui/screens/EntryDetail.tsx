@@ -73,6 +73,7 @@ export default function EntryDetail({
   const [failed, setFailed] = useState<string | null>(null);
   const initialFigures = (): Partial<Record<NutrientKey, string>> => Object.fromEntries(SHOWN.map((k) => [k, fieldText(entry, k)]));
   const [figures, setFigures] = useState(initialFigures);
+  const [badInput, setBadInput] = useState<Partial<Record<NutrientKey, boolean>>>({});
   const [figureError, setFigureError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -101,6 +102,11 @@ export default function EntryDetail({
     const correction: Correction = {};
     for (const k of SHOWN) {
       const text = (figures[k] ?? '').trim();
+      // Unparseable text (such as "1e") reads as '' in a number input: that is not an emptied field, so it must not clear a figure.
+      if (badInput[k]) {
+        setFigureError(`${NUTRIENT_LABEL[k].name[0]!.toUpperCase()}${NUTRIENT_LABEL[k].name.slice(1)} is not a number yet. Nothing has been changed.`);
+        return;
+      }
       const before = fieldText(entry, k);
       if (text === '') {
         if (before !== '') correction[k] = null;
@@ -196,7 +202,7 @@ export default function EntryDetail({
       {mode === 'figures' && (
         <form onSubmit={onSaveFigures} className="space-y-3">
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            Type the figures you know. A blank field means the figure is unknown, not zero; emptying a field takes your figure back.
+            Type the figures you know. A blank field means the figure is unknown, not zero; emptying a field makes that figure unknown.
           </p>
           {SHOWN.map((k) => (
             <div key={k}>
@@ -207,7 +213,11 @@ export default function EntryDetail({
                 inputMode="decimal"
                 step="any"
                 value={figures[k] ?? ''}
-                onChange={(e) => setFigures((f) => ({ ...f, [k]: e.target.value }))}
+                onChange={(e) => {
+                  const bad = e.currentTarget.validity.badInput;
+                  setBadInput((b) => ({ ...b, [k]: bad }));
+                  setFigures((f) => ({ ...f, [k]: e.target.value }));
+                }}
                 className={fieldClass}
               />
             </div>
@@ -222,7 +232,7 @@ export default function EntryDetail({
             <button
               type="button"
               className={`${btn} flex-1`}
-              onClick={() => { flow.edit(); setFigures(initialFigures()); setFigureError(null); setMode('view'); }}
+              onClick={() => { flow.edit(); setFigures(initialFigures()); setBadInput({}); setFigureError(null); setMode('view'); }}
             >
               Discard
             </button>

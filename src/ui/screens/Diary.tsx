@@ -68,7 +68,8 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
   if (opened) {
     return (
       <main className="mx-auto min-h-screen w-full max-w-xl p-4">
-        <EntryDetail entry={opened} deps={deps} onClose={() => setOpenId(null)} onChanged={() => setReload((n) => n + 1)} />
+        {/* keyed by id: EntryDetail's form state is captured at mount, so another entry must remount it */}
+        <EntryDetail key={opened.id} entry={opened} deps={deps} onClose={() => setOpenId(null)} onChanged={() => setReload((n) => n + 1)} />
       </main>
     );
   }

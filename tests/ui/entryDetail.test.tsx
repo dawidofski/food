@@ -135,4 +135,45 @@ describe('correcting figures from the entry screen', () => {
     render(<EntryDetail entry={e} deps={realDeps} onClose={() => {}} onChanged={() => {}} />);
     expect(screen.getByText(/you corrected sodium by hand/i)).toBeInTheDocument();
   });
+
+  test('several corrected figures are joined with "and"', async () => {
+    const e = await seed({ correctedKeys: ['sodiumMg', 'energyKcal', 'proteinG'] });
+    render(<EntryDetail entry={e} deps={realDeps} onClose={() => {}} onChanged={() => {}} />);
+    expect(screen.getByText(/you corrected sodium, energy and protein by hand/i)).toBeInTheDocument();
+  });
+
+  test('an entry whose only corrected key is unknown shows no corrected paragraph', async () => {
+    const e = await seed({ correctedKeys: ['futureKey' as never] });
+    render(<EntryDetail entry={e} deps={realDeps} onClose={() => {}} onChanged={() => {}} />);
+    expect(screen.queryByText(/you corrected/i)).toBeNull();
+    expect(screen.queryByTestId('corrected')).toBeNull();
+  });
+
+  test('a non-finite value is refused at the form', async () => {
+    // jsdom sanitises "1e999" to '' like a browser does, and a browser reports badInput for it; stub that report.
+    const e = await seed();
+    await openForm(e);
+    Object.defineProperty(field(/sodium/i), 'validity', { configurable: true, get: () => ({ badInput: true }) });
+    type(/sodium/i, '1e999');
+    await save();
+    expect(screen.getByRole('alert')).toHaveTextContent(/not a number yet/i);
+    expect(await allEntriesIncludingTombstones()).toHaveLength(1);
+  });
+
+  test('half-typed text is refused rather than read as an emptied field', async () => {
+    const e = await seed();
+    await openForm(e);
+    const input = field(/sodium/i);
+    Object.defineProperty(input, 'validity', { configurable: true, get: () => ({ badInput: true }) });
+    type(/sodium/i, '');
+    await save();
+    expect(screen.getByRole('alert')).toHaveTextContent(/not a number yet/i);
+    expect(screen.queryByTestId('warning-gate')).toBeNull();
+    expect(await allEntriesIncludingTombstones()).toHaveLength(1);
+  });
+
+  test('the blank-field sentence is true for any figure, typed or from the database', async () => {
+    await openForm(await seed());
+    expect(screen.getByText(/emptying a field makes that figure unknown/i)).toBeInTheDocument();
+  });
 });
