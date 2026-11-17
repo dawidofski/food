@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { localDayKey } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
+import type { Correction } from '@/domain/corrections';
 import { deleteEntry } from '@/data/db';
 import { offProductMeta } from '@/data/offCache';
 import { useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
@@ -10,7 +11,9 @@ import CoverageNote, { NUTRIENT_LABEL } from '@/ui/components/CoverageNote';
 import { fmtAmount } from '@/ui/components/NutrientBar';
 import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
+import CorrectedBadge from '@/ui/components/CorrectedBadge';
 import WarningGate from './WarningGate';
+import { fieldClass } from './FirstRun';
 
 const LEVEL_WORD: Record<Level, string> = { INFO: 'info', MODERATE: 'moderate', HIGH: 'high', CRITICAL: 'critical' };
 const SHOWN: NutrientKey[] = ['energyKcal', 'proteinG', 'fibreG', 'sodiumMg', 'satFatG', 'addedSugarsG'];
@@ -38,6 +41,24 @@ function removalText(entry: DiaryEntry, isToday: boolean): string {
   return `This will remove ${list} from ${day}’s totals.`;
 }
 
+const fieldText = (entry: DiaryEntry, k: NutrientKey): string => {
+  const v = entry.nutrients[k];
+  return isKnownValue(v) ? String(v) : '';
+};
+
+/** Names of the figures the person corrected by hand. A key this build does not know is skipped, never thrown on. */
+function correctedNames(keys: NutrientKey[] | undefined): string[] {
+  const labels: Partial<Record<string, { name: string }>> = NUTRIENT_LABEL;
+  return [...new Set(keys ?? [])].flatMap((k) => {
+    const name = labels[k]?.name;
+    return name ? [name] : [];
+  });
+}
+
+function listNames(names: string[]): string {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
 export default function EntryDetail({
   entry, deps, onClose, onChanged,
 }: {
@@ -47,9 +68,12 @@ export default function EntryDetail({
   onChanged: () => void;
 }) {
   const flow = useEntryFlow(deps);
-  const [mode, setMode] = useState<'view' | 'edit' | 'confirmDelete'>('view');
+  const [mode, setMode] = useState<'view' | 'edit' | 'figures' | 'confirmDelete'>('view');
   const [text, setText] = useState(entry.rawText);
   const [failed, setFailed] = useState<string | null>(null);
+  const initialFigures = (): Partial<Record<NutrientKey, string>> => Object.fromEntries(SHOWN.map((k) => [k, fieldText(entry, k)]));
+  const [figures, setFigures] = useState(initialFigures);
+  const [figureError, setFigureError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!flow.outcome) return;
@@ -69,6 +93,29 @@ export default function EntryDetail({
   const onSave = (e: FormEvent) => {
     e.preventDefault();
     void flow.submit(text, { revises: { id: entry.id, at: entry.at } });
+  };
+
+  const onSaveFigures = (e: FormEvent) => {
+    e.preventDefault();
+    // Only fields that changed are sent: an untouched field changes nothing, and a figure not shown here is never mentioned.
+    const correction: Correction = {};
+    for (const k of SHOWN) {
+      const text = (figures[k] ?? '').trim();
+      const before = fieldText(entry, k);
+      if (text === '') {
+        if (before !== '') correction[k] = null;
+        continue;
+      }
+      const n = Number(text);
+      if (!Number.isFinite(n) || n < 0) {
+        setFigureError(`${NUTRIENT_LABEL[k].name[0]!.toUpperCase()}${NUTRIENT_LABEL[k].name.slice(1)} needs a number that is zero or more. Nothing has been changed.`);
+        return;
+      }
+      if (text !== before && !(before !== '' && n === Number(before))) correction[k] = n;
+    }
+    setFigureError(null);
+    if (Object.keys(correction).length === 0) { setMode('view'); return; }
+    void flow.correctEntry(entry, correction);
   };
 
   const confirmDelete = async () => {
@@ -101,6 +148,13 @@ export default function EntryDetail({
         ))}
       </ul>
 
+      {correctedNames(entry.correctedKeys).length > 0 && (
+        <p className="text-sm text-teal-900 dark:text-teal-200">
+          <CorrectedBadge keys={entry.correctedKeys} />
+          {` You corrected ${listNames(correctedNames(entry.correctedKeys))} by hand. The entry’s other figures are unchanged.`}
+        </p>
+      )}
+
       <dl className="space-y-1 text-sm">
         {SHOWN.map((k) => {
           const v = entry.nutrients[k];
@@ -132,10 +186,48 @@ export default function EntryDetail({
       {failed && <p role="alert" className="text-sm text-slate-900 dark:text-slate-100">{failed}</p>}
 
       {mode === 'view' && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button type="button" className={`${btn} flex-1`} onClick={() => setMode('edit')}>Edit</button>
+          <button type="button" className={`${btn} flex-1`} onClick={() => setMode('figures')}>Correct the figures</button>
           <button type="button" className={`${btn} flex-1`} onClick={() => setMode('confirmDelete')}>Delete</button>
         </div>
+      )}
+
+      {mode === 'figures' && (
+        <form onSubmit={onSaveFigures} className="space-y-3">
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            Type the figures you know. A blank field means the figure is unknown, not zero; emptying a field takes your figure back.
+          </p>
+          {SHOWN.map((k) => (
+            <div key={k}>
+              <label htmlFor={`fig-${k}`} className="block text-sm font-medium capitalize">{`${NUTRIENT_LABEL[k].name} (${NUTRIENT_LABEL[k].unit})`}</label>
+              <input
+                id={`fig-${k}`}
+                type="number"
+                inputMode="decimal"
+                step="any"
+                value={figures[k] ?? ''}
+                onChange={(e) => setFigures((f) => ({ ...f, [k]: e.target.value }))}
+                className={fieldClass}
+              />
+            </div>
+          ))}
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            The corrected entry is checked again before it replaces this one. The original is kept in your history.
+          </p>
+          {figureError && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{figureError}</p>}
+          {flow.error && !gateOpen && <p role="alert" className="text-sm text-slate-900 dark:text-slate-100">{flow.error}</p>}
+          <div className="flex gap-2">
+            <button type="submit" className={`${btn} flex-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>Save figures</button>
+            <button
+              type="button"
+              className={`${btn} flex-1`}
+              onClick={() => { flow.edit(); setFigures(initialFigures()); setFigureError(null); setMode('view'); }}
+            >
+              Discard
+            </button>
+          </div>
+        </form>
       )}
 
       {mode === 'edit' && (
