@@ -9,8 +9,10 @@ export type Goal = { kind: 'lose' | 'hold' | 'gain'; rateKgPerWeek?: number };
 
 /** Where each part of the targets comes from. Later tasks and plans read this to say so to the person. */
 export type TargetBasis = {
-  protein: 'efsa-pri' | 'issn-range';
-  energy: 'mifflin' | 'katch-mcardle';
+  /** 'custom' when the person set the number themselves; a source is never attached to it. */
+  protein: 'efsa-pri' | 'issn-range' | 'custom';
+  /** 'custom' when the person set the energy or resting figure themselves. */
+  energy: 'mifflin' | 'katch-mcardle' | 'custom';
   /**
    * Only 'formula' is produced in this plan. 'reported' and 'observed' are reserved for a later plan's daily health data
    * and weight page; their presence here is NOT a finished feature, so nothing may claim one of them yet.

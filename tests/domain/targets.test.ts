@@ -214,4 +214,24 @@ describe('targets', () => {
       expect(t.basis.expenditure).toBe('formula');
     });
   });
+
+  describe('an override replaces the basis it overrides, and only that', () => {
+    test('a typed protein target is custom and leaves energy alone', () => {
+      const t = computeTargets({ ...profileAt(80, 'moderate'), overrides: { proteinG: 95 } }, ON);
+      expect(t.proteinG).toBe(95);
+      expect(t.basis).toEqual({ protein: 'custom', energy: 'mifflin', expenditure: 'formula' });
+    });
+
+    test('a typed energy or resting figure is custom and leaves protein alone', () => {
+      for (const overrides of [{ energyKcal: 2000 }, { rmrKcal: 1600 }]) {
+        const t = computeTargets({ ...profileAt(80, 'moderate'), overrides }, ON);
+        expect(t.basis).toEqual({ protein: 'issn-range', energy: 'custom', expenditure: 'formula' });
+      }
+    });
+
+    test('an override of something else changes no basis', () => {
+      const t = computeTargets({ ...profileAt(80, 'moderate'), overrides: { sodiumMg: 2300 } }, ON);
+      expect(t.basis).toEqual({ protein: 'issn-range', energy: 'mifflin', expenditure: 'formula' });
+    });
+  });
 });

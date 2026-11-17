@@ -260,7 +260,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
           The energy and fibre targets are this app&rsquo;s own working figures, not a published recommendation (fibre is 14 g per 1,000
           kcal, at least 30 g; WHO advises at least 25 g of fibre a day). Protein comes from two sources: EFSA&rsquo;s reference intake of 0.83 g
           per kg of body weight, and for people who exercise, the International Society of Sports Nutrition&rsquo;s range of 1.4 to 2.0 g
-          per kg. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any
+          per kg, within which this app uses the middle, 1.7 g, and the top, 2.0 g, when your goal is to lose weight. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any
           target in Settings.
         </p>
       </section>

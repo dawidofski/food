@@ -158,7 +158,7 @@ describe('missing view', () => {
   });
 });
 
-describe('the protein and fibre targets are labelled as the app\'s own', () => {
+describe('the energy and fibre targets are labelled as the app\'s own', () => {
   test('the Missing screen says the energy and fibre targets are not a published recommendation, and names the sources of the protein targets', async () => {
     await putProfile(ownerProfile);
     render(<Missing />);
@@ -167,6 +167,7 @@ describe('the protein and fibre targets are labelled as the app\'s own', () => {
     expect(note.textContent).toMatch(/WHO advises at least 25 g of fibre/i);
     expect(note.textContent).toMatch(/EFSA[^.]*0\.83 g/);
     expect(note.textContent).toMatch(/International Society of Sports Nutrition[^.]*1\.4 to 2\.0 g/);
+    expect(note.textContent).toMatch(/this app uses the middle, 1\.7 g, and the top, 2\.0 g, when your goal is to lose weight/);
     expect(note.textContent).not.toMatch(/1\.2 g/);
   });
 });

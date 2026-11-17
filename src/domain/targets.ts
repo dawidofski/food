@@ -181,5 +181,9 @@ export function computeTargets(p: Profile | null, on: Date): Targets {
   for (const [k, v] of Object.entries(p.overrides ?? {})) {
     if (typeof v === 'number' && Number.isFinite(v)) (overrides as Record<string, number>)[k] = v;
   }
-  return { ...base, ...overrides, isGeneric: base.isGeneric };
+  // A number the person typed has no source: where an override applies, the basis says so instead of keeping a citation.
+  const basis = { ...base.basis };
+  if (overrides.proteinG !== undefined) basis.protein = 'custom';
+  if (overrides.energyKcal !== undefined || overrides.rmrKcal !== undefined) basis.energy = 'custom';
+  return { ...base, ...overrides, basis, isGeneric: base.isGeneric };
 }
