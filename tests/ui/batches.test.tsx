@@ -155,3 +155,89 @@ describe('the batch screen', () => {
     await waitFor(async () => expect((await getBatch(batch.id))!.portionCount).toBe(8));
   });
 });
+
+describe('correcting a batch\'s figures by hand', () => {
+  const open = async (name = 'chicken pasta') => {
+    render(<BatchBuilder deps={builderDeps} />);
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`correct the figures of ${name}`, 'i') }));
+  };
+  const field = (name: RegExp) => screen.getByLabelText(name) as HTMLInputElement;
+  const type = (name: RegExp, value: string) => fireEvent.change(field(name), { target: { value } });
+  const save = async () => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: /save figures/i })); }); };
+
+  test('a batch\'s figures can be corrected by hand, and a blank field leaves the figure unknown', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    await saveBatch(batch);
+    await open();
+    expect(screen.getByText(/a blank field means the figure is unknown, not zero; emptying a field makes that figure unknown/i)).toBeInTheDocument();
+    expect(field(/^energy/i).value).toBe(String(batch.nutrientsPerPortion.energyKcal));
+    // A figure the batch never knew renders blank, not 0.
+    expect(field(/^fibre/i).value).toBe('');
+    type(/^energy/i, '500');
+    type(/^sodium/i, '');
+    await save();
+    await waitFor(async () => expect((await getBatch(batch.id))!.nutrientsPerPortion.energyKcal).toBe(500));
+    const after = (await getBatch(batch.id))!;
+    expect('sodiumMg' in after.nutrientsPerPortion).toBe(false); // cleared means unknown, never zero
+    expect(after.coverage.sodiumMg).toBe('unknown');
+    expect(after.nutrientsPerPortion.proteinG).toBe(batch.nutrientsPerPortion.proteinG); // untouched
+    expect(after.portionsRemaining).toBe(batch.portionsRemaining);
+    expect(after.name).toBe(batch.name);
+  });
+
+  test('a half-typed figure is refused, read from the DOM, and nothing is saved', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    await saveBatch(batch);
+    await open();
+    const f = field(/^energy/i);
+    Object.defineProperty(f, 'validity', { value: { badInput: true }, configurable: true });
+    f.value = '';
+    await save();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/energy is not a number yet\. Nothing has been changed\./i);
+    expect((await getBatch(batch.id))!.nutrientsPerPortion.energyKcal).toBe(batch.nutrientsPerPortion.energyKcal);
+  });
+
+  test('a portion logged after the edit uses the new figures', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    await saveBatch(batch);
+    await open();
+    type(/^energy/i, '500');
+    await save();
+    await waitFor(async () => expect((await getBatch(batch.id))!.nutrientsPerPortion.energyKcal).toBe(500));
+    cleanup();
+    await logPortion();
+    await waitFor(async () => expect(await todays()).toHaveLength(1));
+    expect((await todays())[0]!.nutrients.energyKcal).toBeCloseTo(500, 6);
+  });
+
+  test('a hand-corrected batch is marked self-reported, and a portion logged from it carries the badge', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    expect(batch.selfReported).toBeUndefined();
+    await saveBatch(batch);
+    await open();
+    type(/^energy/i, '500');
+    await save();
+    await waitFor(async () => expect((await getBatch(batch.id))!.selfReported).toBe(true));
+    cleanup();
+    await logPortion();
+    await waitFor(async () => expect(await todays()).toHaveLength(1));
+    expect((await todays())[0]!.items[0]!.selfReported).toBe(true);
+  });
+
+  test('saving with nothing changed leaves the batch unmarked', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    await saveBatch(batch);
+    await open();
+    await save();
+    expect((await getBatch(batch.id))!.selfReported).toBeUndefined();
+  });
+
+  test('rebuilding the ingredients works the figures out again, so typed figures and the mark go together', async () => {
+    const { batch } = buildBatch(base, fixtureLookup);
+    await saveBatch(batch);
+    const typed = { ...batch, nutrientsPerPortion: { ...batch.nutrientsPerPortion, energyKcal: 999 }, selfReported: true };
+    const { batch: rebuilt } = rebuildBatch(typed, { portionCount: 8 }, fixtureLookup);
+    expect(rebuilt.nutrientsPerPortion.energyKcal).not.toBe(999);
+    expect(rebuilt.selfReported).toBeUndefined();
+  });
+});

@@ -1,19 +1,24 @@
 import { useHoldUpdates } from '@/state/updates';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { allBatches } from '@/data/db';
 import { datasetLookup } from '@/data/datasetLookup';
 import { loadFoods } from '@/data/foodRepository';
 import {
   buildBatch, deleteBatch, rebuildBatch, recook, refreshBatches, saveBatch, type BatchInput, type BuildResult,
 } from '@/domain/batches';
+import { applyCorrection, type Correction } from '@/domain/corrections';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
 import type { FoodLookup } from '@/domain/foodLookup';
 import { isKnownValue } from '@/domain/nutrients';
 import type { Batch } from '@/types/diary';
+import type { NutrientKey } from '@/types/nutrients';
+import { NUTRIENT_LABEL } from '@/ui/components/CoverageNote';
 import CoverageNote from '@/ui/components/CoverageNote';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
+import { fieldClass } from './FirstRun';
 
 const input = 'min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 px-3 text-base';
+const SHOWN: NutrientKey[] = ['energyKcal', 'proteinG', 'fibreG', 'sodiumMg', 'satFatG', 'addedSugarsG'];
 const btn = 'min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-base';
 
 export type BatchDeps = { lookup: FoodLookup; loadData: () => Promise<void> };
@@ -43,6 +48,7 @@ export default function BatchBuilder({ deps = defaultBatchDeps, onLogPortion }: 
   const [batches, setBatches] = useState<Batch[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [editing, setEditing] = useState<Batch | 'new' | null>(null);
+  const [correcting, setCorrecting] = useState<Batch | null>(null);
 
   const load = useCallback(() => {
     allBatches()
@@ -57,6 +63,18 @@ export default function BatchBuilder({ deps = defaultBatchDeps, onLogPortion }: 
   async function onRecook(b: Batch) {
     await saveBatch(recook(b));
     load();
+  }
+
+  if (correcting) {
+    return (
+      <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
+        <BatchFigures
+          batch={correcting}
+          onSaved={() => { setCorrecting(null); load(); }}
+          onCancel={() => setCorrecting(null)}
+        />
+      </main>
+    );
   }
 
   if (editing) {
@@ -114,6 +132,12 @@ export default function BatchBuilder({ deps = defaultBatchDeps, onLogPortion }: 
                 className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm"
               >
                 Edit
+              </button>
+              <button
+                type="button" onClick={() => setCorrecting(b)} aria-label={`Correct the figures of ${b.name}`}
+                className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm"
+              >
+                Correct the figures
               </button>
             </div>
           </li>
@@ -295,5 +319,85 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
 function NUTRIENT_PARTIALS(b: Batch): (keyof Batch['coverage'])[] {
   return (Object.keys(b.coverage) as (keyof Batch['coverage'])[]).filter(
     (k) => k !== 'energyKcal' && b.coverage[k] === 'partial' && isKnownValue(b.nutrientsPerPortion[k]) && (k === 'addedSugarsG' || k === 'sodiumMg' || k === 'satFatG'),
+  );
+}
+
+const fieldText = (b: Batch, k: NutrientKey): string => {
+  const v = b.nutrientsPerPortion[k];
+  return isKnownValue(v) ? String(v) : '';
+};
+
+const sentence = (k: NutrientKey): string => `${NUTRIENT_LABEL[k].name[0]!.toUpperCase()}${NUTRIENT_LABEL[k].name.slice(1)}`;
+
+/** The batch's per-portion figures, typed by hand. Same field pattern and wording as an entry's figures. */
+function BatchFigures({ batch, onSaved, onCancel }: { batch: Batch; onSaved: () => void; onCancel: () => void }) {
+  useHoldUpdates(true);
+  const [figures, setFigures] = useState<Partial<Record<NutrientKey, string>>>(() => Object.fromEntries(SHOWN.map((k) => [k, fieldText(batch, k)])));
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    // Only fields that changed are sent: an untouched field changes nothing.
+    const correction: Correction = {};
+    for (const k of SHOWN) {
+      const text = (figures[k] ?? '').trim();
+      // "1e" reads as '' in a number input; that is not an emptied field. Read from the DOM now, never from a cached flag.
+      if ((e.currentTarget.elements.namedItem(`batch-fig-${k}`) as HTMLInputElement | null)?.validity.badInput) {
+        setError(`${sentence(k)} is not a number yet. Nothing has been changed.`);
+        return;
+      }
+      const before = fieldText(batch, k);
+      if (text === '') {
+        if (before !== '') correction[k] = null;
+        continue;
+      }
+      const n = Number(text);
+      if (!Number.isFinite(n) || n < 0) {
+        setError(`${sentence(k)} needs a number that is zero or more. Nothing has been changed.`);
+        return;
+      }
+      if (text !== before && !(before !== '' && n === Number(before))) correction[k] = n;
+    }
+    setError(null);
+    if (Object.keys(correction).length === 0) { onCancel(); return; }
+    setBusy(true);
+    try {
+      const applied = applyCorrection({ nutrients: batch.nutrientsPerPortion, coverage: batch.coverage }, correction);
+      // A typed figure is the person's own reading, so the batch is self-reported; portions logged from it carry the badge.
+      await saveBatch({ ...batch, nutrientsPerPortion: applied.nutrients, coverage: applied.coverage, selfReported: true });
+      onSaved();
+    } catch (err) {
+      setError(`Could not save: ${err instanceof Error ? err.message : String(err)}`);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => void onSubmit(e)} className="space-y-3" aria-label="Correct the figures">
+      <h2 className="text-lg font-semibold">{`Correct the figures of ${batch.name}`}</h2>
+      <p className="text-sm text-slate-700 dark:text-slate-300">
+        Type the figures you know. A blank field means the figure is unknown, not zero; emptying a field makes that figure unknown.
+      </p>
+      <p className="text-sm text-slate-700 dark:text-slate-300">These are the figures for one portion.</p>
+      {SHOWN.map((k) => (
+        <div key={k}>
+          <label htmlFor={`batch-fig-${k}`} className="block text-sm font-medium capitalize">{`${NUTRIENT_LABEL[k].name} (${NUTRIENT_LABEL[k].unit})`}</label>
+          <input
+            id={`batch-fig-${k}`} type="number" inputMode="decimal" step="any" value={figures[k] ?? ''}
+            onChange={(e) => setFigures((f) => ({ ...f, [k]: e.target.value }))} className={fieldClass}
+          />
+        </div>
+      ))}
+      <p className="text-sm text-slate-700 dark:text-slate-300">
+        Portions you already logged keep their numbers; only portions logged from now on use these. Changing the
+        ingredients or the number of portions works the figures out again and replaces anything typed here.
+      </p>
+      {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={busy} className={`${btn} flex-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900`}>Save figures</button>
+        <button type="button" onClick={onCancel} className={`${btn} flex-1`}>Discard</button>
+      </div>
+    </form>
   );
 }
