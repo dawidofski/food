@@ -499,3 +499,23 @@ Missing screen's note was corrected, because it still stated 1.2 g/kg.
 **Decision:** when the targets are generic (no profile, or an incomplete one), protein is EFSA's 0.83 g/kg for both
 floor and target, with basis `'efsa-pri'`. The generic basis's `light` activity serves the energy formula only and is
 not a claim that the person exercises, which the ISSN range requires.
+
+### Weight goal and energy (honest-targets plan, Task 6)
+
+**7,700 kcal per kg, accepted here and refused in section 7.2.** The energy offset is `rate (kg/week) x 7,700 / 7`, so a
+0.5 kg/week deficit is 550 kcal a day. This is the same conversion figure that section 7.2 rejects for a twelve-week
+projection, and neither use is a mistake. Here it only SETS a starting offset, over a week or two, before the body has
+adapted, where it is a serviceable approximation; and it is self-correcting, because the observed-expenditure source
+(7.1) re-reads the person's actual weight change and moves the target. Carried forward twelve weeks with nothing
+correcting it, the same figure compounds its own error, so the projection refuses it.
+
+**Cap and floor.** The energy target never falls below the resting rate (`rmrKcal`). Separately, a requested rate is
+limited to `MAX_GOAL_RATE_KG_PER_WEEK = 1` kg/week. That maximum is the app's own choice and not a published figure.
+`Targets.goalCapped` is `true` when either limit reduced the request. A goal with no `rateKgPerWeek` does not move
+energy (protein still moves on the goal's kind). Generic targets are not goal-adjusted.
+
+**Which figures follow the adjusted energy (8.1.1).** Saturated fat, added sugars (10% and the conditional 5%), trans
+fat and fibre are stated by their sources as shares of energy intake, so they follow the goal-adjusted energy; a
+tighter intake carries a tighter absolute allowance. Sodium (2,000 mg) and every micronutrient reference intake are
+absolute amounts and never move. `Targets` stays one structure, so the person's screen and the warning they are shown
+agree about every figure. `tests/rules/goalTargets.test.ts` proves it through the rules.

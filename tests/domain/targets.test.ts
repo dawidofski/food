@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { ACTIVITY_FACTORS, ageOn, computeTargets, currentWeightKg } from '@/domain/targets';
+import { ACTIVITY_FACTORS, MAX_GOAL_RATE_KG_PER_WEEK, ageOn, computeTargets, currentWeightKg } from '@/domain/targets';
 import type { ActivityLevel, Goal, Profile } from '@/types/profile';
 import { ownerProfile } from '../fixtures/profile';
 
@@ -24,6 +24,8 @@ function profileAt(weightKg: number, activityLevel: ActivityLevel, goal?: Goal, 
     ...extra,
   };
 }
+
+const emptyProfile: Profile = { weightLog: [], flaggedAllergens: [], conditions: [] };
 
 describe('targets', () => {
   test('ageOn derives age from date of birth, not a stored number', () => {
@@ -268,6 +270,90 @@ describe('targets', () => {
     test('energy, and the figures derived from it, follow the new resting rate', () => {
       const t = computeTargets(profileAt(80, 'light', undefined, { bodyFatPct: 25 }), ON);
       expect(t.energyKcal).toBe(Math.round(1666 * 1.375));
+    });
+  });
+
+  describe('a weight goal', () => {
+    const on = ON;
+
+    test('a deficit shifts energy by rate x 7700 / 7', () => {
+      const hold = computeTargets(profileAt(80, 'light', { kind: 'hold' }), on).energyKcal;
+      const lose = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), on).energyKcal;
+      expect(hold - lose).toBe(Math.round((0.5 * 7700) / 7)); // 550
+    });
+
+    test('a gain goal adds the same offset', () => {
+      const hold = computeTargets(profileAt(80, 'light', { kind: 'hold' }), on).energyKcal;
+      const gain = computeTargets(profileAt(80, 'light', { kind: 'gain', rateKgPerWeek: 0.25 }), on).energyKcal;
+      expect(gain - hold).toBe(Math.round((0.25 * 7700) / 7)); // 275
+    });
+
+    test('a goal with no rate does not move energy, though it still moves protein', () => {
+      const hold = computeTargets(profileAt(80, 'light', { kind: 'hold' }), on);
+      const lose = computeTargets(profileAt(80, 'light', { kind: 'lose' }), on);
+      expect(lose.energyKcal).toBe(hold.energyKcal);
+      expect(lose.goalCapped).toBeUndefined();
+      expect(lose.proteinG).toBe(160);
+    });
+
+    test('an unusable rate (zero, negative, not a number) does not move energy', () => {
+      const hold = computeTargets(profileAt(80, 'light', { kind: 'hold' }), on).energyKcal;
+      for (const rateKgPerWeek of [0, -0.5, Number.NaN]) {
+        expect(computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek }), on).energyKcal).toBe(hold);
+      }
+    });
+
+    test('the energy target never falls below the resting rate, and says when it was capped', () => {
+      const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 5 }), on);
+      expect(t.energyKcal).toBeGreaterThanOrEqual(t.rmrKcal);
+      expect(t.goalCapped).toBe(true);
+    });
+
+    test('a modest deficit is not flagged as capped', () => {
+      const t = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), on);
+      expect(t.goalCapped).toBeUndefined();
+    });
+
+    test('a rate above the maximum is reduced to it, and says so', () => {
+      // Heavy, active person: the floor is far away, so only the maximum rate can be what caps this.
+      const hold = computeTargets(profileAt(150, 'veryActive', { kind: 'hold' }), on).energyKcal;
+      const t = computeTargets(profileAt(150, 'veryActive', { kind: 'lose', rateKgPerWeek: 3 }), on);
+      expect(hold - t.energyKcal).toBe(Math.round((MAX_GOAL_RATE_KG_PER_WEEK * 7700) / 7));
+      expect(t.goalCapped).toBe(true);
+    });
+
+    test('a goal does not adjust generic targets', () => {
+      const t = computeTargets({ ...emptyProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 } }, on);
+      expect(t.isGeneric).toBe(true);
+      expect(t.energyKcal).toBe(computeTargets(emptyProfile, on).energyKcal);
+      expect(t.goalCapped).toBeUndefined();
+    });
+
+    test('the goal does not change which formula produced the maintenance figure', () => {
+      expect(computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), on).basis.energy).toBe('mifflin');
+      const lean = profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }, { bodyFatPct: 20 });
+      expect(computeTargets(lean, on).basis.energy).toBe('katch-mcardle');
+    });
+
+    test('a custom energy override still wins, and is not called capped', () => {
+      const p = profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 5 }, { overrides: { energyKcal: 2000 } });
+      const t = computeTargets(p, on);
+      expect(t.energyKcal).toBe(2000);
+      expect(t.basis.energy).toBe('custom');
+      expect(t.goalCapped).toBeUndefined();
+    });
+
+    // Spec 8.1.1: each figure follows its source's own basis.
+    test('the shares of energy follow the goal; the absolute figures never move', () => {
+      const hold = computeTargets(profileAt(80, 'light', { kind: 'hold' }), on);
+      const lose = computeTargets(profileAt(80, 'light', { kind: 'lose', rateKgPerWeek: 0.5 }), on);
+      expect(lose.satFatG).toBeLessThan(hold.satFatG);
+      expect(lose.addedSugarsG).toBeLessThan(hold.addedSugarsG);
+      expect(lose.addedSugarsIdealG).toBeLessThan(hold.addedSugarsIdealG);
+      expect(lose.transFatG).toBeLessThan(hold.transFatG);
+      expect(lose.fibreG).toBeLessThanOrEqual(hold.fibreG);
+      expect(lose.sodiumMg).toBe(hold.sodiumMg);
+      expect(lose.micronutrients).toEqual(hold.micronutrients);
     });
   });
 });

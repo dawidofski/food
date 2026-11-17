@@ -131,6 +131,39 @@ function usableBodyFatPct(pct: number | undefined): number | undefined {
     : undefined;
 }
 
+/**
+ * Energy per kilogram of body weight change, used to turn a weekly rate into a daily energy offset. 7,700 kcal/kg is the
+ * conventional approximation (about 1 kg of body tissue). It is accepted here, to SET a starting offset a week or two
+ * ahead, and refused for a twelve-week projection; the reasoning is in the design document's verification log.
+ */
+const KCAL_PER_KG = 7700;
+
+/**
+ * The largest weekly rate of change the app will turn into an energy offset. This is the app's own choice and not a
+ * published figure. 1 kg a week is a deficit of 1,100 kcal a day, which already exceeds what the resting-rate floor
+ * below allows for most adults; the cap exists so that a gain goal, which has no such floor, and a heavy or very active
+ * person, whose floor is far away, cannot be given an extreme offset either. A requested rate above it is reduced to
+ * it, and `Targets.goalCapped` says so.
+ */
+export const MAX_GOAL_RATE_KG_PER_WEEK = 1;
+
+/**
+ * The goal's effect on energy. A goal with no usable rate does not move energy: inventing a default deficit for someone
+ * who never stated one would put them in a deficit they did not ask for. (Protein moves on the goal's kind alone.)
+ * The energy target never falls below the resting rate, whatever the rate asked for.
+ */
+function applyGoal(maintenance: number, rmr: number, goal: Goal | undefined): { energy: number; capped: boolean } {
+  const rate = goal?.rateKgPerWeek;
+  if ((goal?.kind !== 'lose' && goal?.kind !== 'gain') || !isPositive(rate)) return { energy: maintenance, capped: false };
+  const usedRate = Math.min(rate, MAX_GOAL_RATE_KG_PER_WEEK);
+  const offset = Math.round((usedRate * KCAL_PER_KG) / 7);
+  if (goal.kind === 'gain') return { energy: maintenance + offset, capped: usedRate < rate };
+  const floor = Math.round(rmr);
+  const energy = Math.max(maintenance - offset, floor);
+  // Capped when the rate was reduced, or when the floor, not the rate, set the target (and so the deficit is smaller).
+  return { energy, capped: usedRate < rate || energy !== maintenance - offset };
+}
+
 function derive(
   heightCm: number,
   weightKg: number,
@@ -147,7 +180,12 @@ function derive(
     bf !== undefined
       ? 370 + 21.6 * (weightKg * (1 - bf / 100))
       : 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
-  const energy = Math.round(rmr * ACTIVITY_FACTORS[activity]);
+  const maintenance = Math.round(rmr * ACTIVITY_FACTORS[activity]);
+  // A deficit computed from a stranger's expenditure is meaningless, so the generic basis is not goal-adjusted.
+  const adjusted = isGeneric ? { energy: maintenance, capped: false } : applyGoal(maintenance, rmr, goal);
+  // Everything expressed by its source as a share of energy INTAKE follows the adjusted energy (a tighter intake carries
+  // a tighter absolute allowance). Sodium and the micronutrients are absolute amounts and never move.
+  const energy = adjusted.energy;
   // The generic basis's 'light' activity level is a convenience for the energy formula, not a claim that anyone exercises.
   // The ISSN range is stated for exercising individuals, so for a person the app knows nothing about, protein takes
   // EFSA's PRI, which is stated for adults generally. Energy and protein are deliberately not coupled here.
@@ -171,6 +209,7 @@ function derive(
     transFatG: Math.round((0.01 * energy) / 9),
     micronutrients: microsFor(sex),
     isGeneric,
+    ...(adjusted.capped ? { goalCapped: true as const } : {}),
     basis: { protein: exercises ? 'issn-range' : 'efsa-pri', energy: bf !== undefined ? 'katch-mcardle' : 'mifflin', expenditure: 'formula' },
   };
 }
@@ -206,5 +245,8 @@ export function computeTargets(p: Profile | null, on: Date): Targets {
   const basis = { ...base.basis };
   if (overrides.proteinG !== undefined) basis.protein = 'custom';
   if (overrides.energyKcal !== undefined || overrides.rmrKcal !== undefined) basis.energy = 'custom';
-  return { ...base, ...overrides, basis, isGeneric: base.isGeneric };
+  const merged: Targets = { ...base, ...overrides, basis, isGeneric: base.isGeneric };
+  // A typed energy figure replaces the goal's result, so "the goal was reduced" no longer describes it.
+  if (overrides.energyKcal !== undefined) delete merged.goalCapped;
+  return merged;
 }

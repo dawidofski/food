@@ -35,6 +35,8 @@ export type Targets = {
   micronutrients: Partial<Record<NutrientKey, number>>;
   /** True when the targets come from the generic fallback basis, not the person's profile. */
   isGeneric: boolean;
+  /** True when the goal's requested weekly rate was reduced (to the app's maximum rate, or so energy stays at the resting rate). */
+  goalCapped?: true;
   basis: TargetBasis;
 };
 
