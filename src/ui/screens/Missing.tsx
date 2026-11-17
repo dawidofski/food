@@ -71,6 +71,28 @@ export const MICRO_ORDER: NutrientKey[] = [
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
+/**
+ * The footnote that says which of the figures behind the bars are this app's own working figures.
+ *
+ * It keys on what PRODUCED those figures — `basis.energy` and `basis.expenditure`, the same pair `energySource.ts` reads —
+ * and not on whether the profile is generic. An activity factor is named only when the energy sentence above it names one:
+ * a reported burn replaces the factor outright, and a typed energy figure is not multiplied by anything. A goal offset is
+ * named only where one can reach the energy target: never on the generic basis, and never under a typed energy figure,
+ * which `computeTargets` overlays while deleting `goalCapped`, so the goal moves the target by nothing at all.
+ */
+function ownTargetsNote(basis: Targets['basis'], isGeneric: boolean): string {
+  const typed = basis.energy === 'custom';
+  const usesFactor = !typed && basis.expenditure === 'formula';
+  const usesGoal = !typed && !isGeneric;
+  const own = [...(usesFactor ? ['the activity factor'] : []), ...(usesGoal ? ['the goal offset'] : []), 'the fibre rule'];
+  const credit =
+    own.length === 1
+      ? `${own[0]!} is this app’s own working figure`
+      : `${own.slice(0, -1).join(', ')} and ${own[own.length - 1]!} are this app’s own working figures`;
+  const lead = usesGoal ? 'Any goal offset is added to the energy target; the' : 'The';
+  return `${lead} fibre target is 14 g per 1,000 kcal, at least 30 g. ${credit[0]!.toUpperCase()}${credit.slice(1)}, not a published recommendation.`;
+}
+
 function dayLabel(key: string): string {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
@@ -286,9 +308,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
         {targets.isGeneric && <p className="text-xs text-slate-600 dark:text-slate-400">Targets use general adult guidelines until your profile is set up.</p>}
         <p data-testid="energy-source" className="text-xs text-slate-600 dark:text-slate-400">{energySourceSentence(targets.basis, profile?.activityLevel, reported?.days, targets.isGeneric)}</p>
         <p data-testid="own-targets-note" className="text-xs text-slate-600 dark:text-slate-400">
-          {targets.isGeneric
-            ? 'The fibre target is 14 g per 1,000 kcal, at least 30 g. The activity factor and the fibre rule are this app’s own working figures, not a published recommendation.'
-            : 'Any goal offset is added to the energy target; the fibre target is 14 g per 1,000 kcal, at least 30 g. The activity factors, the goal offset and the fibre rule are this app’s own working figures, not a published recommendation.'} WHO advises at least 25 g
+          {ownTargetsNote(targets.basis, targets.isGeneric)} WHO advises at least 25 g
           of fibre a day. Protein comes from two sources: EFSA&rsquo;s reference intake of 0.83 g
           per kg of body weight, and for people who exercise, the International Society of Sports Nutrition&rsquo;s range of 1.4 to 2.0 g
           per kg, within which this app uses the middle, 1.7 g, and the top, 2.0 g, when your goal is to lose weight. The sodium, saturated fat and added sugar limits are WHO&rsquo;s. You can change any

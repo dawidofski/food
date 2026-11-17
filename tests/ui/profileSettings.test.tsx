@@ -294,4 +294,17 @@ describe('where the energy figure came from', () => {
     const line = await screen.findByText(/^Energy:/);
     expect(line.textContent).toBe('Energy: your own figure, not calculated by the app.');
   });
+
+  // Finding 3: the goal has had this line since Task 3; the reported burn, which is also read and then not used, had none.
+  test('a typed energy figure says it replaces the reported burn too, not only the goal', async () => {
+    await seedBurn(3000, 5);
+    await open({ ...ownerProfile, overrides: { energyKcal: 2500 } });
+    expect(await screen.findByText('Your own energy figure replaces your reported energy burn as the energy target.')).toBeInTheDocument();
+  });
+
+  test('with no reported burn no such line is shown, because there is nothing it replaced', async () => {
+    await open({ ...ownerProfile, overrides: { energyKcal: 2500 } });
+    await screen.findByText(/^Energy:/);
+    expect(screen.queryByText(/replaces your reported energy burn/i)).toBeNull();
+  });
 });

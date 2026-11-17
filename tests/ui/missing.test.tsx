@@ -332,6 +332,41 @@ describe('the screens and the warning engine agree about the energy figure', () 
     expect(await targetSeenByRules()).toBe(computeTargets(ownerProfile, new Date()).energyKcal);
   });
 
+  // Findings 1-3: the note keys on what produced the figure, not on whether the profile is generic.
+  describe('the own-figures note credits only what produced the figures on screen', () => {
+    test('a typed energy figure claims no goal offset, because the goal moves it by nothing', async () => {
+      await putProfile({ ...ownerProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 }, overrides: { energyKcal: 2000 } });
+      await seedEntry();
+      render(<Missing />);
+      const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
+      expect(note).toMatch(/The fibre rule is this app.s own working figure, not a published recommendation\./);
+      expect(note).not.toMatch(/goal offset/i);
+      expect(note).not.toMatch(/activity factor/i);
+      // The energy sentence and the note now give one account: the figure is the person's own, and nothing moved it.
+      expect((screen.getByTestId('energy-source')).textContent).toBe('Energy: your own figure, not calculated by the app.');
+    });
+
+    test('a reported burn does not credit an activity factor, which it replaced', async () => {
+      await putProfile(ownerProfile);
+      await seedBurn(3000, 5);
+      await seedEntry();
+      render(<Missing />);
+      const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
+      expect(note).not.toMatch(/activity factor/i);
+      expect(note).toMatch(/The goal offset and the fibre rule are this app.s own working figures/);
+      expect((screen.getByTestId('energy-source')).textContent).toMatch(/used in place of an activity level/);
+    });
+
+    test('a formula figure still credits the one factor the sentence above it names', async () => {
+      await putProfile(ownerProfile);
+      await seedEntry();
+      render(<Missing />);
+      const note = (await screen.findByTestId('own-targets-note')).textContent ?? '';
+      expect(note).toMatch(/The activity factor, the goal offset and the fibre rule are this app.s own working figures/);
+      expect(note).not.toMatch(/activity factors/i);
+    });
+  });
+
   test('the Missing screen and Settings say the same sentence about the energy source', async () => {
     await putProfile(ownerProfile);
     await seedBurn(3000, 5);

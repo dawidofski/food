@@ -286,6 +286,9 @@ function TargetSources({ profile, reported }: { profile: Profile; reported: Repo
 
   if (basis.energy === 'custom') {
     if (kind === 'lose' || kind === 'gain') lines.push('Your own energy figure replaces anything your goal would have set.');
+    // `basis.expenditure` still records 'reported' under a typed figure, so the burn the person typed in is read and then
+    // not used for the energy target. Said here for the same reason the goal line is: nothing else on the screen says it.
+    if (basis.expenditure === 'reported') lines.push('Your own energy figure replaces your reported energy burn as the energy target.');
   } else if (kind === 'hold') {
     lines.push('Your goal is to hold, so your energy target stays at maintenance.');
   } else if ((kind === 'lose' || kind === 'gain') && !hasRate) {
