@@ -2196,3 +2196,82 @@ Someone with a lose/gain **rate** and a typed `energyKcal` override has tightene
 "Your own energy figure replaces anything your goal would have set" — the sentence explaining the moved limits is
 gated on the energy basis not being custom. Every number shown is correct; what is missing is the explanation.
 The fix is a one-line gate change plus a variant sentence.
+
+
+---
+
+# Correcting figures by hand — the plan of 17 Nov 2026
+
+Six tasks, thirteen commits including one fix wave. Each task reviewed by a fresh agent that did not write it,
+then one whole-branch review. 1,348 tests pass; `tsc` and the build are clean. Below is every decision taken
+during execution that the code alone does not explain.
+
+## Three things the spec asked for that were already true
+
+Recorded so no future plan rebuilds them. The revise path already re-ran the warning gate; `reviseEntry` was
+already insert-only; and a revision already kept the original's date, so correcting last Tuesday's meal cannot
+drag it onto today. The spec also asked the builder to confirm that editing a batch cannot rewrite entries
+already logged from it, and make it true if it was not — it was already true, and `batches.ts:167` says so in
+its own words. The branch pins it with a characterisation test and changes nothing. **The structural proof is
+stronger than the test: the whole branch touches no file under `src/domain/batches.ts`'s neighbourhood that the
+claim depends on.**
+
+## The ruling the spec needed
+
+**A correction replaces ENTRY-level figures, not per-item ones.** §8.2 says "an entry's items ... can have their
+macros edited", but `FoodRef` carries grams, classification and FPED and **no nutrients** — figures live once per
+entry. Per-item nutrient sets would have rippled through the data model, the totals, the rules and the export
+format, and the figure a person wants to fix is the one they can see.
+
+## Rulings made during execution
+
+- **Clearing a figure DELETES the nutrient key but sets `coverage[key] = 'unknown'`.** My brief said to delete
+  both; an implementer pushed back and was right. For nutrients, absence *is* how this app says unknown. For
+  coverage it is not — `sumNutrients` writes every key explicitly — so a cleared entry would have been the only
+  entry in the diary shaped differently. It also matters for safety: `rules/engine.ts` tests `cov === 'unknown'`,
+  which is **false** for a deleted key, so the gate would have closed only because a second clause caught the
+  missing value.
+- **`validity.badInput` is read from the DOM at save time, never cached in React state.** A `type="number"` field
+  reports an empty value for half-typed text like `1e`, and React fires no change event when an empty field
+  becomes empty again — so a cached flag goes stale and refuses a save on a visibly empty field. Reproduced in a
+  real browser: type `1e`, clear the field, press save, and the app said "Sodium is not a number yet" about a
+  field you could see was empty. The cache was the defect class, not the one path.
+- **A malformed `correctedKeys` in a backup rejects the file — but an unknown STRING key is accepted.** The first
+  half is the standing no-silent-drop rule. The second half narrows it: the validator was rejecting a whole
+  backup for exactly the case two renderers were hardened to tolerate ("a backup from a newer version"), while
+  `nutrients`, `coverage` and `refs` all accept unknown keys. An unknown key cannot produce a wrong figure, only
+  an unnamed one.
+- **No export version bump.** The version is compared with `!==`, so bumping it would make every existing backup
+  unreadable. An implementer found this reason after being asked to verify the earlier phase's conclusion rather
+  than inherit it; it is better than the reason I had.
+- **A hand-corrected batch sets `selfReported: true`, but only when a number was typed** — not for a correction
+  that only clears. `Batch.selfReported` already means "part of the figure is their reading of a packet", and it
+  already propagates to logged portions, so no new concept was needed. After a clear, no reading of theirs is in
+  there, so marking it would claim something untrue.
+
+## The finding six task reviews missed
+
+Both correction forms pre-filled a **partial** figure as if it were the figure. A partial figure is a floor — the
+screen two lines above renders it as "at least 25 mg — some items have no sodium data" — while the form showed
+"25" under "Type the figures you know". Retyping it to confirm would have set coverage to `known`, and the
+warning engine would then have trusted an understated daily total it had deliberately been refusing. For a batch
+it was sharper: `batchToDatasetShape` drops partial nutrients entirely, so the form displayed a figure the app
+itself refuses to pass to any logged portion. Each field whose figure is a floor now says so.
+
+## Known limitation, accepted
+
+Typing back exactly the displayed floor reads as unchanged, so coverage stays `partial`. Someone who genuinely
+knows the floor is the true figure must type a different number to assert it. The safe direction: a slightly
+conservative total, never a falsely trusted one.
+
+## Recorded for the next plan
+
+The entry and batch correction forms share `src/ui/components/figureForm.tsx` for the lead sentence, the display
+rounding, the field logic and the partial note — extracted during the fix wave because three review findings and
+two deferred minors all traced to the two forms being copies. The rest of the duplication remains: `fieldClass`
+is still imported from the `FirstRun` *screen*, and the two forms are still structurally asymmetric. A shared
+figures-form component belongs at the **start** of a plan, not the end of one.
+
+Also for the next plan: the ingredient-edit screen gives no warning that editing a batch's ingredients replaces
+hand-typed figures, though the figures screen warns about exactly that; and the entry screen's **Edit** path
+silently discards hand-typed figures, where the batch screen says so in plain words.
