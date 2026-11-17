@@ -4,6 +4,9 @@ export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'ver
 
 export type Sex = 'male' | 'female' | 'unspecified';
 
+/** What the person is aiming for. Absent means no goal has been stated, which is NOT the same as `hold`. */
+export type Goal = { kind: 'lose' | 'hold' | 'gain'; rateKgPerWeek?: number };
+
 export type Targets = {
   energyKcal: number;
   rmrKcal: number;
@@ -27,6 +30,10 @@ export type Profile = {
   dob?: string;
   sex?: Sex;
   activityLevel?: ActivityLevel;
+  /** Body fat as a percentage of body weight. Absent means unknown, never zero. */
+  bodyFatPct?: number;
+  /** Absent means no goal stated; it must never be read as `{ kind: 'hold' }`. */
+  goal?: Goal;
   weightLog: { date: string; kg: number }[];
   flaggedAllergens: string[];
   conditions: string[];

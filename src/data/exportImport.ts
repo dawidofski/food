@@ -4,7 +4,7 @@ import {
 } from '@/data/db';
 import { API_KEY_LS } from '@/state/aiSettings';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
-import type { Profile } from '@/types/profile';
+import type { Goal, Profile } from '@/types/profile';
 
 /**
  * Export and import: the person's only backup, since the browser can clear its own storage.
@@ -183,6 +183,16 @@ function batch(v: unknown, i: number): Batch {
   return v as Batch;
 }
 
+const GOAL_KINDS: readonly string[] = ['lose', 'hold', 'gain'];
+
+/** Optional fields that are not usable are dropped, never imported and never defaulted: absent means unknown. */
+function goalOf(v: unknown): Goal | undefined {
+  if (!isObj(v) || typeof v.kind !== 'string' || !GOAL_KINDS.includes(v.kind)) return undefined;
+  const goal: Goal = { kind: v.kind as Goal['kind'] };
+  if (typeof v.rateKgPerWeek === 'number' && Number.isFinite(v.rateKgPerWeek)) goal.rateKgPerWeek = v.rateKgPerWeek;
+  return goal;
+}
+
 function profile(v: unknown): Profile {
   const o = obj(v, 'profile');
   // Body data is optional (a profile may hold only flags); when present it must be valid.
@@ -204,7 +214,12 @@ function profile(v: unknown): Profile {
       else num(x, `profile override ${k}`);
     }
   }
-  return v as Profile;
+  const { bodyFatPct, goal: rawGoal, ...rest } = o;
+  const out = rest as Profile;
+  if (typeof bodyFatPct === 'number' && Number.isFinite(bodyFatPct)) out.bodyFatPct = bodyFatPct;
+  const goal = goalOf(rawGoal);
+  if (goal) out.goal = goal;
+  return out;
 }
 
 function unique(rows: { id: string }[], what: string): void {
