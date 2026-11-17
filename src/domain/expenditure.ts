@@ -21,8 +21,6 @@ function usableBurn(day: HealthDay): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= REPORTED_BURN_CEILING_KCAL ? v : undefined;
 }
 
-
-
 /** The day keys the reported burn is read from: the 7 days ending YESTERDAY, oldest first. The store is read over exactly these. */
 export function reportedWindowKeys(on: Date): string[] {
   const yesterday = new Date(on.getFullYear(), on.getMonth(), on.getDate() - 1, 12);

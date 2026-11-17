@@ -18,6 +18,10 @@ import type { Profile } from '@/types/profile';
  * written, so a malformed file changes nothing; the rows then go in one IndexedDB transaction and the
  * localStorage part is applied with a snapshot to roll back to, so a failure in either store leaves
  * both as they were.
+ *
+ * One checked field is deliberately permissive rather than strict: an entry's `correctedKeys` may name a figure this
+ * build does not have, because a backup written by a newer version would otherwise be refused whole. Such a key cannot
+ * produce a wrong figure, only an unnamed one, and the screens skip it. The reasoning is at that check, in `entry`.
  */
 
 export const EXPORT_FORMAT = 'food-diary-export';

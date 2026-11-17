@@ -182,6 +182,9 @@ function derive(
       : 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
   // A reported burn is the person's own measured whole-day figure and replaces the activity-multiplier guess. A stranger's
   // is meaningless, so the generic basis ignores it, the same gate the goal and protein use.
+  // The `!isGeneric` half is a guard, not a live branch: the only generic caller is `genericTargets`, which passes no
+  // reported figure at all. A test that reaches here with isGeneric true is therefore exercising the fallback path, not
+  // this condition — do not read it as cover for the condition itself.
   const reported = !isGeneric && isPositive(reportedKcal) ? Math.round(reportedKcal) : undefined;
   const maintenance = reported ?? Math.round(rmr * ACTIVITY_FACTORS[activity]);
   // A deficit computed from a stranger's expenditure is meaningless, so the generic basis is not goal-adjusted.

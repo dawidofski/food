@@ -14,12 +14,18 @@ export type Goal = { kind: 'lose' | 'hold' | 'gain'; rateKgPerWeek?: number };
 export type TargetBasis = {
   /** 'custom' when the person set the number themselves; a source is never attached to it. */
   protein: 'efsa-pri' | 'issn-range' | 'custom';
-  /** 'custom' when the person set the energy or resting figure themselves. */
+  /**
+   * What produced the RESTING rate, and 'custom' when the person set the energy or resting figure themselves. It says
+   * nothing about the whole-day figure: it stays 'mifflin' (or 'katch-mcardle') while `expenditure` is 'reported',
+   * because a reported burn replaces the activity factor, not the equation underneath it. The two must therefore be
+   * read together — `energySource.ts` depends on exactly that pairing to write one true sentence.
+   */
   energy: 'mifflin' | 'katch-mcardle' | 'custom';
   /**
-   * 'formula' is the activity-multiplier guess; 'reported' is the mean of the person's own whole-day energy burn
-   * (`reportedExpenditure`). 'observed' is reserved for a later plan's weight page and is NOT a finished feature, so
-   * nothing may claim it yet.
+   * What produced the WHOLE-DAY figure. 'formula' is the activity-multiplier guess; 'reported' is the mean of the
+   * person's own whole-day energy burn (`reportedExpenditure`), and still says so under a typed energy override, where
+   * `energy` is 'custom' and the reported figure reached the other targets but not the energy one. 'observed' is
+   * reserved for a later plan's weight page and is NOT a finished feature, so nothing may claim it yet.
    */
   expenditure: 'formula' | 'reported' | 'observed';
 };
