@@ -322,6 +322,20 @@ describe('targets', () => {
       expect(t.goalCapped).toBe(true);
     });
 
+    test('a rate within the maximum is still capped when the resting-rate floor truncates the deficit', () => {
+      const t = computeTargets(profileAt(80, 'sedentary', { kind: 'lose', rateKgPerWeek: 0.5 }), on);
+      expect(t.rmrKcal).toBe(1755);
+      expect(t.energyKcal).toBe(t.rmrKcal); // 2106 - 550 = 1556, clamped to the floor
+      expect(t.goalCapped).toBe(true);
+    });
+
+    test('a gain rate above the maximum is reduced to it, and says so', () => {
+      const hold = computeTargets(profileAt(80, 'light', { kind: 'hold' }), on).energyKcal;
+      const t = computeTargets(profileAt(80, 'light', { kind: 'gain', rateKgPerWeek: 3 }), on);
+      expect(t.energyKcal - hold).toBe(1100);
+      expect(t.goalCapped).toBe(true);
+    });
+
     test('a goal does not adjust generic targets', () => {
       const t = computeTargets({ ...emptyProfile, goal: { kind: 'lose', rateKgPerWeek: 0.5 } }, on);
       expect(t.isGeneric).toBe(true);
@@ -352,6 +366,13 @@ describe('targets', () => {
       expect(lose.addedSugarsIdealG).toBeLessThan(hold.addedSugarsIdealG);
       expect(lose.transFatG).toBeLessThan(hold.transFatG);
       expect(lose.fibreG).toBeLessThanOrEqual(hold.fibreG);
+      // Pinned to arithmetic, not direction: a wrong divisor would still be "less than".
+      expect(lose.energyKcal).toBe(1863);
+      expect(lose.satFatG).toBe(21);
+      expect(lose.addedSugarsG).toBe(47);
+      expect(lose.addedSugarsIdealG).toBe(23);
+      expect(lose.transFatG).toBe(2);
+      expect(lose.fibreG).toBe(30);
       expect(lose.sodiumMg).toBe(hold.sodiumMg);
       expect(lose.micronutrients).toEqual(hold.micronutrients);
     });
