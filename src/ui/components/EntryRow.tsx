@@ -1,6 +1,7 @@
 import { isKnownValue } from '@/domain/nutrients';
 import type { DiaryEntry } from '@/types/diary';
 import CoverageNote from '@/ui/components/CoverageNote';
+import CorrectedBadge from '@/ui/components/CorrectedBadge';
 import OpenFoodFactsBadge from '@/ui/components/OpenFoodFactsBadge';
 import SelfReportedBadge from '@/ui/components/SelfReportedBadge';
 
@@ -21,6 +22,7 @@ export default function EntryRow({ entry, onRelog }: { entry: DiaryEntry; onRelo
           {entry.items.some((i) => i.source === 'batch') && ' · from a batch'}
           {entry.items.some((i) => i.source === 'custom' || i.selfReported) && <SelfReportedBadge />}
           {entry.items.some((i) => i.source === 'off') && <OpenFoodFactsBadge />}
+          <CorrectedBadge keys={entry.correctedKeys} />
         </p>
         {entry.coverage.energyKcal === 'partial' && isKnownValue(kcal) && (
           <CoverageNote nutrient="energyKcal" coverage="partial" value={kcal} />
