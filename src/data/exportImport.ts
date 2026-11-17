@@ -196,7 +196,8 @@ function batch(v: unknown, i: number): Batch {
 
 const HEALTH_FIGURES = ['sleepScore', 'steps', 'energyBurnedKcal'] as const;
 
-function healthDay(v: unknown, i: number): HealthDay {
+/** Returns null for a day that holds no figure at all: it carries no information, so it is passed over, not rejected. */
+function healthDay(v: unknown, i: number): HealthDay | null {
   const o = obj(v, `health day ${i + 1}`);
   const w = typeof o.date === 'string' ? `health day ${i + 1} (${o.date})` : `health day ${i + 1}`;
   const date = isoDay(o.date, `${w} date`);
@@ -217,8 +218,9 @@ function healthDay(v: unknown, i: number): HealthDay {
     if (k === 'sleepScore' && n > 100) fail(`${w} ${k}`, 'must be between 0 and 100');
     row[k] = n;
   }
-  if (HEALTH_FIGURES.every((k) => row[k] === undefined)) fail(w, 'has no figures; leave the day out instead');
-  return row;
+  // Dropping a FIGURE loses information and is refused above (null, a typo, a bad value all throw). Dropping a record
+  // that holds none loses nothing, and putHealthDay already treats it the same way (it deletes rather than store it).
+  return HEALTH_FIGURES.every((k) => row[k] === undefined) ? null : row;
 }
 
 const GOAL_KINDS = ['lose', 'hold', 'gain'];
@@ -291,7 +293,7 @@ export function parseExport(text: string): Parsed {
   unique(customFoods, 'custom foods');
   unique(batches, 'batches');
   // An older backup has no healthDays key: that reads as none. A present key must be a list.
-  const healthDays = o.healthDays === undefined ? [] : arr(o.healthDays, 'health days').map(healthDay);
+  const healthDays = o.healthDays === undefined ? [] : arr(o.healthDays, 'health days').map(healthDay).filter((h): h is HealthDay => h !== null);
   uniqueDays(healthDays);
   const prof = o.profile === null || o.profile === undefined ? null : profile(o.profile);
   const settings: Record<string, string> = {};

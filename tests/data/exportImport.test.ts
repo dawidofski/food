@@ -332,7 +332,6 @@ describe('daily health data in a backup', () => {
     ['a sleep score above 100', { date: '2026-11-13', sleepScore: 101 }, /sleepScore must be between 0 and 100/],
     ['a figure that is text', { date: '2026-11-13', steps: '4000' }, /steps must be a finite number/],
     ['a date that is not a real day', { date: '2026-02-30', steps: 1 }, /health day 3 \(2026-02-30\) date must be a real date/],
-    ['a record with no figures', { date: '2026-11-13' }, /has no figures/],
     ['the same day twice', { date: '2026-11-10', steps: 1 }, /more than once/],
   ])('%s', async (_n, bad, message) => {
     await seedEverything();
@@ -341,6 +340,17 @@ describe('daily health data in a backup', () => {
     const before = await snapshot();
     await expect(importAll(file(JSON.stringify(g)), 'replace')).rejects.toThrow(message);
     expect(await snapshot()).toEqual(before);
+  });
+
+  // Dropping a figure loses information and is forbidden; dropping a record that holds none loses nothing.
+  test('a health day with a date and no figures imports, is not written and is not counted', async () => {
+    await seedEverything();
+    const g = JSON.parse(await (await exportAll()).text());
+    g.healthDays.push({ date: '2026-11-13' });
+    const r = await importAll(file(JSON.stringify(g)), 'replace');
+    expect(r).toEqual({ added: 8, skipped: 0 });
+    expect(await getHealthDay('2026-11-13')).toBeUndefined();
+    expect((await healthDaysBetween('0000-01-01', '9999-12-31')).map((h) => h.date)).toEqual(['2026-11-10', '2026-11-11']);
   });
 
   test('healthDays that is not a list rejects the file', async () => {
