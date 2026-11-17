@@ -7,8 +7,13 @@ import { isKnownValue } from './nutrients';
  *
  * CLEARING DELETES THE KEY. It never writes a zero. In this app an absent nutrient key means UNKNOWN, and the day's
  * totals read it that way ("we don't know"). A zero says "the meal contained none", a confident and wrong claim about
- * a figure the person has just taken back. The same goes for `coverage`: the key is removed with the figure, so the
- * entry reads as it would if the figure had never been known. Do not tidy the `delete` into `= 0`.
+ * a figure the person has just taken back. Do not tidy the `delete` into `= 0`.
+ *
+ * The two objects differ on purpose. `nutrients` says unknown by ABSENCE; `coverage` says it by the explicit value
+ * 'unknown', because sumNutrients writes every key into coverage and every entry is built through it. Deleting the
+ * coverage key would make this the only entry shaped differently, and would leave the rules gate
+ * (`cov === 'unknown' || !isKnownValue(...)` in engine.ts) closing only through its second clause. Do not make the
+ * two consistent in either direction.
  *
  * A figure the person typed is theirs, so its coverage becomes 'known': they asserted it, whatever the entry's
  * resolution knew before. A typed 0 is a real assertion and is kept as 0; only `null` means unknown.
@@ -35,7 +40,7 @@ export function applyCorrection(
     const v = c[key];
     if (v === null) {
       delete nutrients[key];
-      delete coverage[key];
+      coverage[key] = 'unknown';
       corrected.delete(key);
     } else if (isKnownValue(v) && v >= 0) {
       nutrients[key] = v;

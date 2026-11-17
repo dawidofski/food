@@ -14,7 +14,7 @@ describe('applyCorrection', () => {
     const base = { nutrients: { sodiumMg: 900 }, coverage: { sodiumMg: 'known' as const }, correctedKeys: ['sodiumMg' as const] };
     const out = applyCorrection(base, { sodiumMg: null });
     expect('sodiumMg' in out.nutrients).toBe(false);
-    expect('sodiumMg' in out.coverage).toBe(false);
+    expect(out.coverage.sodiumMg).toBe('unknown');
     expect(out.correctedKeys).not.toContain('sodiumMg');
   });
 
