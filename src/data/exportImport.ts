@@ -4,7 +4,7 @@ import {
 } from '@/data/db';
 import { API_KEY_LS } from '@/state/aiSettings';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
-import type { Goal, Profile } from '@/types/profile';
+import type { Profile } from '@/types/profile';
 
 /**
  * Export and import: the person's only backup, since the browser can clear its own storage.
@@ -183,15 +183,7 @@ function batch(v: unknown, i: number): Batch {
   return v as Batch;
 }
 
-const GOAL_KINDS: readonly string[] = ['lose', 'hold', 'gain'];
-
-/** Optional fields that are not usable are dropped, never imported and never defaulted: absent means unknown. */
-function goalOf(v: unknown): Goal | undefined {
-  if (!isObj(v) || typeof v.kind !== 'string' || !GOAL_KINDS.includes(v.kind)) return undefined;
-  const goal: Goal = { kind: v.kind as Goal['kind'] };
-  if (typeof v.rateKgPerWeek === 'number' && Number.isFinite(v.rateKgPerWeek)) goal.rateKgPerWeek = v.rateKgPerWeek;
-  return goal;
-}
+const GOAL_KINDS = ['lose', 'hold', 'gain'];
 
 function profile(v: unknown): Profile {
   const o = obj(v, 'profile');
@@ -200,6 +192,15 @@ function profile(v: unknown): Profile {
   if (o.dob !== undefined) isoDay(o.dob, 'profile date of birth');
   if (o.sex !== undefined) oneOf(o.sex, ['male', 'female', 'unspecified'], 'profile sex');
   if (o.activityLevel !== undefined) oneOf(o.activityLevel, ['sedentary', 'light', 'moderate', 'active', 'veryActive'], 'profile activity level');
+  // Shape only, on purpose: a stored 0 or 150 is not clamped or dropped here. The code that uses body fat rejects an
+  // implausible value where it is used, so the person can see it and correct it.
+  if (o.bodyFatPct !== undefined) num(o.bodyFatPct, 'profile body fat');
+  // An omitted goal stays absent: it is unknown, never a default of hold.
+  if (o.goal !== undefined) {
+    const g = obj(o.goal, 'profile goal');
+    oneOf(g.kind, GOAL_KINDS, 'profile goal kind');
+    if (g.rateKgPerWeek !== undefined) num(g.rateKgPerWeek, 'profile goal rate');
+  }
   arr(o.weightLog, 'profile weight log').forEach((w, i) => {
     const wo = obj(w, `weight ${i + 1}`);
     isoDay(wo.date, `weight ${i + 1} date`);
@@ -214,12 +215,7 @@ function profile(v: unknown): Profile {
       else num(x, `profile override ${k}`);
     }
   }
-  const { bodyFatPct, goal: rawGoal, ...rest } = o;
-  const out = rest as Profile;
-  if (typeof bodyFatPct === 'number' && Number.isFinite(bodyFatPct)) out.bodyFatPct = bodyFatPct;
-  const goal = goalOf(rawGoal);
-  if (goal) out.goal = goal;
-  return out;
+  return v as Profile;
 }
 
 function unique(rows: { id: string }[], what: string): void {

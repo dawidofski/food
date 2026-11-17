@@ -174,27 +174,22 @@ describe('export and import', () => {
     expect(p?.bodyFatPct).toBe(0);
   });
 
-  describe('untrusted body-composition and goal values are dropped, not imported', () => {
+  describe('malformed body-composition and goal values are refused, like every other profile field', () => {
     const importWith = async (extra: Record<string, unknown>) => {
       const g = JSON.parse(await (await exportAll()).text());
       g.profile = { ...ownerProfile, ...extra };
-      await eraseEverything();
-      await importAll(file(JSON.stringify(g)), 'replace');
-      return getProfile();
+      const before = await snapshot();
+      await expect(importAll(file(JSON.stringify(g)), 'replace')).rejects.toThrow(/profile/);
+      expect(await snapshot()).toEqual(before);
     };
     beforeEach(async () => {
-      await putProfile(ownerProfile);
+      await seedEverything();
     });
 
     test.each([
       ['a string', '23'],
       ['null', null],
-      ['a non-finite value', 1e999],
-    ])('body fat that is %s is dropped, the rest of the profile imports', async (_n, v) => {
-      const p = await importWith({ bodyFatPct: v });
-      expect('bodyFatPct' in (p ?? {})).toBe(false);
-      expect(p?.heightCm).toBe(ownerProfile.heightCm);
-    });
+    ])('body fat that is %s is refused', async (_n, v) => importWith({ bodyFatPct: v }));
 
     test.each([
       ['a kind outside the union', { kind: 'bulk' }],
@@ -202,20 +197,13 @@ describe('export and import', () => {
       ['not an object', 'lose'],
       ['null', null],
       ['a list', []],
-    ])('a goal with %s is dropped, and not defaulted to hold', async (_n, v) => {
-      const p = await importWith({ goal: v });
-      expect('goal' in (p ?? {})).toBe(false);
-      expect(p?.goal).toBeUndefined();
-    });
+      ['a rate that is not a number', { kind: 'gain', rateKgPerWeek: 'fast' }],
+      ['a null rate', { kind: 'gain', rateKgPerWeek: null }],
+    ])('a goal with %s is refused', async (_n, v) => importWith({ goal: v }));
 
-    test('a goal whose rate is not a finite number keeps its kind and loses the rate', async () => {
-      const p = await importWith({ goal: { kind: 'gain', rateKgPerWeek: 'fast' } });
-      expect(p?.goal).toEqual({ kind: 'gain' });
-    });
-
-    test('a goal keeps only the fields it defines', async () => {
-      const p = await importWith({ goal: { kind: 'lose', rateKgPerWeek: 0.25, extra: 'x' } });
-      expect(p?.goal).toEqual({ kind: 'lose', rateKgPerWeek: 0.25 });
+    test('a body fat that is not finite is refused (the file text carries 1e999)', async () => {
+      const text = (await (await exportAll()).text()).replace('"weightLog"', '"bodyFatPct": 1e999, "weightLog"');
+      await expect(importAll(file(text), 'replace')).rejects.toThrow(/profile body fat/);
     });
   });
 
