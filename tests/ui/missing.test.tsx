@@ -1,7 +1,13 @@
 import 'fake-indexeddb/auto';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { addEntry, eraseEverything, putProfile } from '@/data/db';
+import { addEntry, eraseEverything, putHealthDay, putProfile } from '@/data/db';
+import { lastNDayKeys } from '@/domain/dayBoundary';
+import { computeTargets } from '@/domain/targets';
+import type { Rule } from '@/rules/types';
+import type { DatasetFood } from '@/types/food';
+import { defaultDeps, useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
+import ProfileSettings from '@/ui/screens/ProfileSettings';
 import type { DiaryEntry } from '@/types/diary';
 import type { ClassificationFlags } from '@/types/nutrients';
 import { directionOf } from '@/domain/targetDirection';
@@ -166,9 +172,7 @@ describe('the energy and fibre targets are labelled as the app\'s own', () => {
     const note = await screen.findByTestId('own-targets-note');
     expect(note.textContent).toMatch(/own working figures[^.]*not a published recommendation/i);
     expect(note.textContent).toMatch(/WHO advises at least 25 g of fibre/i);
-    // One account of where energy comes from, agreeing with Settings: a published equation, the app's own factors.
-    expect(note.textContent).toMatch(/energy target is a published resting-energy equation[^.]*times an activity factor/i);
-    expect(note.textContent).toMatch(/activity factors, the goal offset and the fibre rule are this app.s own working figures/i);
+    expect(note.textContent).toMatch(/goal offset and the fibre rule are this app.s own working figures/i);
     expect(note.textContent).toMatch(/EFSA[^.]*0\.83 g/);
     expect(note.textContent).toMatch(/International Society of Sports Nutrition[^.]*1\.4 to 2\.0 g/);
     expect(note.textContent).toMatch(/this app uses the middle, 1\.7 g, and the top, 2\.0 g, when your goal is to lose weight/);
@@ -237,5 +241,80 @@ describe('a ceiling is never framed as a target, and a floor below the target is
   test('characterisation: the weekly gap list covers floors only (structural, independent of any data)', () => {
     expect(MICRO_ORDER.length).toBeGreaterThan(0);
     for (const key of MICRO_ORDER) expect(directionOf(key), key).toBe('floor');
+  });
+});
+
+describe('the screens and the warning engine agree about the energy figure', () => {
+  async function seedBurn(kcal: number, count: number) {
+    const t = new Date();
+    const keys = lastNDayKeys(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1, 12), 7).reverse();
+    for (const date of keys.slice(0, count)) await putHealthDay({ date, energyBurnedKcal: kcal });
+  }
+
+  /** The energy target the rules receive through useEntryFlow's path, captured by a rule that stays silent. */
+  async function targetSeenByRules(): Promise<number> {
+    const seen: number[] = [];
+    const probe: Rule = {
+      id: 'probe', title: 'Probe', category: 'nutrition', level: (ctx) => { seen.push(ctx.targets.energyKcal); return null; },
+      concern: 'c', cause: 'c', horizon: 'both', portionNote: () => '', requiresNutrients: [], scope: 'entry',
+      evidence: { strength: 'strong', body: 'B', summary: 's', isAssociational: false, citation: { title: 't', publisher: 'B', year: 2020, url: 'https://example.org', conclusion: 'c' } },
+    };
+    const food: DatasetFood = {
+      id: 'apple', name: 'apple', synonyms: [], per100g: { energyKcal: 52 }, portions: [{ label: 'one', grams: 100 }], allergens: [],
+      classification: { ...flags, fruit: true },
+    };
+    const deps: FlowDeps = {
+      ...defaultDeps, rules: [probe], loadData: async () => undefined, isDataReady: () => true,
+      lookup: { search: (q) => (q.includes('apple') ? [{ source: 'dataset' as const, food, score: 0.03 }] : []), get: (_s, id) => (id === 'apple' ? food : undefined) },
+    };
+    function Harness() {
+      const flow = useEntryFlow(deps);
+      return <button onClick={() => void flow.submit('an apple')}>go</button>;
+    }
+    render(<Harness />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'go' })); });
+    await waitFor(() => expect(seen.length).toBeGreaterThan(0));
+    cleanup();
+    return seen[0]!;
+  }
+
+  test('the warning engine sees the same energy target the screen shows', async () => {
+    await putProfile(ownerProfile);
+    await seedBurn(3000, 5);
+    const reported = computeTargets(ownerProfile, new Date(), 3000).energyKcal;
+    expect(reported).not.toBe(computeTargets(ownerProfile, new Date()).energyKcal);
+
+    expect(await targetSeenByRules()).toBe(reported);
+
+    render(<Missing />);
+    const bar = await screen.findByTestId('own-targets-note');
+    expect(bar).toBeInTheDocument();
+    // The energy row is drawn against the same figure the rules received.
+    const energyRow = (await screen.findAllByText(new RegExp(`${reported.toLocaleString('en')}|${reported}`)))[0];
+    expect(energyRow).toBeDefined();
+  });
+
+  test('with too few reported days the rules fall back to the formula figure', async () => {
+    await putProfile(ownerProfile);
+    await seedBurn(3000, 3);
+    expect(await targetSeenByRules()).toBe(computeTargets(ownerProfile, new Date()).energyKcal);
+  });
+
+  test('a raw figure no day produces reaches neither the rules nor the screen', async () => {
+    await putProfile(ownerProfile);
+    await seedBurn(1e308, 7);
+    expect(await targetSeenByRules()).toBe(computeTargets(ownerProfile, new Date()).energyKcal);
+  });
+
+  test('the Missing screen and Settings say the same sentence about the energy source', async () => {
+    await putProfile(ownerProfile);
+    await seedBurn(3000, 5);
+    render(<Missing />);
+    const onMissing = (await screen.findByTestId('energy-source')).textContent;
+    cleanup();
+    render(<ProfileSettings />);
+    const line = await screen.findByText(/^Energy:/);
+    expect(onMissing).toBe(line.textContent);
+    expect(onMissing).toMatch(/5 of the last 7 days/);
   });
 });

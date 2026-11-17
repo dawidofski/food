@@ -1,5 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { getProfile, putProfile } from '@/data/db';
+import { loadReportedEnergy } from '@/data/reportedEnergy';
+import { energySourceSentence } from '@/domain/energySource';
+import type { ReportedExpenditure } from '@/domain/expenditure';
 import { localDayKey } from '@/domain/dayBoundary';
 import {
   CONVERSION_NOTE, dailyKcalForRate, dailyToRatePhrase, formatRate, offsetWord, rateForDailyKcal, rateToDailyPhrase,
@@ -30,12 +33,15 @@ const section = 'space-y-3 rounded-xl border-2 border-slate-400 dark:border-slat
 
 export default function ProfileSettings() {
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [reported, setReported] = useState<ReportedExpenditure | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    void getProfile().then((p) => {
-      if (live) setProfile(p);
+    void Promise.all([getProfile(), loadReportedEnergy(new Date())]).then(([p, r]) => {
+      if (!live) return;
+      setReported(r);
+      setProfile(p);
     });
     return () => {
       live = false;
@@ -74,7 +80,7 @@ export default function ProfileSettings() {
         )}
         <BodyDataForm initial={hasBody ? profile : null} base={profile} submitLabel="Save body data" onSaved={setProfile} />
       </section>
-      <GoalSection profile={base} hasBody={hasBody} save={save} />
+      <GoalSection profile={base} hasBody={hasBody} save={save} reported={reported} />
       {hasBody && <WeightLog profile={base} save={save} />}
       <FlagList
         profile={base}
@@ -92,7 +98,7 @@ export default function ProfileSettings() {
         addLabel="Add condition"
         help="Kept on this device with your profile."
       />
-      <Overrides profile={base} save={save} />
+      <Overrides profile={base} save={save} reported={reported} />
       {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
     </>
   );
@@ -111,7 +117,7 @@ const GOAL_CHOICES: { value: GoalChoice; label: string; hint: string }[] = [
 const BODY_FAT_MIN = BODY_FAT_PCT_PLAUSIBLE.min;
 const BODY_FAT_MAX = BODY_FAT_PCT_PLAUSIBLE.max;
 
-function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: boolean; save: SaveFn }) {
+function GoalSection({ profile, hasBody, save, reported }: { profile: Profile; hasBody: boolean; save: SaveFn; reported: ReportedExpenditure | undefined }) {
   const g = profile.goal;
   const [kind, setKind] = useState<GoalChoice>(g?.kind ?? 'none');
   const [rateNum, setRateNum] = useState<number | undefined>(g?.rateKgPerWeek);
@@ -233,14 +239,14 @@ function GoalSection({ profile, hasBody, save }: { profile: Profile; hasBody: bo
         {error && <p role="alert" className="text-sm text-red-800 dark:text-red-300">{error}</p>}
         <button type="submit" className="min-h-12 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 text-white dark:text-slate-900">Save goal</button>
       </form>
-      <TargetSources profile={profile} />
+      <TargetSources profile={profile} reported={reported} />
     </section>
   );
 }
 
 /** Says where each saved target came from. A figure the person typed is theirs: it never carries a citation. */
-function TargetSources({ profile }: { profile: Profile }) {
-  const t = computeTargets(profile, new Date());
+function TargetSources({ profile, reported }: { profile: Profile; reported: ReportedExpenditure | undefined }) {
+  const t = computeTargets(profile, new Date(), reported?.kcal);
   const { basis } = t;
   const kind = profile.goal?.kind;
   const rate = profile.goal?.rateKgPerWeek;
@@ -254,13 +260,8 @@ function TargetSources({ profile }: { profile: Profile }) {
         : kind === 'lose'
           ? 'Protein: 2.0 g per kg of body weight, the top of the 1.4 to 2.0 g per kg range in the ISSN position stand (Jager et al., 2017). The app takes the top of the range for a weight-loss goal.'
           : 'Protein: 1.7 g per kg of body weight, within the 1.4 to 2.0 g per kg range in the ISSN position stand (Jager et al., 2017). The app chose the middle of that range.';
-  const energy =
-    basis.energy === 'custom'
-      ? 'Energy: your own figure, not calculated by the app.'
-      : basis.energy === 'katch-mcardle'
-        ? 'Energy: resting energy from the Katch-McArdle equation, using your body-fat percentage, multiplied by your activity level.'
-        : 'Energy: resting energy from the Mifflin-St Jeor equation, multiplied by your activity level.';
-
+  // One sentence, shared with the Missing screen, that reads the resting basis and the expenditure basis together.
+  const energy = energySourceSentence(basis, profile.activityLevel, reported?.days);
   // With no usable weight the targets are the general-adult basis, not the person's: attributing a cited figure to them, or a
   // goal offset, would be false. Only a figure the person typed is still theirs.
   const lines: string[] = t.isGeneric
@@ -305,7 +306,7 @@ function TargetSources({ profile }: { profile: Profile }) {
     lines.push(parts.join(' '));
   } else if (hasRate) {
     // What the target actually moved by, read from the computed energy rather than recomputed from the rate.
-    const n = Math.abs(t.energyKcal - computeTargets({ ...profile, goal: undefined, overrides: undefined }, new Date()).energyKcal);
+    const n = Math.abs(t.energyKcal - computeTargets({ ...profile, goal: undefined, overrides: undefined }, new Date(), reported?.kcal).energyKcal);
     lines.push(
       kind === 'lose'
         ? `Your goal takes ${n} kcal a day off your maintenance energy. ${CONVERSION_NOTE}`
@@ -481,8 +482,8 @@ function FlagList({
   );
 }
 
-function Overrides({ profile, save }: { profile: Profile; save: SaveFn }) {
-  const calculated = computeTargets({ ...profile, overrides: undefined }, new Date());
+function Overrides({ profile, save, reported }: { profile: Profile; save: SaveFn; reported: ReportedExpenditure | undefined }) {
+  const calculated = computeTargets({ ...profile, overrides: undefined }, new Date(), reported?.kcal);
   const [vals, setVals] = useState<Record<OverrideKey, string>>(() => {
     const o = profile.overrides ?? {};
     return Object.fromEntries(OVERRIDES.map(({ key }) => [key, o[key] !== undefined ? String(o[key]) : ''])) as Record<OverrideKey, string>;

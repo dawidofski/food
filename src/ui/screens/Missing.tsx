@@ -1,5 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { entriesBetween, getProfile, putProfile } from '@/data/db';
+import { loadReportedEnergy } from '@/data/reportedEnergy';
+import type { healthDaysBetween } from '@/data/healthDays';
+import { energySourceSentence } from '@/domain/energySource';
+import type { ReportedExpenditure } from '@/domain/expenditure';
 import { last7DayKeys, localDayKey, localDayRange } from '@/domain/dayBoundary';
 import { isKnownValue } from '@/domain/nutrients';
 import { MIN_LOGGED_DAYS } from '@/domain/trends';
@@ -25,6 +29,8 @@ export type MissingDeps = {
     entriesBetween: typeof entriesBetween;
     getProfile: () => Promise<Profile | null>;
     putProfile: (p: Profile) => Promise<void>;
+    /** Optional: absent means the real store. */
+    healthDaysBetween?: typeof healthDaysBetween;
   };
 };
 
@@ -183,7 +189,7 @@ function WeightPanel({
 }
 
 export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingDeps }) {
-  const [state, setState] = useState<{ entries: DiaryEntry[]; profile: Profile | null } | 'loading' | 'error'>('loading');
+  const [state, setState] = useState<{ entries: DiaryEntry[]; profile: Profile | null; reported: ReportedExpenditure | undefined } | 'loading' | 'error'>('loading');
   const [reload, setReload] = useState(0);
   const now = deps.now();
   const keys = last7DayKeys(now);
@@ -194,8 +200,9 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
     Promise.all([
       deps.store.entriesBetween(localDayRange(k[0]!).fromISO, localDayRange(k[6]!).toISO),
       deps.store.getProfile().catch(() => null),
+      loadReportedEnergy(deps.now(), deps.store.healthDaysBetween),
     ])
-      .then(([entries, profile]) => live && setState({ entries, profile }))
+      .then(([entries, profile, reported]) => live && setState({ entries, profile, reported }))
       .catch(() => live && setState('error'));
     return () => {
       live = false;
@@ -211,10 +218,10 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
     );
   }
 
-  const { entries, profile } = state;
+  const { entries, profile, reported } = state;
   const week = weekContext(entries, now);
   const today = week.days[6]!;
-  const targets = computeTargets(profile, now);
+  const targets = computeTargets(profile, now, reported?.kcal);
   const logged = week.days.filter((d) => d.entryCount > 0);
   const enough = logged.length >= MIN_LOGGED_DAYS;
   const fruit = fruitByDay(entries, keys);
@@ -277,9 +284,9 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
           })
         )}
         {targets.isGeneric && <p className="text-xs text-slate-600 dark:text-slate-400">Targets use general adult guidelines until your profile is set up.</p>}
+        {!targets.isGeneric && <p data-testid="energy-source" className="text-xs text-slate-600 dark:text-slate-400">{energySourceSentence(targets.basis, profile?.activityLevel, reported?.days)}</p>}
         <p data-testid="own-targets-note" className="text-xs text-slate-600 dark:text-slate-400">
-          The energy target is a published resting-energy equation (Mifflin-St Jeor, or Katch-McArdle when you give a body-fat percentage)
-          times an activity factor, plus any goal offset; the fibre target is 14 g per 1,000 kcal, at least 30 g. The activity factors, the
+          Any goal offset is added to the energy target; the fibre target is 14 g per 1,000 kcal, at least 30 g. The activity factors, the
           goal offset and the fibre rule are this app&rsquo;s own working figures, not a published recommendation. WHO advises at least 25 g
           of fibre a day. Protein comes from two sources: EFSA&rsquo;s reference intake of 0.83 g
           per kg of body weight, and for people who exercise, the International Society of Sports Nutrition&rsquo;s range of 1.4 to 2.0 g

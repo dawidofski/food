@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { eraseEverything, getProfile, putProfile } from '@/data/db';
+import { eraseEverything, getProfile, putHealthDay, putProfile } from '@/data/db';
+import { lastNDayKeys } from '@/domain/dayBoundary';
 import { dailyKcalForRate, rateForDailyKcal } from '@/domain/goalConversion';
 import ProfileSettings from '@/ui/screens/ProfileSettings';
 import { ownerProfile } from '../fixtures/profile';
@@ -246,5 +247,50 @@ describe('weight goal', () => {
     render(<ProfileSettings />);
     expect(await screen.findByText(/needs your body data/i)).toBeInTheDocument();
     expect(screen.queryByRole('radio')).toBeNull();
+  });
+});
+
+describe('where the energy figure came from', () => {
+  /** Gives `count` of the last 7 days (ending yesterday, newest first) a whole-day burn. */
+  async function seedBurn(kcal: number, count: number) {
+    const t = new Date();
+    const keys = lastNDayKeys(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1, 12), 7).reverse();
+    for (const date of keys.slice(0, count)) await putHealthDay({ date, energyBurnedKcal: kcal });
+  }
+
+  test('with enough reported days, the screen says the figure is the person\'s own and over how many days', async () => {
+    await seedBurn(3000, 5);
+    await open();
+    const line = await screen.findByText(/^Energy:/);
+    expect(line).toHaveTextContent(/your own reported energy burn/i);
+    expect(line).toHaveTextContent(/5 of the last 7 days/);
+    // Both are true at once: the burn replaced the activity factor, the equation still produced the resting rate.
+    expect(line).toHaveTextContent(/Mifflin-St Jeor/);
+    expect(line).not.toHaveTextContent(/multiplied by your activity level/i);
+  });
+
+  test('without them, it still names the formula and the activity factor', async () => {
+    await seedBurn(3000, 3); // one short of the minimum: the formula is used
+    await open();
+    const line = await screen.findByText(/^Energy:/);
+    expect(line).toHaveTextContent(/Mifflin-St Jeor equation, multiplied by your activity level/i);
+    expect(line).toHaveTextContent(/light, a factor of 1\.375/);
+    expect(line).toHaveTextContent(/this app's own working figure/i);
+    expect(line).not.toHaveTextContent(/reported/i);
+  });
+
+  test('a stored figure no day produces never becomes the energy figure or the sentence', async () => {
+    await seedBurn(1e308, 7);
+    await open();
+    const line = await screen.findByText(/^Energy:/);
+    expect(line).toHaveTextContent(/multiplied by your activity level/i);
+    expect(line).not.toHaveTextContent(/reported/i);
+  });
+
+  test('a typed energy figure is described as the person\'s own, even with a reported burn', async () => {
+    await seedBurn(3000, 5);
+    await open({ ...ownerProfile, overrides: { energyKcal: 2500 } });
+    const line = await screen.findByText(/^Energy:/);
+    expect(line.textContent).toBe('Energy: your own figure, not calculated by the app.');
   });
 });

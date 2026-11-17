@@ -14,6 +14,8 @@ import { resolveItems, resolveKnownFood } from '@/domain/resolveItems';
 import { applyAi, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
 import { interpretEntry, type AiFailure } from '@/ai/deepseek';
 import { getApiKey, isAiEnabled } from '@/state/aiSettings';
+import { loadReportedEnergy } from '@/data/reportedEnergy';
+import type { healthDaysBetween } from '@/data/healthDays';
 import { computeTargets } from '@/domain/targets';
 import { dayTotals, weekContext } from '@/domain/totals';
 import { unusualServing, type UnusualServing } from '@/domain/unusualServing';
@@ -64,6 +66,8 @@ export type FlowDeps = {
     deleteEntry?: typeof deleteEntry;
     /** How many live entries exist, for the diary's backup reminder. Optional for the same reason. */
     countActiveEntries?: typeof countActiveEntries;
+    /** Optional: absent means the real store. Only its figures are used, and only through `reportedExpenditureOver`. */
+    healthDaysBetween?: typeof healthDaysBetween;
   };
   /** The optional AI fallback for a phrase the local parser could not resolve. Absent means off. */
   ai?: AiDeps;
@@ -434,6 +438,9 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
         const now = d.now();
         const keys = last7DayKeys(now);
+        // Started with the history read, not after it: the same figure the screens use, so the rules and the person see one
+        // energy target. It never rejects; undefined means the formula.
+        const reportedRead = loadReportedEnergy(now, d.store.healthDaysBetween);
         const carried: RuleFailure[] = [];
         let history: DiaryEntry[] = [];
         try {
@@ -453,6 +460,8 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
         } catch {
           profile = null;
         }
+        const reported = await reportedRead;
+        if (my !== seq.current) return;
         const foods = identities(resolution.refs, d.lookup);
         // Fail visibly: when only SOME refs lose their food, the engine (which reports only an empty list) stays silent,
         // and the safety rules would read as "checked, nothing found" for the foods they never saw.
@@ -470,7 +479,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
             rawText: text,
             today: dayTotals(history, keys[6]!),
             week: weekContext(history, now),
-            targets: computeTargets(profile, now),
+            targets: computeTargets(profile, now, reported?.kcal),
             profile,
             now,
           },

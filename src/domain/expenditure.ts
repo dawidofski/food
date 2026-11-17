@@ -3,7 +3,7 @@ import { MIN_LOGGED_DAYS } from '@/domain/trends';
 import type { HealthDay } from '@/types/health';
 
 /** How many days, ending yesterday, the reported burn is averaged over. */
-const WINDOW_DAYS = 7;
+export const WINDOW_DAYS = 7;
 
 /**
  * The app's own choice and not a published figure: a whole-day burn above this is not a real day, so it is left out of the
@@ -18,17 +18,31 @@ function usableBurn(day: HealthDay): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= REPORTED_BURN_CEILING_KCAL ? v : undefined;
 }
 
+
+
+/** The day keys the reported burn is read from: the 7 days ending YESTERDAY, oldest first. The store is read over exactly these. */
+export function reportedWindowKeys(on: Date): string[] {
+  const yesterday = new Date(on.getFullYear(), on.getMonth(), on.getDate() - 1, 12);
+  return lastNDayKeys(yesterday, WINDOW_DAYS);
+}
+
+export type ReportedExpenditure = {
+  /** Whole kcal: the mean of the usable days. This is the only figure that may be handed to `computeTargets`. */
+  kcal: number;
+  /** How many of the window's days carried a usable figure, so a screen can say what the mean was taken over. */
+  days: number;
+};
+
 /**
  * The person's own energy burn, as the mean whole-day figure over the last 7 days ending YESTERDAY, rounded to a whole
- * kcal. Today is left out because the day is not over and its figure would be a partial.
+ * kcal, with the number of days it was taken over. Today is left out because the day is not over and its figure would be a partial.
  *
  * A day with no burn figure is absent, not zero: it is skipped, never averaged in (a day with only steps would otherwise
  * lower the energy target). Undefined when fewer than `MIN_LOGGED_DAYS` days carry a usable figure, so the formula is used.
  */
-export function reportedExpenditure(days: HealthDay[], on: Date): number | undefined {
+export function reportedExpenditureOver(days: HealthDay[], on: Date): ReportedExpenditure | undefined {
   if (!Number.isFinite(on.getTime())) return undefined;
-  const yesterday = new Date(on.getFullYear(), on.getMonth(), on.getDate() - 1, 12);
-  const window = new Set(lastNDayKeys(yesterday, WINDOW_DAYS));
+  const window = new Set(reportedWindowKeys(on));
   const byDate = new Map<string, number>();
   for (const d of days) {
     const v = usableBurn(d);
@@ -37,5 +51,10 @@ export function reportedExpenditure(days: HealthDay[], on: Date): number | undef
   if (byDate.size < MIN_LOGGED_DAYS) return undefined;
   let sum = 0;
   for (const v of byDate.values()) sum += v;
-  return Math.round(sum / byDate.size);
+  return { kcal: Math.round(sum / byDate.size), days: byDate.size };
+}
+
+/** Just the figure; see `reportedExpenditureOver`. */
+export function reportedExpenditure(days: HealthDay[], on: Date): number | undefined {
+  return reportedExpenditureOver(days, on)?.kcal;
 }
