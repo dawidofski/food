@@ -34,7 +34,7 @@ describe('the main navigation', () => {
   test('gives every nav control a 44 px target', async () => {
     const n = await nav();
     // min-h-12 is 48 px in this project's Tailwind scale; anything smaller fails the thumb rule.
-    for (const b of n.getAllByRole('button')) expect(b.className).toMatch(/min-h-1[2-9]|min-h-\d{2,}/);
+    for (const b of n.getAllByRole('button')) expect(b.className).toMatch(/min-h-(1[1-9]|[2-9]\d)/);
   });
 
   test('the icons carry no accessible name of their own', async () => {

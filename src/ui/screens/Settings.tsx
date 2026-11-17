@@ -192,7 +192,7 @@ function BarcodeSettings() {
     <section aria-labelledby="off-heading" data-testid="off-source" className="space-y-2 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
       <h2 id="off-heading" className="text-lg font-semibold">Barcodes and Open Food Facts</h2>
       <p className="text-sm">
-        Scanning a barcode on the Log screen looks the product up in Open Food Facts, a public database of food
+        Scanning a barcode when you log something looks the product up in Open Food Facts, a public database of food
         products. It is crowdsourced: anyone can add or change any product, the figures were copied off a packet by
         a member of the public rather than measured in a laboratory, and they may be wrong, stale or incomplete.
         Anything logged from a scan is marked &ldquo;Open Food Facts&rdquo; wherever it appears, with the date the

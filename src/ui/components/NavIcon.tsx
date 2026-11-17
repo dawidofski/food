@@ -22,7 +22,7 @@ const PATHS: Record<NavIconName, ReactElement> = {
     <>
       <path d="M3 20h18" />
       <path d="M4 16l5-5 4 3 6-7" />
-      <path d="M19 4h0.5V8" />
+      <path d="M15 4h4v4" />
     </>
   ),
   // A fork and a knife: the things you keep rather than the things you ate.
@@ -34,11 +34,11 @@ const PATHS: Record<NavIconName, ReactElement> = {
       <path d="M16 12v9" />
     </>
   ),
-  // A cog.
+  // A cog: a toothed outer ring, so it does not read as the sun/brightness glyph.
   settings: (
     <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" />
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 14.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.55-1.1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
     </>
   ),
   // A plus: add what you ate.

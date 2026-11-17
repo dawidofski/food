@@ -53,14 +53,35 @@ describe('logging from anywhere', () => {
     expect(document.activeElement).toBe(logButton());
   });
 
+  test('pushes a history entry on open so the back gesture has something to consume', async () => {
+    // Without this, back leaves the app instead of closing the dialog. A synthetic popstate event would
+    // exercise the listener while proving nothing about the mechanism, so spy on history itself.
+    const push = vi.spyOn(history, 'pushState');
+    await app();
+    fireEvent.click(logButton());
+    await screen.findByRole('dialog', { name: 'Log what you ate' });
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
   test('closes on the back gesture without leaving the app', async () => {
     await app();
     fireEvent.click(logButton());
     await screen.findByRole('dialog', { name: 'Log what you ate' });
-    await act(async () => { window.dispatchEvent(new PopStateEvent('popstate')); });
+    await act(async () => { history.back(); await new Promise((r) => setTimeout(r, 50)); });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     // Still in the app, on the tab it was opened from.
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+  });
+
+  test('consumes its history entry when closed another way, so the back stack does not grow', async () => {
+    const back = vi.spyOn(history, 'back');
+    await app();
+    const button = logButton();
+    button.focus();
+    fireEvent.click(button);
+    const dialog = await screen.findByRole('dialog', { name: 'Log what you ate' });
+    await act(async () => { fireEvent.keyDown(dialog, { key: 'Escape' }); });
+    expect(back).toHaveBeenCalledTimes(1);
   });
 
   test('is offered on the diary, trends and food tabs and not on settings', async () => {
@@ -72,6 +93,41 @@ describe('logging from anywhere', () => {
     expect(logButton()).toBeInTheDocument();
     goTo('Settings');
     expect(screen.queryByRole('button', { name: 'Log what you ate' })).toBeNull();
+  });
+
+  test('asks before throwing away what was typed, and keeps it when told to', async () => {
+    await app();
+    fireEvent.click(logButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Log what you ate' });
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'half a sandwich' } });
+    await act(async () => { fireEvent.keyDown(dialog, { key: 'Escape' }); });
+    // Not gone: asked about.
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Log what you ate' })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /keep it/i })); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect((within(screen.getByRole('dialog', { name: 'Log what you ate' })).getByRole('textbox') as HTMLInputElement).value).toBe('half a sandwich');
+  });
+
+  test('asks before a back gesture throws away what was typed', async () => {
+    // The route the owner hits by accident on a phone. Back has already happened by the time we hear about
+    // it, so keeping the entry means putting it back.
+    await app();
+    fireEvent.click(logButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Log what you ate' });
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'half a sandwich' } });
+    await act(async () => { history.back(); await new Promise((r) => setTimeout(r, 50)); });
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Log what you ate' })).toBeInTheDocument();
+  });
+
+  test('closes without asking when there is nothing to lose', async () => {
+    await app();
+    fireEvent.click(logButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Log what you ate' });
+    await act(async () => { fireEvent.keyDown(dialog, { key: 'Escape' }); });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   test('still runs the warning gate on an entry rather than storing it silently', async () => {

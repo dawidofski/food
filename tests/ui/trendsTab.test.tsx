@@ -8,7 +8,7 @@ import type { ClassificationFlags } from '@/types/nutrients';
 import App from '@/App';
 import BehaviourHistory from '@/ui/screens/BehaviourHistory';
 import TrendsTab from '@/ui/screens/TrendsTab';
-import Trends from '@/ui/screens/WeekTrends';
+import WeekTrends from '@/ui/screens/WeekTrends';
 
 beforeEach(async () => {
   await eraseEverything();
@@ -45,7 +45,7 @@ function card(name: RegExp): HTMLElement {
 
 describe('trends screen', () => {
   test('an empty diary renders a plain message, no charts and no NaN', async () => {
-    const { container } = render(<Trends />);
+    const { container } = render(<WeekTrends />);
     expect(await screen.findByText(/nothing logged in the last 12 weeks/i)).toBeInTheDocument();
     expect(container.querySelector('svg')).toBeNull();
     expect(container.textContent).not.toMatch(/NaN|undefined|Infinity/);
@@ -53,7 +53,7 @@ describe('trends screen', () => {
 
   test('a week with too few logged days is not plotted: no value bar, and it says why', async () => {
     for (let i = 0; i < 3; i++) await seed({ at: daysAgo(i) });
-    render(<Trends />);
+    render(<WeekTrends />);
     await screen.findByRole('heading', { name: /^fibre$/i });
     const fibre = card(/^fibre$/i);
     expect(fibre.querySelectorAll('[data-status="value"]')).toHaveLength(0);
@@ -64,7 +64,7 @@ describe('trends screen', () => {
 
   test('a week with enough logged days is plotted with its median day', async () => {
     for (let i = 0; i < 5; i++) await seed({ at: daysAgo(i) });
-    render(<Trends />);
+    render(<WeekTrends />);
     await screen.findByRole('heading', { name: /^fibre$/i });
     const fibre = card(/^fibre$/i);
     expect(fibre.querySelectorAll('[data-status="value"]')).toHaveLength(1);
@@ -75,7 +75,7 @@ describe('trends screen', () => {
     for (let i = 0; i < 5; i++) {
       await seed({ at: daysAgo(i), nutrients: { energyKcal: 500, proteinG: 20 }, coverage: { energyKcal: 'known', proteinG: 'known' } });
     }
-    render(<Trends />);
+    render(<WeekTrends />);
     await screen.findByRole('heading', { name: /^fibre$/i });
     const fibre = card(/^fibre$/i);
     expect(fibre.querySelectorAll('[data-status="value"]')).toHaveLength(0);
@@ -87,7 +87,7 @@ describe('trends screen', () => {
   test('cancelled entries do not count toward days logged or processed meat', async () => {
     for (let i = 0; i < 5; i++) await seed({ at: daysAgo(i) });
     for (let i = 0; i < 4; i++) await seed({ at: daysAgo(i), userAction: 'cancelled', classification: { ...flags, processedMeat: true } });
-    render(<Trends />);
+    render(<WeekTrends />);
     await screen.findByRole('heading', { name: /processed meat/i });
     expect(within(card(/processed meat/i)).getByText(/\b0 meals\b/)).toBeInTheDocument();
     expect(within(card(/days logged/i)).getByText(/5 of 7 days/)).toBeInTheDocument();
@@ -100,14 +100,14 @@ describe('trends screen', () => {
     await addEntry(original);
     const { id: _id, supersededBy: _sb, revisionOf: _r, ...fields } = original;
     await reviseEntry(original.id, fields);
-    render(<Trends />);
+    render(<WeekTrends />);
     await screen.findByRole('heading', { name: /processed meat/i });
     expect(within(card(/processed meat/i)).getByText(/\b1 meal\b/)).toBeInTheDocument();
   });
 
   test('uses no scores, grades, streaks or verdicts', async () => {
     for (let i = 0; i < 6; i++) await seed({ at: daysAgo(i), classification: { ...flags, processedMeat: i % 2 === 0 } });
-    const { container } = render(<Trends />);
+    const { container } = render(<WeekTrends />);
     await screen.findByRole('heading', { name: /^fibre$/i });
     expect(container.textContent).not.toMatch(/score|grade|streak|rating|bmi|failed|should|must|good|bad|improv|worse|declin|%/i);
   });
@@ -180,23 +180,26 @@ describe('behaviour history screen', () => {
   });
 });
 
-describe('progress tab and navigation', () => {
+describe('the trends tab and navigation', () => {
   test('opens on worth a look and switches to this week and warning history', async () => {
     // Repointed when the tab was renamed Trends: the views are the same three, named so that none of them
     // repeats the tab's own name.
     render(<TrendsTab />);
-    expect(await screen.findByRole('heading', { name: /what.s missing/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^worth a look$/i, level: 1 })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^this week$/i }));
-    expect(await screen.findByRole('heading', { name: /^trends$/i, level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^this week$/i, level: 1 })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /warning history/i }));
     expect(await screen.findByRole('heading', { name: /^warning history$/i, level: 1 })).toBeInTheDocument();
   });
 
-  test('no view inside the Trends tab is itself called Trends', () => {
+  test('nothing inside the Trends tab is itself called Trends', () => {
+    // Not only the buttons: the page each one opens must not carry the tab's own name either, or a person
+    // cannot say where something is. This is the whole point of the rename.
     render(<TrendsTab />);
     const views = within(screen.getByRole('group', { name: 'Trends views' })).getAllByRole('button');
     expect(views).toHaveLength(3);
     expect(views.map((b) => b.textContent)).not.toContain('Trends');
+    expect(screen.queryByRole('heading', { name: /^trends$/i })).toBeNull();
   });
 
   test('the main nav reaches these views through the Trends tab', async () => {

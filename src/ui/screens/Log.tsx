@@ -13,9 +13,16 @@ export default function Log({
   deps = defaultDeps,
   initialDraft = '',
   scan,
+  onUnsavedWork,
 }: {
   deps?: FlowDeps;
   initialDraft?: string;
+  /**
+   * Reports whether there is work here that closing would destroy: typed text, an open food editor, a part-
+   * finished scan, or a warning gate the person is reading. The same predicate `useHoldUpdates` uses, because
+   * the same things are worth protecting from a service-worker reload and from a stray back swipe.
+   */
+  onUnsavedWork?: (unsaved: boolean) => void;
   /** The barcode scanner's seam, injected by tests so nothing touches a camera or the network. */
   scan?: ScanDeps;
 }) {
@@ -56,9 +63,16 @@ export default function Log({
   };
 
   // Typed text, an open food editor and a part-finished scan are unsaved work too.
-  useHoldUpdates(draft.trim() !== '' || editorName !== null || scanning);
+  const typing = draft.trim() !== '' || editorName !== null || scanning;
+  useHoldUpdates(typing);
 
   const gateOpen = flow.stage === 'gate' || flow.stage === 'questions';
+
+  // A gate the person is part-way through reading counts as work: it cost them a submission and a wait.
+  const unsaved = typing || gateOpen || flow.stage === 'resolving' || flow.stage === 'needsHelp' || flow.stage === 'aiReview';
+  useEffect(() => {
+    onUnsavedWork?.(unsaved);
+  }, [onUnsavedWork, unsaved]);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">

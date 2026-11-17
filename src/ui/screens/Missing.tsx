@@ -233,7 +233,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-6 p-4">
-      <h1 className="text-xl font-semibold">What&rsquo;s missing</h1>
+      <h1 className="text-xl font-semibold">Worth a look</h1>
       <p className="text-sm text-slate-700 dark:text-slate-300">
         What your diary shows is left out or thin, as facts about what was logged. These are things to add, not things you got wrong.
       </p>
@@ -250,7 +250,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
       </section>
 
       <section aria-labelledby="week-h" className="space-y-3">
-        <h2 id="week-h" className="text-lg font-semibold">This week</h2>
+        <h2 id="week-h" className="text-lg font-semibold">Across the week</h2>
         {!enough ? (
           <p className="text-base">
             {logged.length === 0
@@ -291,7 +291,7 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
 
       {enough && (
         <section aria-labelledby="gaps-h" className="space-y-2">
-          <h2 id="gaps-h" className="text-lg font-semibold">Worth a look</h2>
+          <h2 id="gaps-h" className="text-lg font-semibold">Things to add</h2>
           {gaps.length === 0 ? (
             <p className="text-base">No micronutrient stands out as low on the days with complete data.</p>
           ) : (

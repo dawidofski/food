@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import Log from '@/ui/screens/Log';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -14,9 +14,14 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), texta
  * Three things a floating overlay usually gets wrong, all handled here:
  *  - the Android back gesture. On open it pushes a history entry; `popstate` closes it, so back dismisses the
  *    dialog instead of leaving the app. Closing any other way consumes that entry again.
- *  - focus. It moves inside on open, is kept inside while open, and returns to the button on close.
- *  - what was typed. Closing discards the draft, and the person is told so before it happens, because losing a
- *    half-typed entry to a stray tap is the kind of small betrayal this app is built not to commit.
+ *  - focus. It moves inside on open, is kept inside while open, and returns to the element the caller names.
+ *  - **what was typed.** Closing with work in progress asks first. On this owner's phone an edge swipe is an
+ *    everyday accident, and the work it would have destroyed is not just a half-typed phrase: it is a food
+ *    editor part-filled by hand, a scan part-finished, or a warning gate the person submitted for and waited
+ *    on and is now reading. The same three things `useHoldUpdates` already refuses to interrupt.
+ *
+ * The back route has to re-push its entry when the person says keep: by the time `popstate` arrives the
+ * browser has already gone back, so staying open means putting the entry back.
  */
 export default function LogOverlay({
   open,
@@ -37,9 +42,26 @@ export default function LogOverlay({
   const panel = useRef<HTMLDivElement | null>(null);
   const restoreTo = useRef<Element | null>(null);
   const pushed = useRef(false);
+  const unsaved = useRef(false);
+  const [confirming, setConfirming] = useState(false);
 
-  const close = useCallback(() => {
-    // Consume the history entry we pushed, so the back stack does not grow with every open and close.
+  // Held in a ref so the open effect depends on `open` alone: a fresh `onClose` closure from the parent must
+  // never re-run it, which would push a second history entry and pull focus out of the field mid-word.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const push = useCallback(() => {
+    try {
+      history.pushState({ fdLogOverlay: true }, '');
+      pushed.current = true;
+    } catch {
+      pushed.current = false;
+    }
+  }, []);
+
+  /** Leave for good, consuming the history entry we pushed so the back stack does not grow. */
+  const leave = useCallback(() => {
+    setConfirming(false);
     if (pushed.current) {
       pushed.current = false;
       try {
@@ -49,37 +71,52 @@ export default function LogOverlay({
         // History is unavailable; fall through and close directly.
       }
     }
-    onClose();
-  }, [onClose]);
+    onCloseRef.current();
+  }, []);
+
+  /** The Close button and Escape: ask first when there is something to lose. */
+  const requestClose = useCallback(() => {
+    if (unsaved.current) {
+      setConfirming(true);
+      return;
+    }
+    leave();
+  }, [leave]);
 
   useEffect(() => {
     if (!open) return undefined;
     restoreTo.current = returnFocusTo?.current ?? document.activeElement;
-    try {
-      history.pushState({ fdLogOverlay: true }, '');
-      pushed.current = true;
-    } catch {
-      pushed.current = false;
-    }
+    push();
     const onPop = () => {
       pushed.current = false;
-      onClose();
+      if (unsaved.current) {
+        // Back has already happened. Put the entry back and ask, rather than discarding their work.
+        push();
+        setConfirming(true);
+        return;
+      }
+      onCloseRef.current();
     };
     window.addEventListener('popstate', onPop);
     // Focus the panel itself rather than guessing a control: the Log screen's first field may not be mounted yet.
     panel.current?.focus();
     return () => {
       window.removeEventListener('popstate', onPop);
-      if (restoreTo.current instanceof HTMLElement) restoreTo.current.focus();
+      setConfirming(false);
+      unsaved.current = false;
+      const back = restoreTo.current;
+      if (back instanceof HTMLElement && document.body.contains(back)) back.focus();
     };
-  }, [open, onClose, returnFocusTo]);
+    // `onClose` is deliberately absent: it lives in a ref. See `onCloseRef`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, push, returnFocusTo]);
 
   if (!open) return null;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
-      close();
+      requestClose();
       return;
     }
     if (e.key !== 'Tab') return;
@@ -106,14 +143,37 @@ export default function LogOverlay({
         aria-label="Log what you ate"
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto outline-none"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain outline-none"
       >
         <div className="mx-auto flex w-full max-w-xl justify-end px-4 pt-4">
-          <button type="button" onClick={close} className="min-h-11 px-2 text-sm underline">
-            Close
+          <button type="button" onClick={requestClose} aria-label="Close" className="min-h-11 min-w-11 px-2 text-lg">
+            ✕
           </button>
         </div>
-        <Log key={initialDraft} initialDraft={initialDraft} />
+
+        {confirming && (
+          <div role="alertdialog" aria-label="Leave without logging this?" className="mx-auto w-full max-w-xl px-4">
+            <div className="rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
+              <p className="text-base">Leave without logging this? What you have typed here will be lost.</p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => setConfirming(false)} className="min-h-11 flex-1 rounded-lg border border-slate-900 dark:border-slate-100 px-3 text-sm font-semibold">
+                  Keep it
+                </button>
+                <button type="button" onClick={leave} className="min-h-11 flex-1 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-sm">
+                  Discard it
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Log
+          key={initialDraft}
+          initialDraft={initialDraft}
+          onUnsavedWork={(u) => {
+            unsaved.current = u;
+          }}
+        />
       </div>
     </div>
   );

@@ -185,7 +185,7 @@ function MetricCard({ weeks, metric }: { weeks: TrendWeek[]; metric: Metric }) {
   );
 }
 
-export default function Trends({ deps = defaultTrendsDeps }: { deps?: TrendsDeps }) {
+export default function WeekTrends({ deps = defaultTrendsDeps }: { deps?: TrendsDeps }) {
   const [state, setState] = useState<DiaryEntry[] | 'loading' | 'error'>('loading');
   const todayKey = localDayKey(deps.now());
 
@@ -216,7 +216,7 @@ export default function Trends({ deps = defaultTrendsDeps }: { deps?: TrendsDeps
   const anyLogged = weeks.some((w) => w.loggedDays > 0);
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-4 p-4">
-      <h1 className="text-xl font-semibold">Trends</h1>
+      <h1 className="text-xl font-semibold">This week</h1>
       <p className="text-sm text-slate-700 dark:text-slate-300">
         {`Week by week over the last ${TREND_WEEKS} weeks, as logged. Each week is seven days, the newest ending today. These are facts about what was logged, not a measure of how you are doing.`}
       </p>
