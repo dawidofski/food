@@ -178,7 +178,9 @@ export default function Log({
             )}
             {dishFailed && (
               <p role="alert" className="text-sm">
-                That could not be broken down either. Adding it yourself still works.
+                {flow.aiRefused
+                  ? 'The AI service could not be reached or refused the request, so nothing was worked out. Adding it yourself still works.'
+                  : 'That could not be broken down either. Adding it yourself still works.'}
               </p>
             )}
             <button type="button" onClick={() => setEditorName('')} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-left">
@@ -197,7 +199,9 @@ export default function Log({
       {flow.stage === 'aiReview' && (
         <section data-testid="ai-review" className="space-y-3 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
           <p className="font-medium">
-            I didn&rsquo;t recognise part of that, so DeepSeek (an AI) was asked to read it. Please check its reading before anything is checked or saved.
+            {flow.dishPending
+              ? 'DeepSeek (an AI) was asked what this dish is made of. Please check it before anything is checked or saved.'
+              : 'I didn’t recognise part of that, so DeepSeek (an AI) was asked to read it. Please check its reading before anything is checked or saved.'}
           </p>
           <ul className="space-y-1">
             {flow.aiReadings.map((r) => (
@@ -207,7 +211,9 @@ export default function Log({
             ))}
           </ul>
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            The AI only described your words; the food was then found in the database. The amounts below come from the database, not from the AI.
+            {flow.dishPending
+              ? 'Each food was found in the database and every nutrition figure comes from there — but the AMOUNTS are the AI’s guess at a typical serving, not a measurement and not from the database. Treat them as a starting point: use this, then open the entry to correct any amount, or type it yourself instead.'
+              : 'The AI only described your words; the food was then found in the database. The amounts below come from the database, not from the AI.'}
           </p>
           {flow.lines.length > 0 && <ResolvedLines lines={flow.lines} />}
           <div className="flex flex-col gap-2">

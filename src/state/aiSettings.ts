@@ -12,6 +12,8 @@ import { lsKey } from '@/data/db';
 export const API_KEY_LS = lsKey('ai.deepseekKey');
 const KEY = API_KEY_LS;
 const SWITCH = lsKey('ai.enabled');
+/** The separate agreement to send a PHOTOGRAPH. See `isLabelPhotoSwitchedOn`. */
+const LABEL_SWITCH = lsKey('ai.labelPhoto');
 
 export function getApiKey(): string | null {
   try {
@@ -32,10 +34,17 @@ export function setApiKey(key: string): void {
   localStorage.setItem(KEY, k);
 }
 
+/**
+ * Clearing the key revokes the whole arrangement, photographs included.
+ *
+ * Consent to send a picture must not outlive the key it was given against: otherwise entering a new key later
+ * silently brings the camera control back on an agreement made before the revocation.
+ */
 export function clearApiKey(): void {
   try {
     localStorage.removeItem(KEY);
     localStorage.removeItem(SWITCH);
+    localStorage.removeItem(LABEL_SWITCH);
   } catch {
     /* nothing to clear in unreadable storage */
   }
@@ -67,7 +76,6 @@ export function isAiEnabled(): boolean {
  * carry a kitchen, a face, a hand, an address on a letter behind the packet. Someone who said yes to one has
  * not said yes to the other, and the app must not read the first as consent for the second.
  */
-const LABEL_SWITCH = lsKey('ai.labelPhoto');
 
 export function isLabelPhotoSwitchedOn(): boolean {
   try {

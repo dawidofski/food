@@ -36,11 +36,31 @@ describe('Spanish quantities, as the parser handles them today', () => {
     expect(parseQuantity('una loncha de jamón')?.quantity).toEqual({ count: 1 });
   });
 
-  test('the food is left for the search, with the preposition stripped', () => {
-    // "de" belongs to the phrasing, not to the food: searching for "de arroz" would find nothing.
+  test('the preposition is stripped on the form Spanish actually uses', () => {
+    // A digit, a metric unit, "de", the food. This is the path nearly every Spanish entry takes, metric units
+    // being language-neutral — and the case the first version of this change did not fix while claiming to.
+    expect(parseQuantity('200 g de pollo')?.rest).toBe('pollo');
+    expect(parseQuantity('1,5 kg de arroz')?.rest).toBe('arroz');
+    expect(parseQuantity('250 ml de leche')?.rest).toBe('leche');
+    expect(parseQuantity('200 g of chicken')?.rest).toBe('chicken');
+  });
+
+  test('the food is left for the search after an amount word', () => {
     expect(parseQuantity('medio aguacate')?.rest).toBe('aguacate');
     expect(parseQuantity('dos huevos')?.rest).toBe('huevos');
-    expect(parseQuantity('una loncha de jamón')?.rest).toBe('loncha de jamón');
+  });
+
+  test('an English word beginning "de" is not eaten by the Spanish preposition', () => {
+    // The regression the first version introduced: "two de-boned thighs" searched for "-boned thighs".
+    expect(parseQuantity('two de-boned thighs')?.rest).toBe('de-boned thighs');
+    expect(parseQuantity('3 de-boned chicken thighs')?.rest).toBe('de-boned chicken thighs');
+  });
+
+  test('"once" is still the English word, not eleven', () => {
+    // `once` is 11 in Spanish. Keeping it would have read "once a day" as eleven of something, which is a
+    // worse error than making someone write 11.
+    expect(parseQuantity('once a day')).toBeNull();
+    expect(parseQuantity('once baked')).toBeNull();
   });
 
   test('a phrase with no number at all leaves the whole text for the search', () => {

@@ -144,6 +144,8 @@ export type EntryFlow = {
   aiReadings: AiReading[];
   /** True when the model was asked for this entry and the service refused (a rejected call), as opposed to answering with nothing. */
   aiRefused: boolean;
+  /** True when the reading on screen is a dish breakdown, so the screen can say whose amounts these are. */
+  dishPending: boolean;
   /** True when the food database could not be loaded, so nothing could be matched. */
   dataMissing: boolean;
   viewingAlternatives: boolean;
@@ -277,6 +279,8 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   /** What resolved when some items did not, kept so the person may continue without the unresolved ones. */
   const pendingResolution = useRef<{ items: ParsedItem[]; resolution: Resolution; viaAi?: boolean } | null>(null);
   const aiPending = useRef<AiApplied | null>(null);
+  /** True while the pending reading is a DISH breakdown, whose amounts are the model's and not the database's. */
+  const [dishPending, setDishPending] = useState(false);
   const revisesRef = useRef<Revises | null>(null);
   const keptRef = useRef<Session['kept'] | null>(null);
   const depsRef = useRef(deps);
@@ -585,6 +589,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   const acceptAi = useCallback(async () => {
     const a = aiPending.current;
+    setDishPending(false);
     if (!a) return;
     await run(lastText, { items: a.items, resolution: a.resolution }, true);
   }, [run, lastText]);
@@ -598,14 +603,27 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
    */
   const tryDish = useCallback(async (): Promise<boolean> => {
     const d = depsRef.current;
-    const applied = await applyDish(lastText, d.lookup, d.ai).catch(() => null);
+    let refused = false;
+    const applied = await applyDish(lastText, d.lookup, d.ai, (f: AiFailure) => {
+      if (f === 'rejected') refused = true;
+    }).catch(() => null);
+    setAiRefused(refused);
     if (!applied) return false;
+    // NOT `run`: passing a resolutionOverride skips the review stage and the gate may then commit instantly,
+    // which would put amounts the model invented straight into the diary with nobody having seen them. The
+    // amounts are the model's guess at a recipe — the one case where its figures DO reach a total — so this
+    // goes through the same confirm-or-decline path the phrase reading uses. `acceptAi` does the committing.
+    aiPending.current = applied;
     setAiReadings(applied.readings);
-    await run(lastText, { items: applied.items, resolution: applied.resolution }, true);
+    setDishPending(true);
+    setLines(describeLines(applied.items, applied.resolution, d.lookup));
+    setUnresolved(applied.resolution.needsHelp);
+    setStage('aiReview');
     return true;
-  }, [run, lastText]);
+  }, [lastText]);
 
   const rejectAi = useCallback(() => {
+    setDishPending(false);
     const p = pendingResolution.current;
     if (!p) return;
     const d = depsRef.current;
@@ -662,7 +680,7 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   }, []);
 
   return {
-    stage, cards, questions, failures, lines, unresolved, aiReadings, aiRefused, dataMissing, viewingAlternatives, outcome, error, lastText,
+    stage, cards, questions, failures, lines, unresolved, aiReadings, aiRefused, dishPending, dataMissing, viewingAlternatives, outcome, error, lastText,
     genericTargets, storedCount, submit, submitKnownFood, correctEntry, setEntryMeal, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, tryDish, rejectAi, dismissOutcome,
   };
 }

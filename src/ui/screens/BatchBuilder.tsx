@@ -225,6 +225,15 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
           className={`${input} py-2`}
         />
       </label>
+      {/*
+        Said here, not only on the figures screen that warns about it: the person changing ingredients is not
+        the person reading that screen, and by the time they find out the figures are already gone. There is no
+        marker on a batch saying which figures were typed, so this is said every time rather than guessed at.
+      */}
+      <p className="text-sm text-slate-700 dark:text-slate-300">
+        Changing these works the figures out again from the ingredients, and replaces anything you typed by hand
+        on the figures screen. Portions you already logged keep the numbers they had.
+      </p>
 
       <RecipeReader
         onLines={(read) => touch(setLines)((lines.trim() === '' ? '' : `${lines.trim()}\n`) + read.join('\n'))}
@@ -414,16 +423,28 @@ function RecipeReader({ onLines }: { onLines: (lines: string[]) => void }) {
   const read = () => {
     setBusy(true);
     setNote(null);
-    void readIngredients(text, {
-      isEnabled: isAiEnabled,
-      getKey: getApiKey,
-      isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
-      interpret: interpretEntry,
-      readIngredientList,
-    })
+    let refused = false;
+    void readIngredients(
+      text,
+      {
+        isEnabled: isAiEnabled,
+        getKey: getApiKey,
+        isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
+        interpret: interpretEntry,
+        readIngredientList,
+      },
+      (f) => { if (f !== 'bad-response') refused = true; },
+    )
       .then((lines) => {
         if (lines === null) {
-          setNote('Nothing could be read from that. Type the ingredients in instead.');
+          // A service that refused is not a recipe that could not be read. Saying the second when the first
+          // happened sends someone looking for the fault in their own text — the silence that hid a dead
+          // model name for weeks.
+          setNote(
+            refused
+              ? 'The AI service could not be reached or refused the request, so nothing was read. Typing the ingredients in still works.'
+              : 'Nothing could be read from that. Type the ingredients in instead.',
+          );
           return;
         }
         onLines(lines);

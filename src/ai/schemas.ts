@@ -161,10 +161,39 @@ export const ingredientsOperation: AiOperation<AiIngredient> = {
   validate: (raw) => validateFoodish(raw),
 };
 
-/** One figure from a label: a non-negative number within a plausible per-100 range, or undefined. */
+/**
+ * One figure from a label, or undefined.
+ *
+ * **A zero is treated as absent.** The invariant does not bend for a photograph: if the model writes 0 for a
+ * figure it could not read, a stored 0 silently satisfies the sugar and salt rules, where a blank makes the app
+ * say it does not know. A label that genuinely prints 0 takes two seconds to type.
+ */
 function cleanPer100(v: unknown): number | undefined {
-  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > MAX_PER_100) return undefined;
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0 || v > MAX_PER_100) return undefined;
   return v;
+}
+
+/**
+ * Arithmetic the label must satisfy to be believed — hostile input means arithmetically hostile too.
+ *
+ * The one that matters most is energy. A label printing 800 kJ read as 800 kcal is a 4.2x error in the figure
+ * this whole app is built around, and it looks entirely plausible in the box. The prompt tells the model to
+ * convert; this checks that it did, against the macronutrients it also read.
+ */
+function labelIsCoherent(p: AiLabel['per100']): boolean {
+  const { energyKcal, proteinG, carbsG, sugarsG, fatG, satFatG } = p;
+  // Nothing can hold more than 100 g of macronutrient in 100 g, with a gram of rounding slack.
+  const macros = (proteinG ?? 0) + (carbsG ?? 0) + (fatG ?? 0);
+  if (macros > 101) return false;
+  if (sugarsG !== undefined && carbsG !== undefined && sugarsG > carbsG + 0.5) return false;
+  if (satFatG !== undefined && fatG !== undefined && satFatG > fatG + 0.5) return false;
+  if (energyKcal !== undefined && proteinG !== undefined && carbsG !== undefined && fatG !== undefined) {
+    const atwater = 4 * carbsG + 4 * proteinG + 9 * fatG;
+    // Generous: fibre, polyols and rounding all move this, and a label is allowed to disagree a little. A
+    // kJ-for-kcal mix-up is 4.2x out and nowhere near this band.
+    if (atwater > 0 && (energyKcal > atwater * 1.5 || energyKcal < atwater * 0.5)) return false;
+  }
+  return true;
 }
 
 const PER_100_KEYS = ['energyKcal', 'proteinG', 'carbsG', 'sugarsG', 'fatG', 'satFatG', 'fibreG', 'saltG'] as const;
@@ -202,6 +231,7 @@ export const labelOperation: AiOperation<AiLabel> = {
       if (v !== undefined) per100[k] = v;
     }
     if (Object.keys(per100).length === 0) return [];
+    if (!labelIsCoherent(per100)) return [];
     const name = cleanDescription(raw.name);
     return [name === undefined ? { per100 } : { per100, name }];
   },

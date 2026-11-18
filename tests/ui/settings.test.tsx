@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { addEntry, allEntriesIncludingTombstones, eraseEverything, getProfile, lsKey, putProfile } from '@/data/db';
 import { computeTargets } from '@/domain/targets';
-import { clearApiKey, getApiKey, setApiKey } from '@/state/aiSettings';
+import { clearApiKey, getApiKey, setAiSwitch, setApiKey } from '@/state/aiSettings';
 import type { DiaryEntry } from '@/types/diary';
 import type { Profile } from '@/types/profile';
 import App from '@/App';
@@ -414,7 +414,20 @@ describe('settings: data source and what cannot be checked', () => {
 });
 
 describe('the label photo disclosure', () => {
+  // It needs a key and the fallback switched on: a control that cannot do anything is worse than none.
+  const ready = () => {
+    setApiKey('test-key-abcd1234');
+    setAiSwitch(true);
+  };
+
+  test('is not offered at all without a key and the fallback on', async () => {
+    render(<Settings onErased={() => {}} />);
+    await screen.findByRole('heading', { name: /^settings$/i });
+    expect(screen.queryByTestId('label-photo-setting')).toBeNull();
+  });
+
   test('says a photo is sent to a third party, before the control that enables it', async () => {
+    ready();
     render(<Settings onErased={() => {}} />);
     const box = await screen.findByTestId('label-photo-setting');
     const control = within(box).getByRole('checkbox');
@@ -424,6 +437,7 @@ describe('the label photo disclosure', () => {
   });
 
   test('says what it will and will not read off the label', async () => {
+    ready();
     render(<Settings onErased={() => {}} />);
     const box = await screen.findByTestId('label-photo-setting');
     expect(within(box).getByText(/per 100 g or per 100 ml column, never a per-serving one/i)).toBeInTheDocument();
@@ -432,6 +446,7 @@ describe('the label photo disclosure', () => {
   });
 
   test('starts off, and is its own switch', async () => {
+    ready();
     render(<Settings onErased={() => {}} />);
     const box = await screen.findByTestId('label-photo-setting');
     expect(within(box).getByRole('checkbox')).not.toBeChecked();

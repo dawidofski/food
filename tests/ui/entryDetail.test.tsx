@@ -240,3 +240,24 @@ describe('correcting figures from the entry screen', () => {
     expect('sodiumMg' in revision.nutrients).toBe(false);
   });
 });
+
+describe('editing the words warns before it discards hand-typed figures', () => {
+  test('warns, naming the figures, when the entry has some', async () => {
+    // The same class of defect as a revision dropping a field: the person is about to lose work and is not
+    // told. The batch screen says so in plain words; this one did not.
+    const e = await seed({ correctedKeys: ['energyKcal', 'sodiumMg'] });
+    render(<EntryDetail entry={e} deps={realDeps} onClose={() => {}} onChanged={() => {}} />);
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /^edit$/i })); });
+    const warning = await screen.findByTestId('edit-loses-figures');
+    expect(warning.textContent).toMatch(/energy/i);
+    expect(warning.textContent).toMatch(/sodium/i);
+    expect(warning.textContent).toMatch(/back to the database figures/i);
+  });
+
+  test('says nothing when there is nothing of theirs to lose', async () => {
+    const e = await seed();
+    render(<EntryDetail entry={e} deps={realDeps} onClose={() => {}} onChanged={() => {}} />);
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /^edit$/i })); });
+    expect(screen.queryByTestId('edit-loses-figures')).toBeNull();
+  });
+});

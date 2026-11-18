@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { LABEL_IMAGE_MAX_PX, readLabelPhoto } from '@/ai/deepseek';
 import { labelOperation } from '@/ai/schemas';
-import { isLabelPhotoEnabled, isLabelPhotoSwitchedOn, setAiSwitch, setApiKey, setLabelPhotoSwitch } from '@/state/aiSettings';
+import { clearApiKey, isLabelPhotoEnabled, isLabelPhotoSwitchedOn, setAiSwitch, setApiKey, setLabelPhotoSwitch } from '@/state/aiSettings';
 
 const PIXEL = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
 
@@ -88,6 +88,40 @@ describe('reading a label from a photo', () => {
     expect(await readLabelPhoto(PIXEL, { apiKey: '', fetchImpl: failing })).toEqual([]);
   });
 
+  test('a zero from the model is treated as absent, not stored as a figure', async () => {
+    // A stored 0 silently satisfies the sugar and salt rules; a blank makes the app say it does not know.
+    const out = await readLabelPhoto(PIXEL, {
+      apiKey: 'k',
+      fetchImpl: replying({ per100: { energyKcal: 250, proteinG: 8, fatG: 5, carbsG: 30, sugarsG: 0 } }),
+    });
+    expect('sugarsG' in (out[0]?.per100 ?? {})).toBe(false);
+  });
+
+  test('refuses a reading whose arithmetic cannot be true', async () => {
+    // 2.7 kg of macronutrient inside 100 g of food.
+    expect(
+      await readLabelPhoto(PIXEL, { apiKey: 'k', fetchImpl: replying({ per100: { fatG: 900, carbsG: 900, proteinG: 900 } }) }),
+    ).toEqual([]);
+    // More sugar than carbohydrate, and more saturated fat than fat.
+    expect(
+      await readLabelPhoto(PIXEL, { apiKey: 'k', fetchImpl: replying({ per100: { carbsG: 10, sugarsG: 40 } }) }),
+    ).toEqual([]);
+    expect(
+      await readLabelPhoto(PIXEL, { apiKey: 'k', fetchImpl: replying({ per100: { fatG: 3, satFatG: 20 } }) }),
+    ).toEqual([]);
+  });
+
+  test('refuses kilojoules left unconverted, the 4.2x error that would look plausible', async () => {
+    // 800 kJ is 191 kcal. A label of 10 g protein, 30 g carbs and 5 g fat is about 205 kcal by Atwater, so a
+    // reported 800 is far outside anything rounding explains.
+    const kJ = { per100: { energyKcal: 800, proteinG: 10, carbsG: 30, fatG: 5 } };
+    expect(await readLabelPhoto(PIXEL, { apiKey: 'k', fetchImpl: replying(kJ) })).toEqual([]);
+    // The same label with the conversion done is accepted.
+    const kcal = { per100: { energyKcal: 191, proteinG: 10, carbsG: 30, fatG: 5 } };
+    const ok = await readLabelPhoto(PIXEL, { apiKey: 'k', fetchImpl: replying(kcal) });
+    expect(ok[0]?.per100.energyKcal).toBe(191);
+  });
+
   test('the image cap is small enough to be worth sending', () => {
     // DeepSeek scales anything larger to about 1300 px before the model sees it, so a 12-megapixel phone
     // photo buys no legibility — only the person's data and their money.
@@ -118,6 +152,16 @@ describe('the label photo switch', () => {
     expect(isLabelPhotoEnabled()).toBe(false);
     setAiSwitch(true);
     expect(isLabelPhotoEnabled()).toBe(true);
+  });
+
+  test('clearing the key revokes the photo agreement too', () => {
+    // Consent to send pictures must not outlive the key it was given against, or entering a new key later
+    // silently brings the camera back on an agreement made before the revocation.
+    setApiKey('k');
+    setAiSwitch(true);
+    setLabelPhotoSwitch(true);
+    clearApiKey();
+    expect(isLabelPhotoSwitchedOn()).toBe(false);
   });
 
   test('turning the phrase fallback off takes the photo path with it', () => {

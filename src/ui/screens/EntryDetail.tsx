@@ -258,6 +258,11 @@ export default function EntryDetail({
             autoComplete="off"
             className="min-h-14 w-full rounded-xl border-2 border-slate-400 dark:border-slate-500 px-3 text-lg"
           />
+          {correctedNames(entry.correctedKeys).length > 0 && (
+            <p data-testid="edit-loses-figures" role="alert" className="text-sm font-semibold">
+              {`Changing the words here reads the food again from scratch, so the ${listNames(correctedNames(entry.correctedKeys))} you corrected by hand will go back to the database figures. Correct the figures instead if that is what you meant.`}
+            </p>
+          )}
           <p className="text-sm text-slate-700 dark:text-slate-300">
             The corrected entry is checked again before it replaces this one. The original is kept in your history.
           </p>

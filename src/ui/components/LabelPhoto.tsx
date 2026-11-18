@@ -54,9 +54,19 @@ export default function LabelPhoto({ onRead }: { onRead: (label: AiLabel) => voi
       }
       const key = getApiKey();
       if (key === null) return;
-      const [label] = await readLabelPhoto(dataUrl, { apiKey: key });
+      let refused = false;
+      const [label] = await readLabelPhoto(dataUrl, {
+        apiKey: key,
+        onFailure: (f) => { if (f !== 'bad-response') refused = true; },
+      });
       if (label === undefined) {
-        setNote('No nutrition table could be read in that photo. Check it shows the per 100 g column, or type the figures in.');
+        // Telling someone their photo was unreadable when the service was down sends them to retake a photo
+        // that was fine.
+        setNote(
+          refused
+            ? 'The AI service could not be reached or refused the request, so the label was not read. Typing the figures in still works.'
+            : 'No nutrition table could be read in that photo. Check it shows the per 100 g column, or type the figures in.',
+        );
         return;
       }
       onRead(label);

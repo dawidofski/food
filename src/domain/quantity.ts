@@ -9,7 +9,9 @@ const NUMBER_WORDS: Record<string, number> = {
   // nothing and work with no key and no network, which the AI fallback cannot claim. Only the amount words
   // are here: units (g, ml, kg) are already language-neutral, and a decimal comma already parses.
   cero: 0, uno: 1, una: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8,
-  nueve: 9, diez: 10, once: 11, doce: 12, medio: 0.5, media: 0.5,
+  // `once` (11) and `doce` (12) are deliberately absent: `once` is an ordinary English word, and "once a
+  // day" parsing as eleven is a worse error than someone writing 11 when they mean eleven.
+  nueve: 9, diez: 10, medio: 0.5, media: 0.5,
 };
 
 /** Spanish words that mean "half", which take an article after them exactly as "half" does. */
@@ -73,8 +75,15 @@ function finish(count: number, after: string): { quantity: Quantity; rest: strin
   return { quantity: { count }, rest: after.trim() };
 }
 
+/**
+ * Drops the preposition between an amount and the food: "200 g of chicken", "200 g de pollo".
+ *
+ * `de` is here beside `of` because the common Spanish form is a digit, a metric unit, `de`, then the food —
+ * which is the path every Spanish entry takes, metric units being language-neutral. It must be followed by
+ * whitespace, so the `de` of an English hyphenated word ("two de-boned thighs") is left alone.
+ */
 function stripOf(s: string): string {
-  return s.trim().replace(/^of\s+/, '').trim();
+  return s.trim().replace(/^(of|de)\s+/, '').trim();
 }
 
 /** Reads a leading quantity. Returns null when the text does not start with one (or it is malformed). */
@@ -106,8 +115,7 @@ export function parseQuantity(text: string): { quantity: Quantity; rest: string 
     let after = t.slice(word[0].length);
     // "half a banana" / "medio un aguacate": the article after a half-word is not part of the food.
     if (HALF_WORDS.has(word[1] ?? '')) after = after.replace(/^\s+(an?|el|la|un|una|de)(?![a-z])/, '');
-    // "un puñado de almendras": the preposition after a count word is not part of the food either.
-    else after = after.replace(/^\s+de(?![a-z])/, '');
+
     return finish(NUMBER_WORDS[word[1]!]!, after);
   }
 

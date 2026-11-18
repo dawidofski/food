@@ -91,6 +91,12 @@ function AiSettings() {
             targets and your totals are never sent.
           </li>
           <li>
+            Two other things can be sent, each only when you ask for it by tapping a button. Asking what a dish is
+            made of sends the whole line you typed, up to 200 characters, even the part that was already matched.
+            Reading a recipe on the batches screen sends the text you pasted there, up to 2,000 characters. Nothing
+            is sent in either case unless you tap the button.
+          </li>
+          <li>
             The AI never supplies nutrition and never picks a food. It only describes what your word means; the app then searches its own database, every number comes from that database, and you check the reading before anything is saved.
           </li>
           <li>Your key stays in this browser only. It is not part of the app&rsquo;s code and is removed if you erase everything.</li>
@@ -101,6 +107,7 @@ function AiSettings() {
           is not agreeing to send a photograph. A picture can carry a kitchen, a face, a hand, an address on a
           letter behind the packet — things a food word cannot.
         */}
+        {key !== null && on && (
         <div data-testid="label-photo-setting" className="space-y-2 rounded-lg border border-slate-300 dark:border-slate-700 p-3">
           <h3 className="text-base font-semibold">Reading a nutrition label from a photo</h3>
           <p className="text-sm">
@@ -128,6 +135,7 @@ function AiSettings() {
             Let me photograph a nutrition label
           </label>
         </div>
+        )}
 
         {key !== null && (
           <div className="space-y-2">
