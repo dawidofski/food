@@ -5,6 +5,7 @@ import { parseQuantity, type Quantity } from '@/domain/quantity';
 import { resolveItems } from '@/domain/resolveItems';
 import type { Resolution } from '@/types/diary';
 import type { AiFailure, AiSuggestion, InterpretOptions } from '@/ai/deepseek';
+import type { AiComponent } from '@/ai/schemas';
 
 /** What the flow needs from the AI path, injectable so tests never touch the network or localStorage. */
 export type AiDeps = {
@@ -12,6 +13,8 @@ export type AiDeps = {
   getKey: () => string | null;
   isOnline: () => boolean;
   interpret: (text: string, opts: InterpretOptions) => Promise<AiSuggestion[]>;
+  /** Optional: breaks a composite dish into the foods it is made of. Absent means the app simply never offers it. */
+  breakDownDish?: (dish: string, opts: InterpretOptions) => Promise<AiComponent[]>;
 };
 
 /** One unresolved phrase, the model's plain-English description of it, and the dataset foods that description landed on. */
@@ -153,4 +156,56 @@ export async function applyAi(
   if (readings.length === 0) return null;
   const merged = [...items.flatMap((i) => replacements.get(i) ?? [i]), ...added];
   return { items: merged, resolution: resolveItems(merged, base), readings };
+}
+
+/**
+ * A composite dish, as the foods it is made of.
+ *
+ * The addendum calls this the largest real gap: "chicken tikka masala" is one phrase the dataset will never
+ * hold, and the honest answer is not to invent its nutrition but to say what it is made of and look each part
+ * up like any other food. So the model supplies the component names and rough amounts, and from there this is
+ * an ordinary resolution: the dataset supplies every gram and every calorie, and the person confirms.
+ *
+ * **A component the dataset cannot match is kept, unresolved**, rather than dropped. A partial answer is a
+ * partial answer — someone can correct one line — and silently losing a quarter of a meal would understate the
+ * day while looking complete, which is the failure this whole app is built against.
+ */
+export async function applyDish(
+  dish: string,
+  lookup: FoodLookup,
+  ai: AiDeps | undefined,
+  onFailure?: (f: AiFailure) => void,
+): Promise<AiApplied | null> {
+  if (!ai?.isEnabled() || !ai.isOnline() || ai.breakDownDish === undefined) return null;
+  const key = ai.getKey();
+  if (!key) return null;
+  const phrase = dish.trim();
+  if (phrase === '') return null;
+
+  const components = await ai.breakDownDish(phrase, { apiKey: key, ...(onFailure ? { onFailure } : {}) });
+  if (components.length === 0) return null;
+
+  const base = pinned(lookup);
+  const items: ParsedItem[] = [];
+  const reads: string[] = [];
+  const described: string[] = [];
+  for (const c of components) {
+    const found = findFoodByDescription(c.description, lookup);
+    const { quantity, label } = toQuantity(c);
+    if (!found) {
+      // Unresolved on purpose: it shows up for the person to fix, instead of vanishing from their day.
+      items.push({ rawFragment: `${label} ${c.description}`, quantity, foodQuery: c.description });
+      described.push(c.description);
+      continue;
+    }
+    items.push({ rawFragment: `${label} ${c.description}`, quantity, foodQuery: found.name });
+    reads.push(`${label} ${found.name}`);
+    described.push(c.description);
+  }
+  if (items.length === 0) return null;
+  return {
+    items,
+    resolution: resolveItems(items, base),
+    readings: [{ phrase, description: described.join('; '), reads }],
+  };
 }
