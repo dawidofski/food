@@ -73,7 +73,13 @@ export default function Log({
   const gateOpen = flow.stage === 'gate' || flow.stage === 'questions';
 
   // A gate the person is part-way through reading counts as work: it cost them a submission and a wait.
-  const unsaved = typing || gateOpen || flow.stage === 'resolving' || flow.stage === 'needsHelp' || flow.stage === 'aiReview';
+  //
+  // An outcome on screen means the entry reached the diary, so there is nothing left to lose and closing must
+  // not ask. Without this the person logs a meal and is then asked whether to throw away "what you have typed
+  // here", about food that is already saved and a box that is already empty.
+  const unsaved =
+    flow.outcome === null &&
+    (typing || gateOpen || flow.stage === 'resolving' || flow.stage === 'needsHelp' || flow.stage === 'aiReview');
   useEffect(() => {
     onUnsavedWork?.(unsaved);
   }, [onUnsavedWork, unsaved]);

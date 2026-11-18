@@ -38,6 +38,8 @@ export default function App() {
   /** Set when a portion is picked from the fridge list, so the log opens with it typed in. The gate still runs. */
   const [draft, setDraft] = useState('');
   const [logOpen, setLogOpen] = useState(false);
+  /** Bumped when the log sheet closes, so the diary behind it re-reads rather than showing a stale day. */
+  const [loggedAt, setLoggedAt] = useState(0);
   const logButton = useRef<HTMLButtonElement | null>(null);
 
   const openLog = (text = '') => {
@@ -56,7 +58,7 @@ export default function App() {
 
   return (
     <>
-      {tab === 'diary' && <Diary />}
+      {tab === 'diary' && <Diary reloadToken={loggedAt} />}
       {tab === 'trends' && <TrendsTab />}
       {tab === 'food' && <Food onLogPortion={(text) => openLog(text)} />}
       {tab === 'settings' && (
@@ -89,7 +91,7 @@ export default function App() {
         </button>
       )}
 
-      <LogOverlay open={logOpen} initialDraft={draft} onClose={() => setLogOpen(false)} returnFocusTo={logButton} />
+      <LogOverlay open={logOpen} initialDraft={draft} onClose={() => { setLogOpen(false); setLoggedAt((n) => n + 1); }} returnFocusTo={logButton} />
 
       <nav aria-label="Main" className="sticky bottom-0 z-20 flex border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950">
         {TABS.map((t) => (

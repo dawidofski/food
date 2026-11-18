@@ -144,6 +144,25 @@ describe('logging from anywhere', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
+  test('does not ask about losing work once the entry has been saved', async () => {
+    // Found by using the deployed app: after "Added." the box is empty and the food is in the diary, but
+    // closing still asked whether to throw away "what you have typed here".
+    await app();
+    fireEvent.click(logButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Log what you ate' });
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'two eggs' } });
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: /^log$/i })); });
+    const anyway = await waitFor(
+      () => screen.queryByRole('button', { name: /add anyway/i }) ?? screen.queryByText(/added\./i),
+      { timeout: 8000 },
+    );
+    if (anyway instanceof HTMLButtonElement) await act(async () => { fireEvent.click(anyway); });
+    await screen.findByText(/added\./i, undefined, { timeout: 8000 });
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Close' })); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Log what you ate' })).toBeNull());
+  }, 30000);
+
   test('still runs the warning gate on an entry rather than storing it silently', async () => {
     await app();
     fireEvent.click(logButton());

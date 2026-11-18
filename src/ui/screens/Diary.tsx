@@ -30,7 +30,20 @@ function dayLabel(key: string): string {
   return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
 }
 
-export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
+export default function Diary({
+  deps = defaultDeps,
+  reloadToken = 0,
+}: {
+  deps?: FlowDeps;
+  /**
+   * Bumped by the app whenever something may have been logged elsewhere — today, when the log overlay closes.
+   *
+   * Logging used to be a tab, so coming back to the diary remounted it and it re-read the store. As an overlay
+   * it closes over a diary that never unmounted, so without this the person logs a meal, closes the sheet, and
+   * reads "Nothing logged on this day" about food that is already saved.
+   */
+  reloadToken?: number;
+}) {
   const now = deps.now();
   const todayKey = last7DayKeys(now)[6]!;
   const keys = useMemo(() => last7DayKeys(new Date(`${todayKey}T12:00:00`)), [todayKey]);
@@ -56,7 +69,7 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
     let live = true;
     void loadReportedEnergy(deps.now(), deps.store.healthDaysBetween).then((r) => { if (live) setReported(r); });
     return () => { live = false; };
-  }, [deps, reload]);
+  }, [deps, reload, reloadToken]);
 
   /**
    * Ask the browser once to keep this app's data. Here rather than at start-up because the diary is a resting
@@ -85,7 +98,7 @@ export default function Diary({ deps = defaultDeps }: { deps?: FlowDeps }) {
     return () => {
       live = false;
     };
-  }, [deps, keys, reload]);
+  }, [deps, keys, reload, reloadToken]);
 
   const opened = openId === null ? undefined : entries.find((e) => e.id === openId);
   if (opened) {
