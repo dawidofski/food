@@ -2275,3 +2275,36 @@ figures-form component belongs at the **start** of a plan, not the end of one.
 Also for the next plan: the ingredient-edit screen gives no warning that editing a batch's ingredients replaces
 hand-typed figures, though the figures screen warns about exactly that; and the entry screen's **Edit** path
 silently discards hand-typed figures, where the batch screen says so in plain words.
+
+## The Spanish check (DeepSeek plan, Task 3) — 18 Nov 2026
+
+Run on the half that needs no API key, as the addendum's "test before building" asks. What was checked, through
+`parseQuantity` directly:
+
+| phrase | before | after |
+|---|---|---|
+| `200 g de pollo` | `{grams:200}`, rest `"de pollo"` | rest `"pollo"` |
+| `1,5 kg de arroz` | `{grams:1500}`, rest `"de arroz"` | rest `"arroz"` |
+| `250 ml de leche` | rest `"de leche"` | rest `"leche"` |
+| `medio aguacate` | no amount parsed | `{count:0.5}`, rest `"aguacate"` |
+| `media manzana` | no amount parsed | `{count:0.5}` |
+| `dos huevos` | no amount parsed | `{count:2}` |
+| `una loncha de jamón` | no amount parsed | `{count:1}`, rest `"loncha de jamón"` |
+| `pechuga de pollo` | null (no amount) | unchanged — the whole phrase goes to the search, which is right |
+| `2 huevos` | `{count:2}` | unchanged |
+
+**Finding:** digits and metric units were always fine, being language-neutral, and a decimal comma already
+parsed. The gap was the amount WORDS and the preposition `de`, which the search was being handed as if it were
+part of the food name. That is a parser fix and not an AI feature, exactly as §A2 predicted, and it works with
+no key and no network — which matters for someone standing in a Spanish supermarket.
+
+**Not checked, and still open:** the live end-to-end behaviour against the real model, which needs the owner's
+API key. Nothing here says what DeepSeek does with a Spanish phrase; it says only which phrases now reach the
+dataset search without needing it.
+
+**Two things the first attempt got wrong**, both caught in review and recorded because the lesson is the
+general one: `de` was stripped only after an amount word, which is a form Spanish almost never uses, so the
+common case still carried it while the test reported success; and the strip ate the `de` of English hyphenated
+words, so "two de-boned thighs" searched for "-boned thighs". A change to a parser every entry passes through
+needs its English cases tested too, not only the new ones. `once` was also added as 11 and had to come out:
+it is an ordinary English word, and "once a day" parsed as eleven.
