@@ -181,10 +181,13 @@ describe('behaviour history screen', () => {
 });
 
 describe('the trends tab and navigation', () => {
-  test('opens on worth a look and switches to this week and warning history', async () => {
+  test('opens on weight, and switches to the other views', async () => {
     // Repointed when the tab was renamed Trends: the views are the same three, named so that none of them
     // repeats the tab's own name.
     render(<TrendsTab />);
+    // Weight first: it is the thing the owner went looking for and could not find.
+    expect(await screen.findByRole('heading', { name: /^weight$/i, level: 1 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^worth a look$/i }));
     expect(await screen.findByRole('heading', { name: /^worth a look$/i, level: 1 })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^this week$/i }));
     expect(await screen.findByRole('heading', { name: /^this week$/i, level: 1 })).toBeInTheDocument();
@@ -197,7 +200,7 @@ describe('the trends tab and navigation', () => {
     // cannot say where something is. This is the whole point of the rename.
     render(<TrendsTab />);
     const views = within(screen.getByRole('group', { name: 'Trends views' })).getAllByRole('button');
-    expect(views).toHaveLength(3);
+    expect(views).toHaveLength(4);
     expect(views.map((b) => b.textContent)).not.toContain('Trends');
     expect(screen.queryByRole('heading', { name: /^trends$/i })).toBeNull();
   });

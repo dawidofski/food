@@ -2,8 +2,9 @@ import { useState } from 'react';
 import BehaviourHistory from './BehaviourHistory';
 import Missing from './Missing';
 import WeekTrends from './WeekTrends';
+import WeightView from './WeightView';
 
-type View = 'gaps' | 'week' | 'history';
+type View = 'weight' | 'gaps' | 'week' | 'history';
 
 /**
  * The tab is called Trends, so no view inside it may also be called Trends: a person cannot say where something
@@ -11,6 +12,7 @@ type View = 'gaps' | 'week' | 'history';
  * keeps the job it has left and is named for it.
  */
 const VIEWS: { id: View; label: string }[] = [
+  { id: 'weight', label: 'Weight' },
   { id: 'gaps', label: 'Worth a look' },
   { id: 'week', label: 'This week' },
   { id: 'history', label: 'Warning history' },
@@ -21,10 +23,10 @@ const VIEWS: { id: View; label: string }[] = [
  * old Missing screen's remaining job lives, so nothing a person already knows has moved.
  */
 export default function TrendsTab() {
-  const [view, setView] = useState<View>('gaps');
+  const [view, setView] = useState<View>('weight');
   return (
     <>
-      <div role="group" aria-label="Trends views" className="mx-auto grid w-full max-w-xl grid-cols-3 gap-1 px-4 pt-4">
+      <div role="group" aria-label="Trends views" className="mx-auto grid w-full max-w-xl grid-cols-2 gap-1 px-4 pt-4">
         {VIEWS.map((v) => (
           <button
             key={v.id}
@@ -37,6 +39,7 @@ export default function TrendsTab() {
           </button>
         ))}
       </div>
+      {view === 'weight' && <WeightView />}
       {view === 'gaps' && <Missing />}
       {view === 'week' && <WeekTrends />}
       {view === 'history' && <BehaviourHistory />}

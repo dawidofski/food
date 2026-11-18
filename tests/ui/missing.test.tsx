@@ -155,13 +155,13 @@ describe('missing view', () => {
     expect(screen.getByTestId('gap-calciumMg').textContent).toMatch(/population reference intake/i);
   });
 
-  test('weight is shown with history and no evaluative text', async () => {
-    await putProfile({ ...ownerProfile, weightLog: [{ date: '2026-09-01', kg: 101.5 }, { date: '2026-10-01', kg: 100.2 }] });
-    const { container } = render(<Missing />);
-    expect(await screen.findByText(/101\.5 kg/)).toBeInTheDocument();
-    expect(screen.getByText(/100\.2 kg/)).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /weight trend/i })).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/bmi|overweight|underweight|obese|ideal weight|healthy weight/i);
+  test('the weight log is no longer on this screen; it moved to the weight view', async () => {
+    // Moved, not dropped: the claim it carried (a weight log with no evaluative language) is asserted in
+    // tests/ui/weightView.test.tsx against the screen that now holds it.
+    await putProfile({ ...ownerProfile, weightLog: [{ date: '2026-09-01', kg: 101.5 }] });
+    render(<Missing />);
+    await screen.findByRole('heading', { name: /^worth a look$/i });
+    expect(screen.queryByLabelText(/weight for/i)).toBeNull();
   });
 });
 

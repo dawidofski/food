@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { entriesBetween } from '@/data/db';
+import { last7DayKeys } from '@/domain/dayBoundary';
+import { MEAL_GROUPS, mealTotals, type MealGroup } from '@/domain/totals';
+import { isKnownValue } from '@/domain/nutrients';
 import { lastNDayKeys, localDayKey, localDayRange } from '@/domain/dayBoundary';
 import { MIN_LOGGED_DAYS, TREND_NUTRIENTS, weeklyTrends, type Point, type TrendWeek } from '@/domain/trends';
 import type { DiaryEntry } from '@/types/diary';
@@ -230,8 +233,63 @@ export default function WeekTrends({ deps = defaultTrendsDeps }: { deps?: Trends
             {`A week with fewer than ${MIN_LOGGED_DAYS} logged days is left blank (a dot), because a thin week says little about the week. A ? marks a week with enough days where too much of a figure was missing to give a number. Neither is a low week, and a blank is never counted as zero. Figures are the median day; a day with any food missing that figure is left out of it.`}
           </p>
           {METRICS.map((m) => <MetricCard key={m.id} weeks={weeks} metric={m} />)}
+          <MealWeek rows={Array.isArray(state) ? state : []} now={deps.now()} />
         </>
       )}
     </main>
+  );
+}
+
+const GROUP_LABEL: Record<MealGroup, string> = {
+  breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snacks', earlier: 'Earlier',
+};
+
+/**
+ * Each meal across the last seven days, so "breakfast is short on protein most days" is visible rather than
+ * something you would have to work out from seven separate days (amendment A2.3).
+ *
+ * **Averaged over the days a slot was actually logged, not over seven.** A breakfast logged twice has a two-day
+ * average, and the screen says it was two days: dividing by seven would turn five unlogged breakfasts into five
+ * zeroes and report someone as eating nothing in the morning. A slot never logged shows nothing at all.
+ */
+function MealWeek({ rows, now }: { rows: DiaryEntry[]; now: Date }) {
+  const keys = last7DayKeys(now);
+  const per = MEAL_GROUPS.map((group) => {
+    const days = keys
+      .map((k) => mealTotals(rows, k)[group])
+      .filter((d) => d.entryCount > 0);
+    const withEnergy = days.filter((d) => isKnownValue(d.nutrients.energyKcal));
+    const withProtein = days.filter((d) => isKnownValue(d.nutrients.proteinG));
+    const mean = (xs: number[]) => (xs.length === 0 ? undefined : xs.reduce((a, b) => a + b, 0) / xs.length);
+    return {
+      group,
+      days: days.length,
+      kcal: mean(withEnergy.map((d) => d.nutrients.energyKcal as number)),
+      proteinG: mean(withProtein.map((d) => d.nutrients.proteinG as number)),
+    };
+  }).filter((r) => r.days > 0);
+
+  if (per.length === 0) return null;
+
+  return (
+    <section aria-labelledby="mealweek-h" className="space-y-2 rounded-xl border border-slate-300 dark:border-slate-700 p-3">
+      <h2 id="mealweek-h" className="text-lg font-semibold">Each meal across the week</h2>
+      <p className="text-xs text-slate-600 dark:text-slate-400">
+        Averaged over the days each meal was logged, not over seven, so a meal you logged twice is not reported
+        as five days of nothing.
+      </p>
+      <ul className="text-sm" data-testid="meal-week">
+        {per.map((r) => (
+          <li key={r.group} className="flex items-baseline justify-between gap-2 border-b border-slate-200 dark:border-slate-800 py-1">
+            <span>{GROUP_LABEL[r.group]}</span>
+            <span className="text-right text-slate-700 dark:text-slate-300">
+              {r.kcal !== undefined && `${fmtAmount(r.kcal)} kcal`}
+              {r.proteinG !== undefined && ` · ${fmtAmount(r.proteinG)} g protein`}
+              {` · ${r.days} ${r.days === 1 ? 'day' : 'days'}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

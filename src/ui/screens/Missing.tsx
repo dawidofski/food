@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { entriesBetween, getProfile, putProfile } from '@/data/db';
 import { loadReportedEnergy } from '@/data/reportedEnergy';
 import type { healthDaysBetween } from '@/data/healthDays';
@@ -84,88 +84,10 @@ function fruitByDay(entries: DiaryEntry[], keys: string[]): FruitDay[] {
   });
 }
 
-function WeightPanel({
-  profile, today, onSave,
-}: {
-  profile: Profile | null;
-  today: string;
-  onSave: (kg: number) => Promise<void>;
-}) {
-  const [value, setValue] = useState('');
-  const [note, setNote] = useState<string | null>(null);
-  const log = profile ? [...profile.weightLog].filter((w) => Number.isFinite(w.kg)).sort((a, b) => (a.date < b.date ? 1 : -1)) : [];
-  const oldestFirst = [...log].reverse();
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const kg = Number(value.replace(',', '.'));
-    if (!Number.isFinite(kg) || kg < 20 || kg > 400) {
-      setNote('Enter a number of kilograms between 20 and 400.');
-      return;
-    }
-    setNote(null);
-    void onSave(Math.round(kg * 10) / 10).then(() => setValue('')).catch(() => setNote('That could not be saved.'));
-  };
-
-  let trend = null;
-  if (oldestFirst.length >= 2) {
-    const ks = oldestFirst.map((w) => w.kg);
-    const lo = Math.min(...ks);
-    const hi = Math.max(...ks);
-    const span = hi - lo || 1;
-    const pts = oldestFirst
-      .map((w, i) => `${(i / (oldestFirst.length - 1)) * 280 + 10},${50 - ((w.kg - lo) / span) * 40}`)
-      .join(' ');
-    trend = (
-      <svg role="img" aria-label="Weight trend over the logged measurements" viewBox="0 0 300 60" className="h-16 w-full">
-        <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="2" className="text-sky-700 dark:text-sky-400" />
-      </svg>
-    );
-  }
-
-  return (
-    <section aria-labelledby="weight-h" className="space-y-2">
-      <h2 id="weight-h" className="text-lg font-semibold">Weight</h2>
-      {profile === null ? (
-        <p className="text-sm">Set up your profile to keep a weight log.</p>
-      ) : (
-        <>
-          {trend}
-          {log.length === 0 ? (
-            <p className="text-sm">No weight logged yet.</p>
-          ) : (
-            <ul className="text-sm">
-              {log.slice(0, 12).map((w) => (
-                <li key={w.date} className="flex justify-between border-b border-slate-200 dark:border-slate-800 py-1">
-                  <span>{w.date}</span>
-                  <span>{`${w.kg.toFixed(1)} kg`}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <form onSubmit={submit} className="flex items-end gap-2">
-            <div className="flex-1">
-              <label htmlFor="weight-kg" className="block text-sm">{`Weight for ${today} (kg)`}</label>
-              <input
-                id="weight-kg"
-                inputMode="decimal"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                className="min-h-12 w-full rounded-lg border-2 border-slate-400 dark:border-slate-500 px-3 text-base"
-              />
-            </div>
-            <button type="submit" className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-base">Save weight</button>
-          </form>
-          {note && <p role="status" className="text-sm">{note}</p>}
-        </>
-      )}
-    </section>
-  );
-}
 
 export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingDeps }) {
   const [state, setState] = useState<{ entries: DiaryEntry[]; profile: Profile | null; reported: ReportedExpenditure | undefined } | 'loading' | 'error'>('loading');
-  const [reload, setReload] = useState(0);
+  const [reload] = useState(0);
   const now = deps.now();
   const keys = last7DayKeys(now);
 
@@ -222,14 +144,6 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
     const under = complete.filter((d) => (d.nutrients[key] as number) < ref).length;
     if (under / complete.length >= 0.8) gaps.push({ key, under, complete: complete.length, ref });
   }
-
-  const saveWeight = async (kg: number) => {
-    if (!profile) return;
-    const date = localDayKey(now);
-    const weightLog = [...profile.weightLog.filter((w) => w.date !== date), { date, kg }];
-    await deps.store.putProfile({ ...profile, weightLog });
-    setReload((n) => n + 1);
-  };
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl space-y-6 p-4">
@@ -317,7 +231,6 @@ export default function Missing({ deps = defaultMissingDeps }: { deps?: MissingD
         </section>
       )}
 
-      <WeightPanel profile={profile} today={localDayKey(now)} onSave={saveWeight} />
     </main>
   );
 }
