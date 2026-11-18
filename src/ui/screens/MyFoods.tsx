@@ -1,4 +1,5 @@
 import { useHoldUpdates } from '@/state/updates';
+import LabelPhoto from '@/ui/components/LabelPhoto';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { allCustomFoods } from '@/data/db';
 import {
@@ -127,6 +128,30 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="space-y-4" aria-label={food ? 'Edit food' : 'New food'}>
       <h2 className="text-lg font-semibold">{food ? 'Edit food' : 'Add your own food'}</h2>
+
+      {/*
+        Fills the fields below; it saves nothing. Every figure lands in a box the person can see and change,
+        exactly as if they had typed it, and the food is stored as their own and marked self-reported.
+      */}
+      <LabelPhoto
+        onRead={(label) => {
+          if (label.name !== undefined && name.trim() === '') setName(label.name);
+          setNutrients((n) => {
+            const next = { ...n };
+            // Only what the label actually printed. An absent figure is left absent, never written as 0.
+            const map: [keyof typeof label.per100, NutrientKey | 'saltG'][] = [
+              ['energyKcal', 'energyKcal'], ['proteinG', 'proteinG'], ['carbsG', 'carbG'],
+              ['sugarsG', 'sugarsG'], ['fatG', 'fatG'], ['satFatG', 'satFatG'],
+              ['fibreG', 'fibreG'], ['saltG', 'saltG'],
+            ];
+            for (const [from, to] of map) {
+              const v = label.per100[from];
+              if (typeof v === 'number') next[to] = String(v);
+            }
+            return next;
+          });
+        }}
+      />
 
       <label className="block text-sm">
         Name

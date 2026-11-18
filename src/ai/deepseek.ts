@@ -33,10 +33,22 @@ export type InterpretOptions = {
 
 export const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 export const DEEPSEEK_MODEL = 'deepseek-flash';
-import { labelOperation, phraseOperation, type AiLabel, type AiOperation, type AiSuggestion } from './schemas';
+import {
+  dishOperation,
+  ingredientsOperation,
+  labelOperation,
+  phraseOperation,
+  type AiComponent,
+  type AiIngredient,
+  type AiLabel,
+  type AiOperation,
+  type AiSuggestion,
+} from './schemas';
 
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_PHRASE = 200;
+/** A pasted recipe is longer than a phrase but still bounded: this is an ingredient list, not a document. */
+const MAX_RECIPE = 2000;
 const MAX_RESPONSE_CHARS = 100_000;
 /**
  * One request shape for every operation.
@@ -203,4 +215,18 @@ export async function readLabelPhoto(dataUrl: string, opts: InterpretOptions): P
     ],
     { ...opts, maxTokens: 600 },
   );
+}
+
+/** A composite dish, as the foods it is made of. The dataset still supplies every number. */
+export async function breakDownDish(dish: string, opts: InterpretOptions): Promise<AiComponent[]> {
+  const text = dish.trim().slice(0, MAX_PHRASE);
+  if (text === '') return [];
+  return runOperation(dishOperation, JSON.stringify({ dish: text, servings: 1 }), { ...opts, maxTokens: 600 });
+}
+
+/** A written recipe, as the ingredient lines a batch is made of. Amounts the person stated pass through. */
+export async function readIngredientList(text: string, opts: InterpretOptions): Promise<AiIngredient[]> {
+  const body = text.trim().slice(0, MAX_RECIPE);
+  if (body === '') return [];
+  return runOperation(ingredientsOperation, JSON.stringify({ text: body }), { ...opts, maxTokens: 800 });
 }

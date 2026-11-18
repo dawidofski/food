@@ -11,8 +11,8 @@ import type { FoodLookup } from '@/domain/foodLookup';
 import { parseEntry, type ParsedItem } from '@/domain/parseEntry';
 import { applyCorrection, type Correction } from '@/domain/corrections';
 import { resolveItems, resolveKnownFood } from '@/domain/resolveItems';
-import { applyAi, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
-import { interpretEntry, type AiFailure } from '@/ai/deepseek';
+import { applyAi, applyDish, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
+import { breakDownDish, interpretEntry, readIngredientList, type AiFailure } from '@/ai/deepseek';
 import { getApiKey, isAiEnabled } from '@/state/aiSettings';
 import { loadReportedEnergy } from '@/data/reportedEnergy';
 import type { healthDaysBetween } from '@/data/healthDays';
@@ -93,6 +93,8 @@ export const defaultDeps: FlowDeps = {
     getKey: getApiKey,
     isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
     interpret: interpretEntry,
+    breakDownDish,
+    readIngredientList,
   },
 };
 
@@ -179,6 +181,8 @@ export type EntryFlow = {
   edit: () => void;
   /** Accept the model's reading and go on to the checks, which run on the dataset's numbers as usual. */
   acceptAi: () => Promise<void>;
+  /** Re-read the text as a composite dish. Resolves false when the fallback is off or nothing came back. */
+  tryDish: () => Promise<boolean>;
   /** Discard the model's reading and fall back to manual entry. */
   rejectAi: () => void;
   /** Continue with the foods that did resolve, leaving the unresolved ones out (the person chose this). */
@@ -585,6 +589,22 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     await run(lastText, { items: a.items, resolution: a.resolution }, true);
   }, [run, lastText]);
 
+  /**
+   * Try the text again as a composite dish: ask what it is made of, then resolve each part in the dataset.
+   *
+   * Offered only where nothing else worked, because it is a bigger claim than reading one word — it is a guess
+   * at a recipe. Everything after the component names is ordinary: the dataset supplies every figure, the gate
+   * runs as usual, and the person confirms. A part the dataset cannot match stays unresolved on screen.
+   */
+  const tryDish = useCallback(async (): Promise<boolean> => {
+    const d = depsRef.current;
+    const applied = await applyDish(lastText, d.lookup, d.ai).catch(() => null);
+    if (!applied) return false;
+    setAiReadings(applied.readings);
+    await run(lastText, { items: applied.items, resolution: applied.resolution }, true);
+    return true;
+  }, [run, lastText]);
+
   const rejectAi = useCallback(() => {
     const p = pendingResolution.current;
     if (!p) return;
@@ -643,6 +663,6 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   return {
     stage, cards, questions, failures, lines, unresolved, aiReadings, aiRefused, dataMissing, viewingAlternatives, outcome, error, lastText,
-    genericTargets, storedCount, submit, submitKnownFood, correctEntry, setEntryMeal, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, rejectAi, dismissOutcome,
+    genericTargets, storedCount, submit, submitKnownFood, correctEntry, setEntryMeal, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, tryDish, rejectAi, dismissOutcome,
   };
 }

@@ -1,5 +1,8 @@
 import { useHoldUpdates } from '@/state/updates';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { readIngredients } from '@/ai/aiFallback';
+import { interpretEntry, readIngredientList } from '@/ai/deepseek';
+import { getApiKey, isAiEnabled } from '@/state/aiSettings';
 import { allBatches } from '@/data/db';
 import { datasetLookup } from '@/data/datasetLookup';
 import { loadFoods } from '@/data/foodRepository';
@@ -222,6 +225,11 @@ function BatchForm({ deps, batch, onSaved, onCancel }: { deps: BatchDeps; batch?
           className={`${input} py-2`}
         />
       </label>
+
+      <RecipeReader
+        onLines={(read) => touch(setLines)((lines.trim() === '' ? '' : `${lines.trim()}\n`) + read.join('\n'))}
+      />
+
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-sm">
           Portions it makes
@@ -385,5 +393,81 @@ function BatchFigures({ batch, onSaved, onCancel }: { batch: Batch; onSaved: () 
         <button type="button" onClick={onCancel} className={`${btn} flex-1`}>Discard</button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Paste a recipe and get the ingredient lines out of it.
+ *
+ * It only fills the box above; nothing is saved and nothing is resolved here, so the person edits the lines
+ * exactly as if they had typed them. Hidden entirely when the optional fallback is off, because a control that
+ * does nothing is worse than no control.
+ */
+function RecipeReader({ onLines }: { onLines: (lines: string[]) => void }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+
+  if (!isAiEnabled()) return null;
+
+  const read = () => {
+    setBusy(true);
+    setNote(null);
+    void readIngredients(text, {
+      isEnabled: isAiEnabled,
+      getKey: getApiKey,
+      isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
+      interpret: interpretEntry,
+      readIngredientList,
+    })
+      .then((lines) => {
+        if (lines === null) {
+          setNote('Nothing could be read from that. Type the ingredients in instead.');
+          return;
+        }
+        onLines(lines);
+        setText('');
+        setOpen(false);
+      })
+      .catch(() => setNote('Nothing could be read from that. Type the ingredients in instead.'))
+      .finally(() => setBusy(false));
+  };
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="min-h-11 text-sm underline">
+        Paste a recipe instead
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-slate-300 dark:border-slate-700 p-3">
+      <label className="block text-sm">
+        Paste or type the recipe
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={4}
+          placeholder="lasagna with 500g beef, 400g pasta, 2 jars of tomato sauce"
+          className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2"
+        />
+      </label>
+      <p className="text-xs text-slate-600 dark:text-slate-400">
+        The text is sent to DeepSeek, which reads it into lines. It adds no ingredient your text does not
+        mention and keeps every amount you stated; a line with no amount is left out rather than guessed. The
+        lines land in the box above for you to check and change.
+      </p>
+      <div className="flex gap-2">
+        <button type="button" onClick={read} disabled={busy || text.trim() === ''} className="min-h-11 flex-1 rounded-lg border border-slate-900 dark:border-slate-100 px-3 text-sm font-semibold disabled:opacity-50">
+          {busy ? 'Reading…' : 'Read it'}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="min-h-11 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-sm">
+          Cancel
+        </button>
+      </div>
+      {note && <p role="alert" className="text-sm">{note}</p>}
+    </div>
   );
 }

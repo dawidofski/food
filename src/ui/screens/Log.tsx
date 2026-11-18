@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { isAiEnabled } from '@/state/aiSettings';
 import { useHoldUpdates } from '@/state/updates';
 import { defaultDeps, useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
@@ -33,6 +34,9 @@ export default function Log({
   const [editorName, setEditorName] = useState<string | null>(null);
   /** True while the barcode panel is open. A scan proposes a food; it never adds one. */
   const [scanning, setScanning] = useState(false);
+  /** One attempt per entry: asking twice spends the person's money for the same answer. */
+  const [dishTried, setDishTried] = useState(false);
+  const [dishFailed, setDishFailed] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -162,6 +166,21 @@ export default function Log({
                 Add &ldquo;{u.foodQuery}&rdquo; as my own food
               </button>
             ))}
+            {isAiEnabled() && (
+              <button
+                type="button"
+                onClick={() => { setDishTried(true); void flow.tryDish().then((ok) => { if (!ok) setDishFailed(true); }); }}
+                disabled={dishTried}
+                className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-left disabled:opacity-50"
+              >
+                It&rsquo;s a dish &mdash; work out what&rsquo;s in it
+              </button>
+            )}
+            {dishFailed && (
+              <p role="alert" className="text-sm">
+                That could not be broken down either. Adding it yourself still works.
+              </p>
+            )}
             <button type="button" onClick={() => setEditorName('')} className="min-h-12 rounded-lg border border-slate-400 dark:border-slate-500 px-4 text-left">
               Enter the nutrition manually
             </button>
