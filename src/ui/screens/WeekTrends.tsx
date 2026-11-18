@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { entriesBetween } from '@/data/db';
 import { last7DayKeys } from '@/domain/dayBoundary';
-import { MEAL_GROUPS, mealTotals, type MealGroup } from '@/domain/totals';
+import { MEAL_GROUPS, mealTotals, type DayTotals, type MealGroup } from '@/domain/totals';
 import { isKnownValue } from '@/domain/nutrients';
 import { lastNDayKeys, localDayKey, localDayRange } from '@/domain/dayBoundary';
 import { MIN_LOGGED_DAYS, TREND_NUTRIENTS, weeklyTrends, type Point, type TrendWeek } from '@/domain/trends';
@@ -258,14 +258,22 @@ function MealWeek({ rows, now }: { rows: DiaryEntry[]; now: Date }) {
     const days = keys
       .map((k) => mealTotals(rows, k)[group])
       .filter((d) => d.entryCount > 0);
-    const withEnergy = days.filter((d) => isKnownValue(d.nutrients.energyKcal));
-    const withProtein = days.filter((d) => isKnownValue(d.nutrients.proteinG));
-    const mean = (xs: number[]) => (xs.length === 0 ? undefined : xs.reduce((a, b) => a + b, 0) / xs.length);
+    // A slot whose total is only PARTLY known is a floor, not a figure: averaging it counts the missing part as
+    // zero, which is exactly what `completeDayValue` exists to stop. The metric cards above mark such days "?".
+    const vouched = (key: 'energyKcal' | 'proteinG') =>
+      days.filter((d) => isKnownValue(d.nutrients[key]) && d.coverage[key] === 'known' && d.energyCoveredShare[key] >= 0.999);
+    const mean = (xs: DayTotals[], key: 'energyKcal' | 'proteinG') =>
+      xs.length === 0 ? undefined : xs.reduce((a, d) => a + (d.nutrients[key] as number), 0) / xs.length;
+    const withEnergy = vouched('energyKcal');
+    const withProtein = vouched('proteinG');
     return {
       group,
       days: days.length,
-      kcal: mean(withEnergy.map((d) => d.nutrients.energyKcal as number)),
-      proteinG: mean(withProtein.map((d) => d.nutrients.proteinG as number)),
+      // The days each figure was actually averaged over, which is not always the days the slot was logged.
+      kcalDays: withEnergy.length,
+      proteinDays: withProtein.length,
+      kcal: mean(withEnergy, 'energyKcal'),
+      proteinG: mean(withProtein, 'proteinG'),
     };
   }).filter((r) => r.days > 0);
 
@@ -283,9 +291,10 @@ function MealWeek({ rows, now }: { rows: DiaryEntry[]; now: Date }) {
           <li key={r.group} className="flex items-baseline justify-between gap-2 border-b border-slate-200 dark:border-slate-800 py-1">
             <span>{GROUP_LABEL[r.group]}</span>
             <span className="text-right text-slate-700 dark:text-slate-300">
-              {r.kcal !== undefined && `${fmtAmount(r.kcal)} kcal`}
-              {r.proteinG !== undefined && ` · ${fmtAmount(r.proteinG)} g protein`}
-              {` · ${r.days} ${r.days === 1 ? 'day' : 'days'}`}
+              {r.kcal === undefined
+                ? `logged on ${r.days} ${r.days === 1 ? 'day' : 'days'}, no full figure yet`
+                : `${fmtAmount(r.kcal)} kcal over ${r.kcalDays} ${r.kcalDays === 1 ? 'day' : 'days'}`}
+              {r.proteinG !== undefined && ` · ${fmtAmount(r.proteinG)} g protein over ${r.proteinDays} ${r.proteinDays === 1 ? 'day' : 'days'}`}
             </span>
           </li>
         ))}

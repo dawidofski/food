@@ -224,6 +224,7 @@ function derive(
   return {
     rmrKcal: Math.round(rmr),
     energyKcal: energy,
+    maintenanceKcal: maintenance,
     // Protein is sourced (see the constants above). The fibre rule inside `sharesOfEnergy` is still the app's own
     // working figure.
     proteinG: Math.round(proteinPerKg * weightKg),

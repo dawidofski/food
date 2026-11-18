@@ -69,6 +69,12 @@ export default function WeightChart({
         ].join(' ')
       : '';
 
+  // Said only when true: with a near-perfect log the band is the fluctuation floor and barely moves, and a
+  // caption claiming it widens would describe something the picture does not do.
+  const firstW = projection[0] === undefined ? 0 : projection[0].highKg - projection[0].lowKg;
+  const lastW = projection[projection.length - 1] === undefined ? 0 : (projection[projection.length - 1]?.highKg ?? 0) - (projection[projection.length - 1]?.lowKg ?? 0);
+  const widens = lastW > firstW * 1.2;
+
   return (
     <figure className="m-0">
       <svg role="img" aria-label={label} viewBox={`0 0 ${W} ${H}`} className="h-32 w-full">
@@ -86,7 +92,10 @@ export default function WeightChart({
       {projection.length > 0 && (
         <figcaption className="text-xs text-slate-600 dark:text-slate-400">
           The solid line is what you weighed. The shaded part is an estimate of where this rate would lead, not a
-          measurement, and it widens because the further ahead you look the less it is worth trusting.
+          measurement.
+          {widens
+            ? ' It widens because the further ahead you look the less it is worth trusting.'
+            : ' Its width is the ordinary day-to-day variation of a bathroom scale; your weigh-ins are so close to a straight line that they add almost nothing to it.'}
         </figcaption>
       )}
     </figure>

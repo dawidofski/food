@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { addEntry, eraseEverything, getProfile, putProfile } from '@/data/db';
 import type { DiaryEntry } from '@/types/diary';
 import type { ClassificationFlags, NutrientSet } from '@/types/nutrients';
 import type { Profile } from '@/types/profile';
+import { computeTargets } from '@/domain/targets';
 import WeightView from '@/ui/screens/WeightView';
 import { ownerProfile } from '../fixtures/profile';
 
@@ -136,6 +137,66 @@ describe('the weight view', () => {
     await screen.findByLabelText(/weight for/i);
     expect(screen.getByRole('img', { name: /logged weights/i })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/bmi|overweight|underweight|obese|ideal weight|healthy weight/i);
+  });
+
+  test('a weight goal does not become the energy-out figure', async () => {
+    // The defect this pins: passing targets.energyKcal (what to EAT, after the goal) as expenditure. Someone
+    // eating exactly to a 1 kg/week goal would read "a surplus of about 0 kcal a day" when the honest answer
+    // is a 1,100 kcal deficit — and the page would then blame their logging for the gap against the scale.
+    // The shared fixture has no goal, which is exactly why nothing caught this.
+    await putProfile({ ...withWeights([[28, 80], [14, 79.5], [0, 79]]), goal: { kind: 'lose', rateKgPerWeek: 1 } });
+    const target = computeTargets(await getProfile(), new Date());
+    for (let d = 0; d < 12; d++) await seedDay(d, target.energyKcal);
+    await show();
+    await waitFor(() => expect(screen.getByTestId('balance-known')).toBeInTheDocument());
+    const text = screen.getByTestId('balance-known').textContent ?? '';
+    // Eating to a loss goal is a deficit against what the body burns, never a balance of nothing.
+    expect(text).toMatch(/deficit/i);
+    expect(text).not.toMatch(/surplus/i);
+    expect(text).not.toMatch(/about 0 kcal a day/i);
+  });
+
+  test('says nothing about a direction once the log has gone stale', async () => {
+    // Weigh-ins from months ago, a month apart. Without a staleness gate the page reports them in the present
+    // tense and projects twelve weeks forward from a date already in the past.
+    await putProfile(withWeights([[230, 85], [215, 84], [200, 83]]));
+    await show();
+    const said = screen.getByTestId('weight-direction').textContent ?? '';
+    expect(said).toMatch(/last weigh-in was \d+ days ago/i);
+    expect(said).not.toMatch(/losing|gaining/i);
+  });
+
+  test('says which way each rate points when they are compared', async () => {
+    // Two rates of the same size pointing opposite ways must never read as the same figure.
+    await putProfile(withWeights([[28, 79], [21, 79.2], [14, 79.4], [7, 79.6], [0, 79.8]]));
+    for (let d = 0; d < 14; d++) await seedDay(d, 1200);
+    await show();
+    await waitFor(() => expect(screen.getByTestId('disagreement')).toBeInTheDocument());
+    const text = screen.getByTestId('disagreement').textContent ?? '';
+    expect(text).toMatch(/up/);
+    expect(text).toMatch(/down/);
+    expect(text).toMatch(/disagree/i);
+  });
+
+  test('shows the weights themselves, not only a picture of them', async () => {
+    await putProfile(withWeights([[28, 81.5], [14, 80.9], [0, 80.2]]));
+    await show();
+    const list = screen.getByTestId('weight-log');
+    for (const kg of ['81.5 kg', '80.9 kg', '80.2 kg']) {
+      expect(within(list).getByText(kg)).toBeInTheDocument();
+    }
+  });
+
+  test('accepts a comma for the decimal point', async () => {
+    // A Spanish-locale keyboard types 79,4. Refusing it as "not a number" would be false.
+    await putProfile(withWeights([[14, 80]]));
+    await show();
+    fireEvent.change(screen.getByLabelText(/weight for/i), { target: { value: '79,4' } });
+    fireEvent.click(screen.getByRole('button', { name: /save weight/i }));
+    await waitFor(async () => {
+      const p = await getProfile();
+      expect(p?.weightLog.some((w) => w.kg === 79.4)).toBe(true);
+    });
   });
 
   test('refuses an impossible weight and changes nothing', async () => {

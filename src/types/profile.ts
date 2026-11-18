@@ -36,6 +36,14 @@ export type OverridableTargetKey =
 
 export type Targets = {
   energyKcal: number;
+  /**
+   * Energy OUT: the whole-day expenditure before any goal offset and before any figure the person typed.
+   *
+   * `energyKcal` is what they should EAT and is not this — a goal moves the two apart by up to 1,100 kcal a day,
+   * and a typed override replaces the first while leaving this one alone. Anything reasoning about a balance
+   * between eating and burning must read this, never `energyKcal`.
+   */
+  maintenanceKcal: number;
   rmrKcal: number;
   proteinG: number;
   proteinFloorG: number;

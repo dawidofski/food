@@ -14,6 +14,15 @@ export const MIN_SPAN_DAYS = 14;
 /** Inside this, in either direction, it is holding steady rather than drifting. */
 export const HOLDING_KG_PER_WEEK = 0.1;
 
+/**
+ * How long ago the newest weigh-in may be before the trend stops describing now.
+ *
+ * Without this the app would read a log from six months ago and say "losing 0.47 kg a week, measured over the
+ * last 30 days" in the present tense, and project twelve weeks forward from a date already in the past. Someone
+ * who stopped weighing in would be told which way their body is going today.
+ */
+export const STALE_AFTER_DAYS = 21;
+
 export type WeightTrend =
   | {
       kind: 'losing' | 'gaining' | 'holding';
@@ -28,7 +37,7 @@ export type WeightTrend =
        */
       seKgPerDay: number;
     }
-  | { kind: 'unknown'; reason: 'none' | 'too-few' | 'too-short'; points: number; spanDays: number };
+  | { kind: 'unknown'; reason: 'none' | 'too-few' | 'too-short' | 'stale'; points: number; spanDays: number; daysSinceLast?: number };
 
 const DAY_MS = 86_400_000;
 
@@ -48,7 +57,10 @@ function noonOf(dayKey: string): number {
  * The log is deduplicated by date keeping the last figure for a day, sorted, and stripped of rows whose weight
  * is not a finite number, because a caller must not have to have done any of that.
  */
-export function weightTrend(log: { date: string; kg: number }[], _on: Date): WeightTrend {
+export function weightTrend(log: { date: string; kg: number }[], on: Date): WeightTrend {
+  // Last one wins for a repeated date, and "last" means last in the array the caller gave us — which is the only
+  // thing that distinguishes two rows carrying the same date. Order therefore matters here and nowhere else, so
+  // the tests pin both orders.
   const byDate = new Map<string, number>();
   for (const row of log) {
     if (typeof row?.date !== 'string' || !Number.isFinite(row?.kg)) continue;
@@ -68,9 +80,15 @@ export function weightTrend(log: { date: string; kg: number }[], _on: Date): Wei
   if (n === 0) return { kind: 'unknown', reason: 'none', points: 0, spanDays: 0 };
   if (n < MIN_WEIGH_INS) return { kind: 'unknown', reason: 'too-few', points: n, spanDays };
   if (spanDays < MIN_SPAN_DAYS) return { kind: 'unknown', reason: 'too-short', points: n, spanDays };
+  const daysSinceLast = Math.max(0, Math.round((on.getTime() - (last?.t ?? 0)) / DAY_MS));
+  if (daysSinceLast > STALE_AFTER_DAYS) {
+    return { kind: 'unknown', reason: 'stale', points: n, spanDays, daysSinceLast };
+  }
 
   // Days since the first weigh-in, so the numbers stay small and the intercept means something.
-  const xs = points.map((p) => (p.t - (first?.t ?? 0)) / DAY_MS);
+  // Rounded to whole days: the raw millisecond gap across a daylight-saving change is 28 days and an hour,
+  // which tilts a perfectly flat log and makes a zero residual non-zero.
+  const xs = points.map((p) => Math.round((p.t - (first?.t ?? 0)) / DAY_MS));
   const ys = points.map((p) => p.kg);
   const meanX = xs.reduce((a, b) => a + b, 0) / n;
   const meanY = ys.reduce((a, b) => a + b, 0) / n;
@@ -97,11 +115,12 @@ export function weightTrend(log: { date: string; kg: number }[], _on: Date): Wei
   }
   const seKgPerDay = n > 2 ? Math.sqrt(ss / (n - 2) / sxx) : 0;
 
-  const kgPerWeek = slope * 7;
+  const raw = slope * 7;
+  const kgPerWeek = Number.isFinite(raw) ? raw : 0;
   const kind = Math.abs(kgPerWeek) < HOLDING_KG_PER_WEEK ? 'holding' : kgPerWeek < 0 ? 'losing' : 'gaining';
   return {
     kind,
-    kgPerWeek: Number.isFinite(kgPerWeek) ? kgPerWeek : 0,
+    kgPerWeek,
     spanDays,
     points: n,
     seKgPerDay: Number.isFinite(seKgPerDay) ? seKgPerDay : 0,
