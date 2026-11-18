@@ -59,6 +59,38 @@ export function isAiEnabled(): boolean {
   return getApiKey() !== null && isAiSwitchedOn();
 }
 
+/**
+ * A separate switch for sending a PHOTOGRAPH to a third party.
+ *
+ * Deliberately not the same switch as the phrase fallback. Agreeing that an unrecognised food word may be sent
+ * is a different decision from agreeing that a picture taken with the phone's camera may be: a photograph can
+ * carry a kitchen, a face, a hand, an address on a letter behind the packet. Someone who said yes to one has
+ * not said yes to the other, and the app must not read the first as consent for the second.
+ */
+const LABEL_SWITCH = lsKey('ai.labelPhoto');
+
+export function isLabelPhotoSwitchedOn(): boolean {
+  try {
+    return localStorage.getItem(LABEL_SWITCH) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setLabelPhotoSwitch(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(LABEL_SWITCH, '1');
+    else localStorage.removeItem(LABEL_SWITCH);
+  } catch {
+    /* nothing to store in unreadable storage; the feature simply stays off */
+  }
+}
+
+/** True only with a key, the AI switch on, AND this separate agreement to send a photograph. */
+export function isLabelPhotoEnabled(): boolean {
+  return isAiEnabled() && isLabelPhotoSwitchedOn();
+}
+
 /** Last four characters visible, the rest dots; a key of four or fewer characters is fully masked. */
 export function maskKey(key: string): string {
   if (key.length <= 4) return '•'.repeat(key.length);

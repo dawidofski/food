@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { loadDatasetMeta, type DatasetMeta } from '@/data/foodRepository';
-import { clearApiKey, getApiKey, isAiSwitchedOn, maskKey, setAiSwitch, setApiKey } from '@/state/aiSettings';
+import { clearApiKey, getApiKey, isAiSwitchedOn, isLabelPhotoSwitchedOn, maskKey, setAiSwitch, setApiKey, setLabelPhotoSwitch } from '@/state/aiSettings';
 import { BackupSettings, EraseSettings, StorageSettings } from './DataSettings';
 import ProfileSettings from './ProfileSettings';
 import ThemeSettings from './ThemeSettings';
@@ -31,6 +31,7 @@ export default function Settings({ onErased }: { onErased?: () => void }) {
 function AiSettings() {
   const [key, setKey] = useState<string | null>(() => getApiKey());
   const [on, setOn] = useState<boolean>(() => isAiSwitchedOn());
+  const [labelOn, setLabelOn] = useState<boolean>(() => isLabelPhotoSwitchedOn());
   const [draft, setDraft] = useState('');
   const [replacing, setReplacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +95,39 @@ function AiSettings() {
           </li>
           <li>Your key stays in this browser only. It is not part of the app&rsquo;s code and is removed if you erase everything.</li>
         </ul>
+
+        {/*
+          The disclosure comes BEFORE the control, and the control is its own, because agreeing to send a word
+          is not agreeing to send a photograph. A picture can carry a kitchen, a face, a hand, an address on a
+          letter behind the packet — things a food word cannot.
+        */}
+        <div data-testid="label-photo-setting" className="space-y-2 rounded-lg border border-slate-300 dark:border-slate-700 p-3">
+          <h3 className="text-base font-semibold">Reading a nutrition label from a photo</h3>
+          <p className="text-sm">
+            With this on, you can photograph the nutrition table on a packet and the app will fill in a food
+            from it. <strong>The photograph itself is sent to DeepSeek</strong>, a third party outside your
+            device, and is handled under their data policy. A photograph can show more than you intend: what
+            is behind the packet, your hand, your kitchen. Point it at the label and nothing else.
+          </p>
+          <p className="text-sm">
+            It reads only the per 100 g or per 100 ml column, never a per-serving one, because mixing the two
+            would be wrong by the serving ratio. A figure the label does not print is left blank, never zero.
+            Every figure is shown to you to check, and the food is saved as one of your own, marked
+            self-reported, exactly as if you had typed it in.
+          </p>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={labelOn}
+              onChange={(e) => {
+                setLabelOn(e.target.checked);
+                setLabelPhotoSwitch(e.target.checked);
+              }}
+              className="h-5 w-5"
+            />
+            Let me photograph a nutrition label
+          </label>
+        </div>
 
         {key !== null && (
           <div className="space-y-2">

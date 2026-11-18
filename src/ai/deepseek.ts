@@ -33,7 +33,7 @@ export type InterpretOptions = {
 
 export const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 export const DEEPSEEK_MODEL = 'deepseek-flash';
-import { phraseOperation, type AiOperation, type AiSuggestion } from './schemas';
+import { labelOperation, phraseOperation, type AiLabel, type AiOperation, type AiSuggestion } from './schemas';
 
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_PHRASE = 200;
@@ -168,4 +168,39 @@ export async function interpretEntry(text: string, opts: InterpretOptions): Prom
   const phrase = text.trim().slice(0, MAX_PHRASE);
   if (phrase === '' && opts.apiKey.trim() !== '') return [];
   return runOperation(phraseOperation, JSON.stringify({ phrase }), opts);
+}
+
+/**
+ * The longest side an image is sent at.
+ *
+ * DeepSeek's vision guide states that images larger than roughly 1300x1300 are scaled down to about that before
+ * the model sees them, with an upper bound of 1024 tokens per image. Sending a 12-megapixel phone photo
+ * therefore buys no legibility at all — it only spends the person's data and their money. A nutrition label
+ * needs to be readable, not large.
+ */
+export const LABEL_IMAGE_MAX_PX = 1300;
+
+/**
+ * Read a nutrition label from a photograph.
+ *
+ * **This is the one operation where the model reads numbers**, and the addendum fences it as transcription of
+ * figures already printed on a packet in the person's hand, not as nutrition knowledge. The fences, all of them
+ * requirements: per 100 g or 100 ml only; an absent figure stays absent and is never written as zero; the
+ * person sees every figure before anything is saved; and it sits behind its own switch, separate from the
+ * phrase fallback, because sending a photograph to a third party is a different decision from sending a word.
+ *
+ * `dataUrl` must already be downscaled — see `LABEL_IMAGE_MAX_PX`.
+ */
+export async function readLabelPhoto(dataUrl: string, opts: InterpretOptions): Promise<AiLabel[]> {
+  if (!/^data:image\/(jpeg|png|webp|gif);base64,/.test(dataUrl)) return [];
+  return runOperation(
+    labelOperation,
+    [
+      { type: 'text', text: 'Read the nutrition table in this photograph.' },
+      // The OpenAI-compatible shape DeepSeek's vision guide documents for chat completions. `detail` is left
+      // at the default: 'low' downscales to 512x512, which loses the small print a label is made of.
+      { type: 'image_url', image_url: { url: dataUrl } },
+    ],
+    { ...opts, maxTokens: 600 },
+  );
 }

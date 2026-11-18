@@ -149,7 +149,9 @@ describe('settings: the DeepSeek key', () => {
 
   test('states the privacy consequence before the fallback can be enabled', () => {
     render(<Settings />);
-    expect(screen.getByText(/sent to deepseek/i)).toBeInTheDocument();
+    // Narrowed when the label-photo disclosure added a second "sent to DeepSeek": this test is about the
+    // PHRASE fallback's sentence, so it names it.
+    expect(screen.getByText(/the text of the one phrase it could not match is sent to DeepSeek/i)).toBeInTheDocument();
     expect(screen.getByText(/never sent/i)).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /use deepseek/i })).not.toBeInTheDocument();
   });
@@ -408,6 +410,31 @@ describe('settings: data source and what cannot be checked', () => {
     expect(text).toMatch(/added sugar/i);
     expect(text).toMatch(/allergen/i);
     expect(text).not.toMatch(/allergen-free/i);
+  });
+});
+
+describe('the label photo disclosure', () => {
+  test('says a photo is sent to a third party, before the control that enables it', async () => {
+    render(<Settings onErased={() => {}} />);
+    const box = await screen.findByTestId('label-photo-setting');
+    const control = within(box).getByRole('checkbox');
+    const warning = within(box).getByText(/the photograph itself is sent to DeepSeek/i);
+    // Before, in the document: a person must read what it does before they can agree to it.
+    expect(warning.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('says what it will and will not read off the label', async () => {
+    render(<Settings onErased={() => {}} />);
+    const box = await screen.findByTestId('label-photo-setting');
+    expect(within(box).getByText(/per 100 g or per 100 ml column, never a per-serving one/i)).toBeInTheDocument();
+    expect(within(box).getByText(/left blank, never zero/i)).toBeInTheDocument();
+    expect(within(box).getByText(/marked\s+self-reported/i)).toBeInTheDocument();
+  });
+
+  test('starts off, and is its own switch', async () => {
+    render(<Settings onErased={() => {}} />);
+    const box = await screen.findByTestId('label-photo-setting');
+    expect(within(box).getByRole('checkbox')).not.toBeChecked();
   });
 });
 
