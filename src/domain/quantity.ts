@@ -5,7 +5,15 @@ const NUMBER_WORDS: Record<string, number> = {
   zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
   eighteen: 18, nineteen: 19, twenty: 20, half: 0.5,
+  // Spanish, because the owner shops and eats in Spain and a packet in his hand is in Spanish. These cost
+  // nothing and work with no key and no network, which the AI fallback cannot claim. Only the amount words
+  // are here: units (g, ml, kg) are already language-neutral, and a decimal comma already parses.
+  cero: 0, uno: 1, una: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8,
+  nueve: 9, diez: 10, once: 11, doce: 12, medio: 0.5, media: 0.5,
 };
+
+/** Spanish words that mean "half", which take an article after them exactly as "half" does. */
+const HALF_WORDS = new Set(['half', 'medio', 'media']);
 
 // Weight and volume units convert straight to grams. ml and l are treated as grams 1:1: exact for
 // water-like liquids and close enough for the rest (milk, juice, cola). Density is not modelled.
@@ -96,8 +104,10 @@ export function parseQuantity(text: string): { quantity: Quantity; rest: string 
   const word = WORD_NUM.exec(t);
   if (word) {
     let after = t.slice(word[0].length);
-    // "half a banana": the article after "half" is not part of the food.
-    if (word[1] === 'half') after = after.replace(/^\s+an?(?![a-z])/, '');
+    // "half a banana" / "medio un aguacate": the article after a half-word is not part of the food.
+    if (HALF_WORDS.has(word[1] ?? '')) after = after.replace(/^\s+(an?|el|la|un|una|de)(?![a-z])/, '');
+    // "un puñado de almendras": the preposition after a count word is not part of the food either.
+    else after = after.replace(/^\s+de(?![a-z])/, '');
     return finish(NUMBER_WORDS[word[1]!]!, after);
   }
 

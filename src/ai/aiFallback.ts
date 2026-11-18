@@ -5,7 +5,7 @@ import { parseQuantity, type Quantity } from '@/domain/quantity';
 import { resolveItems } from '@/domain/resolveItems';
 import type { Resolution } from '@/types/diary';
 import type { AiFailure, AiSuggestion, InterpretOptions } from '@/ai/deepseek';
-import type { AiComponent } from '@/ai/schemas';
+import type { AiComponent, AiIngredient } from '@/ai/schemas';
 
 /** What the flow needs from the AI path, injectable so tests never touch the network or localStorage. */
 export type AiDeps = {
@@ -15,6 +15,8 @@ export type AiDeps = {
   interpret: (text: string, opts: InterpretOptions) => Promise<AiSuggestion[]>;
   /** Optional: breaks a composite dish into the foods it is made of. Absent means the app simply never offers it. */
   breakDownDish?: (dish: string, opts: InterpretOptions) => Promise<AiComponent[]>;
+  /** Optional: reads a written recipe into ingredient lines. Absent means the app simply never offers it. */
+  readIngredientList?: (text: string, opts: InterpretOptions) => Promise<AiIngredient[]>;
 };
 
 /** One unresolved phrase, the model's plain-English description of it, and the dataset foods that description landed on. */
@@ -208,4 +210,30 @@ export async function applyDish(
     resolution: resolveItems(items, base),
     readings: [{ phrase, description: described.join('; '), reads }],
   };
+}
+
+/**
+ * A recipe, typed or pasted, read into the lines the batch builder already understands.
+ *
+ * It invents nothing: the prompt forbids adding an ingredient the text does not mention and forbids guessing an
+ * amount it does not give, so a line without a quantity is left out rather than estimated. **An amount the
+ * person stated is passed through exactly** — 500 g in, 500 g out — because the person cooking knows what went
+ * in the pan and the model does not.
+ *
+ * Returns the lines only. Nothing is saved, nothing is resolved here; the batch builder does what it always did
+ * with the text in that box, and the person sees every line before saving.
+ */
+export async function readIngredients(
+  text: string,
+  ai: AiDeps | undefined,
+  onFailure?: (f: AiFailure) => void,
+): Promise<string[] | null> {
+  if (!ai?.isEnabled() || !ai.isOnline() || ai.readIngredientList === undefined) return null;
+  const key = ai.getKey();
+  if (!key) return null;
+  const body = text.trim();
+  if (body === '') return null;
+  const lines = await ai.readIngredientList(body, { apiKey: key, ...(onFailure ? { onFailure } : {}) });
+  if (lines.length === 0) return null;
+  return lines.map((l) => `${l.quantity} ${l.unit} ${l.description}`);
 }
