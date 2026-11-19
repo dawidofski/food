@@ -1,5 +1,6 @@
 import { useHoldUpdates } from '@/state/updates';
 import LabelPhoto from '@/ui/components/LabelPhoto';
+import type { FoodDraft } from '@/domain/entryToFood';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { allCustomFoods } from '@/data/db';
 import {
@@ -43,6 +44,14 @@ type Props = {
   food?: CustomFood;
   /** A starting name for a new food, e.g. what the person just typed in the log. */
   initialName?: string;
+  /**
+   * A pre-filled new food, worked out from something already logged.
+   *
+   * Pre-filling, never saving: every figure appears in a box the person reads and can change, which is the
+   * only reason it is honest to carry figures across at all. A key the draft leaves out stays empty, because
+   * empty is this form's word for unknown.
+   */
+  draft?: FoodDraft;
   onSaved: (food: CustomFood) => void;
   onCancel: () => void;
   /** Called after a delete; the delete control shows only when editing a saved food. */
@@ -53,28 +62,29 @@ type Props = {
  * The custom-food form. Every nutrient field starts EMPTY and an empty field is saved as unknown (no key), never as 0:
  * state is kept as the raw text, and the only text-to-number step is parseNutrientField.
  */
-export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDeleted }: Props) {
+export function FoodEditor({ food, initialName = '', draft, onSaved, onCancel, onDeleted }: Props) {
   useHoldUpdates(true); // mounted only while editing
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [name, setName] = useState(food?.name ?? initialName);
-  const [synonyms, setSynonyms] = useState(food?.synonyms.join(', ') ?? '');
-  const [portionLabel, setPortionLabel] = useState(food?.referencePortion.label ?? '1 serving');
-  const [portionGrams, setPortionGrams] = useState(food ? String(food.referencePortion.grams) : '100');
+  const [name, setName] = useState(food?.name ?? draft?.name ?? initialName);
+  const [synonyms, setSynonyms] = useState((food ?? draft)?.synonyms.join(', ') ?? '');
+  const [portionLabel, setPortionLabel] = useState((food ?? draft)?.referencePortion.label ?? '1 serving');
+  const [portionGrams, setPortionGrams] = useState(String((food ?? draft)?.referencePortion.grams ?? 100));
   const [nutrients, setNutrients] = useState<Partial<Record<NutrientKey | 'saltG', string>>>(() => {
     const t: Partial<Record<NutrientKey, string>> = {};
+    const from = (food ?? draft)?.nutrientsPer100g;
     for (const k of NUTRIENT_KEYS) {
-      const v = food?.nutrientsPer100g[k];
+      const v = from?.[k];
       if (typeof v === 'number') t[k] = String(Math.round(v * 1000) / 1000);
     }
     return t;
   });
   const [flags, setFlags] = useState<Record<FlagKey, boolean>>(() => {
     const f = {} as Record<FlagKey, boolean>;
-    for (const o of FLAG_OPTIONS) f[o.key] = food?.classification[o.key] ?? false;
+    for (const o of FLAG_OPTIONS) f[o.key] = (food ?? draft)?.classification[o.key] ?? false;
     return f;
   });
-  const [ultra, setUltra] = useState(food?.classification.novaGroup === 4);
-  const [allergens, setAllergens] = useState<string[]>(food?.allergens ?? []);
+  const [ultra, setUltra] = useState((food ?? draft)?.classification.novaGroup === 4);
+  const [allergens, setAllergens] = useState<string[]>((food ?? draft)?.allergens ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

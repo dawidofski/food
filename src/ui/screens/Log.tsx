@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { isAiEnabled } from '@/state/aiSettings';
+import { entryToFoodDraft, type FoodDraft } from '@/domain/entryToFood';
 import { useHoldUpdates } from '@/state/updates';
 import { defaultDeps, useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
@@ -37,6 +38,9 @@ export default function Log({
   /** One attempt per entry: asking twice spends the person's money for the same answer. */
   const [dishTried, setDishTried] = useState(false);
   const [dishFailed, setDishFailed] = useState(false);
+  /** A food worked out from something already logged, waiting in the editor for the person to check. */
+  const [foodDraft, setFoodDraft] = useState<FoodDraft | null>(null);
+  const [foodDraftError, setFoodDraftError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -130,14 +134,26 @@ export default function Log({
 
       {editorName !== null && (
         <section className="rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
+          {foodDraft && (
+            <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">
+              Worked out from what you logged, as a food of your own. Check every figure: a figure the entry
+              could only vouch for as a floor is left empty rather than guessed, and saving it marks the food
+              self-reported, because the numbers are now your snapshot rather than the database&rsquo;s.
+            </p>
+          )}
           <FoodEditor
             initialName={editorName.charAt(0).toUpperCase() + editorName.slice(1)}
-            onCancel={() => setEditorName(null)}
+            {...(foodDraft ? { draft: foodDraft } : {})}
+            onCancel={() => { setEditorName(null); setFoodDraft(null); }}
             onSaved={(saved) => {
+              const fromDraft = foodDraft !== null;
               setEditorName(null);
+              setFoodDraft(null);
+              // Saved from a recent entry, nothing was being logged: put its name in the box, ready to log.
+              if (fromDraft) setDraft(saved.name);
               // The food now exists, so the same text can resolve. Opened from a scan that found nothing there is
               // no earlier text, so the new food's own name is put in the box ready to log.
-              if (flow.lastText.trim() !== '') void flow.submit(flow.lastText);
+              else if (flow.lastText.trim() !== '') void flow.submit(flow.lastText);
               else setDraft(saved.name);
             }}
           />
@@ -249,6 +265,8 @@ export default function Log({
         </section>
       )}
 
+      {foodDraftError && <p role="alert" className="text-sm">{foodDraftError}</p>}
+
       {recent.length > 0 && (
         <section aria-label="Recent entries">
           <h2 className="text-sm font-semibold uppercase text-slate-600 dark:text-slate-400">Recent</h2>
@@ -261,6 +279,18 @@ export default function Log({
                   setDraft(t);
                   setEditorName(null);
                   void flow.submit(t);
+                }}
+                onSaveAsFood={(row) => {
+                  const d = entryToFoodDraft(row, deps.lookup);
+                  // No weight behind it means no per-100 g figure exists to work out, and inventing a
+                  // denominator would put a made-up table in their own foods.
+                  if (d === undefined) {
+                    setFoodDraftError('That entry has no weight behind it, so there is no per-100 g figure to work out. Add it as a food yourself instead.');
+                    return;
+                  }
+                  setFoodDraftError(null);
+                  setFoodDraft(d);
+                  setEditorName('');
                 }}
               />
             ))}
