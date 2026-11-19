@@ -1,5 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { isAiEnabled } from '@/state/aiSettings';
+import { putSavedMeal } from '@/data/db';
+import { mealFromEntry } from '@/domain/savedMeals';
+import SavedMeals from '@/ui/components/SavedMeals';
 import { useHoldUpdates } from '@/state/updates';
 import { defaultDeps, useEntryFlow, type FlowDeps } from '@/state/useEntryFlow';
 import type { DiaryEntry } from '@/types/diary';
@@ -37,6 +40,11 @@ export default function Log({
   /** One attempt per entry: asking twice spends the person's money for the same answer. */
   const [dishTried, setDishTried] = useState(false);
   const [dishFailed, setDishFailed] = useState(false);
+  /** The entry being named as a meal, or null. */
+  const [naming, setNaming] = useState<DiaryEntry | null>(null);
+  const [mealName, setMealName] = useState('');
+  const [mealNote, setMealNote] = useState<string | null>(null);
+  const [mealsToken, setMealsToken] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -249,6 +257,58 @@ export default function Log({
         </section>
       )}
 
+      <SavedMeals
+        reloadToken={mealsToken}
+        onLog={(m) => {
+          setNaming(null);
+          return flow.submitSavedMeal(m);
+        }}
+      />
+
+      {naming && (
+        <section aria-label="Name this meal" className="space-y-2 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
+          <p className="text-base">{`Save “${naming.rawText}” as a meal you can log again?`}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400">
+            It remembers which foods and how much, not their figures. Every time you log it the numbers are
+            worked out from those foods again, so they keep the source they have now and nothing is frozen.
+          </p>
+          <label className="block text-sm">
+            Call it
+            <input
+              type="text"
+              value={mealName}
+              onChange={(e) => setMealName(e.target.value)}
+              autoComplete="off"
+              placeholder="my usual porridge"
+              className="mt-1 min-h-12 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3"
+            />
+          </label>
+          {mealNote && <p role="alert" className="text-sm">{mealNote}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={mealName.trim() === ''}
+              onClick={() => {
+                const m = mealFromEntry(naming, mealName, globalThis.crypto.randomUUID(), new Date().toISOString());
+                if (m === undefined) {
+                  setMealNote('That entry has no foods with a weight behind it, so there is nothing to log again.');
+                  return;
+                }
+                void putSavedMeal(m)
+                  .then(() => { setNaming(null); setMealName(''); setMealsToken((n) => n + 1); })
+                  .catch(() => setMealNote('That could not be saved.'));
+              }}
+              className="min-h-12 flex-1 rounded-lg border border-slate-900 dark:border-slate-100 px-3 text-sm font-semibold disabled:opacity-50"
+            >
+              Save it
+            </button>
+            <button type="button" onClick={() => { setNaming(null); setMealName(''); setMealNote(null); }} className="min-h-12 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-sm">
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
+
       {recent.length > 0 && (
         <section aria-label="Recent entries">
           <h2 className="text-sm font-semibold uppercase text-slate-600 dark:text-slate-400">Recent</h2>
@@ -262,6 +322,7 @@ export default function Log({
                   setEditorName(null);
                   void flow.submit(t);
                 }}
+                onSaveMeal={(row) => { setNaming(row); setMealNote(null); }}
               />
             ))}
           </ul>

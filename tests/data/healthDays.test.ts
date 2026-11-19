@@ -128,7 +128,9 @@ describe('upgrading', () => {
     const db3 = await import('@/data/db');
     const hd = await import('@/data/healthDays');
     dbm = db3;
-    expect(db3.DB_VERSION).toBe(3);
+    // Not pinned to a literal: the claim is that a database written before healthDays existed gains the
+    // store and keeps its entries, which stays true as later stores raise the version.
+    expect(db3.DB_VERSION).toBeGreaterThanOrEqual(3);
     expect((await db3.getEntry('old'))!.id).toBe('old');
     expect(await storeNames()).toEqual(
       expect.arrayContaining(['entries', 'customFoods', 'batches', 'offProducts', 'healthDays']),

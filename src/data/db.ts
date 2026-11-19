@@ -2,6 +2,7 @@ import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
 import type { OffProduct } from '@/types/food';
 import type { HealthDay } from '@/types/health';
+import type { SavedMeal } from '@/domain/savedMeals';
 import type { Profile } from '@/types/profile';
 
 /**
@@ -23,16 +24,18 @@ interface FoodDiaryDB extends DBSchema {
   offProducts: { key: string; value: OffProduct };
   /** What the owner types in from Samsung Health, one row per local day. Not food, so not in `entries`. */
   healthDays: { key: string; value: HealthDay };
+  /** Meals the owner named so they can log them again. Refs only: the foods are looked up fresh each time. */
+  savedMeals: { key: string; value: SavedMeal };
 }
 
 const DB_NAME = 'food-diary';
 /**
- * 2 adds `offProducts`; 3 adds `healthDays`. Raise this for EVERY store added: `upgrade` runs only when the stored version is below it,
+ * 2 adds `offProducts`; 3 adds `healthDays`; 4 adds `savedMeals`. Raise this for EVERY store added: `upgrade` runs only when the stored version is below it,
  * and `create` below is written to add whatever is missing, so an old database gains the new store and a fresh one
  * gets everything. The repair path in `open()` relies on `create` being safe to call on a database that already
  * holds some of the stores.
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 /** Every localStorage key this app writes MUST go through `lsKey`, so `eraseEverything` can find it. */
 export const LS_PREFIX = 'fd.';
 export const lsKey = (name: string): string => `${LS_PREFIX}${name}`;
@@ -40,7 +43,7 @@ const PROFILE_KEY = lsKey('profile');
 
 let dbPromise: Promise<IDBPDatabase<FoodDiaryDB>> | null = null;
 
-const STORES = ['entries', 'customFoods', 'batches', 'offProducts', 'healthDays'] as const;
+const STORES = ['entries', 'customFoods', 'batches', 'offProducts', 'healthDays', 'savedMeals'] as const;
 
 /** Adds whatever is missing, so it serves a fresh database, a version upgrade and the repair in `open()` alike. */
 function create(d: IDBPDatabase<FoodDiaryDB>): void {
@@ -54,6 +57,7 @@ function create(d: IDBPDatabase<FoodDiaryDB>): void {
   if (!d.objectStoreNames.contains('batches')) d.createObjectStore('batches', { keyPath: 'id' });
   if (!d.objectStoreNames.contains('offProducts')) d.createObjectStore('offProducts', { keyPath: 'barcode' });
   if (!d.objectStoreNames.contains('healthDays')) d.createObjectStore('healthDays', { keyPath: 'date' });
+  if (!d.objectStoreNames.contains('savedMeals')) d.createObjectStore('savedMeals', { keyPath: 'id' });
 }
 
 function missingStores(d: IDBPDatabase<FoodDiaryDB>): string[] {
@@ -479,21 +483,17 @@ async function eraseStores(): Promise<void> {
   }
 
   const d = await db();
-  const tx = d.transaction(['entries', 'customFoods', 'batches', 'offProducts', 'healthDays'], 'readwrite');
-  await Promise.all([
-    tx.objectStore('entries').clear(),
-    tx.objectStore('customFoods').clear(),
-    tx.objectStore('batches').clear(),
-    tx.objectStore('offProducts').clear(),
-    tx.objectStore('healthDays').clear(),
-    tx.done,
-  ]);
+  // Enumerated from STORES for the same reason the localStorage sweep goes by prefix: a hand-written list
+  // drifts the day a store is added, and an erase that quietly leaves one behind is the worst way to find out.
+  // This was not hypothetical — `savedMeals` was missed from the old literal list.
+  const tx = d.transaction(STORES, 'readwrite');
+  await Promise.all([...STORES.map((name) => tx.objectStore(name).clear()), tx.done]);
   if (!swept) throw sweepError;
 }
 
 // ---- import (one transaction) ----
 
-export type ImportRows = { entries: DiaryEntry[]; customFoods: CustomFood[]; batches: Batch[]; healthDays: HealthDay[] };
+export type ImportRows = { entries: DiaryEntry[]; customFoods: CustomFood[]; batches: Batch[]; healthDays: HealthDay[]; savedMeals: SavedMeal[] };
 
 /**
  * Writes already-validated rows to all four stores in ONE transaction, so an import lands whole or
@@ -503,13 +503,13 @@ export type ImportRows = { entries: DiaryEntry[]; customFoods: CustomFood[]; bat
  * as it was. `at` is normalised so the index invariant holds.
  */
 export async function writeImportedRows(rows: ImportRows, mode: 'merge' | 'replace'): Promise<{ added: number; skipped: number }> {
-  const tx = (await db()).transaction(['entries', 'customFoods', 'batches', 'healthDays'], 'readwrite');
+  const tx = (await db()).transaction(['entries', 'customFoods', 'batches', 'healthDays', 'savedMeals'], 'readwrite');
   const done = tx.done.catch(() => undefined);
   let added = 0;
   let skipped = 0;
   try {
     if (mode === 'replace') {
-      await Promise.all([tx.objectStore('entries').clear(), tx.objectStore('customFoods').clear(), tx.objectStore('batches').clear(), tx.objectStore('healthDays').clear()]);
+      await Promise.all([tx.objectStore('entries').clear(), tx.objectStore('customFoods').clear(), tx.objectStore('batches').clear(), tx.objectStore('healthDays').clear(), tx.objectStore('savedMeals').clear()]);
     }
     const put = async <T>(store: { getKey(k: string): Promise<unknown>; put(v: T): Promise<unknown> }, row: T, key: string) => {
       if (mode === 'merge' && (await store.getKey(key)) !== undefined) {
@@ -524,6 +524,7 @@ export async function writeImportedRows(rows: ImportRows, mode: 'merge' | 'repla
     for (const b of rows.batches) await put(tx.objectStore('batches'), b, b.id);
     // Keyed by day: in merge a local day is kept as it is, as every other local row is.
     for (const h of rows.healthDays) await put(tx.objectStore('healthDays'), h, h.date);
+    for (const m of rows.savedMeals) await put(tx.objectStore('savedMeals'), m, m.id);
   } catch (err) {
     safeAbort(tx);
     await done;
@@ -531,4 +532,35 @@ export async function writeImportedRows(rows: ImportRows, mode: 'merge' | 'repla
   }
   await tx.done;
   return { added, skipped };
+}
+
+/**
+ * A meal the person named so they can log it again. Validated on the way in like every other record: a stored
+ * row with no refs could never be replayed, and writing one would be a saved meal that does nothing.
+ */
+export function validatedSavedMeal(m: SavedMeal): SavedMeal {
+  if (typeof m.id !== 'string' || m.id === '') throw new RangeError('savedMeal.id is missing');
+  if (typeof m.name !== 'string' || m.name.trim() === '') throw new RangeError('savedMeal.name is empty');
+  // No refs means nothing to replay, and a saved meal that logs nothing is worse than no saved meal.
+  if (!Array.isArray(m.refs) || m.refs.length === 0) throw new RangeError('savedMeal has no foods');
+  for (const r of m.refs) assertFiniteNumber(`savedMeal ${m.name} grams`, r.grams);
+  if (typeof m.savedAt !== 'string' || !Number.isFinite(new Date(m.savedAt).getTime())) {
+    throw new RangeError('savedMeal.savedAt is not a time');
+  }
+  return m;
+}
+
+export async function putSavedMeal(m: SavedMeal): Promise<void> {
+  const d = await db();
+  await d.put('savedMeals', validatedSavedMeal(m));
+}
+
+export async function allSavedMeals(): Promise<SavedMeal[]> {
+  const d = await db();
+  return d.getAll('savedMeals');
+}
+
+export async function deleteSavedMeal(id: string): Promise<void> {
+  const d = await db();
+  await d.delete('savedMeals', id);
 }

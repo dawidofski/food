@@ -10,7 +10,16 @@ const time = (at: string): string => {
   return Number.isFinite(d.getTime()) ? d.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 };
 
-export default function EntryRow({ entry, onRelog }: { entry: DiaryEntry; onRelog: (text: string) => void }) {
+export default function EntryRow({
+  entry,
+  onRelog,
+  onSaveMeal,
+}: {
+  entry: DiaryEntry;
+  onRelog: (text: string) => void;
+  /** Offered only where a meal can be saved from this entry; absent, and no such control is drawn. */
+  onSaveMeal?: (entry: DiaryEntry) => void;
+}) {
   const kcal = entry.nutrients.energyKcal;
   return (
     <li className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 py-2">
@@ -28,14 +37,26 @@ export default function EntryRow({ entry, onRelog }: { entry: DiaryEntry; onRelo
           <CoverageNote nutrient="energyKcal" coverage="partial" value={kcal} />
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => onRelog(entry.rawText)}
-        aria-label={`Log ${entry.rawText} again`}
-        className="min-h-11 shrink-0 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm"
-      >
-        Log again
-      </button>
+      <div className="flex shrink-0 flex-col gap-1">
+        <button
+          type="button"
+          onClick={() => onRelog(entry.rawText)}
+          aria-label={`Log ${entry.rawText} again`}
+          className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-sm"
+        >
+          Log again
+        </button>
+        {onSaveMeal && (
+          <button
+            type="button"
+            onClick={() => onSaveMeal(entry)}
+            aria-label={`Save ${entry.rawText} as a meal`}
+            className="min-h-11 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-xs"
+          >
+            Save as a meal
+          </button>
+        )}
+      </div>
     </li>
   );
 }

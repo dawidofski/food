@@ -1,10 +1,11 @@
 import {
-  LS_PREFIX, allBatches, allCustomFoods, allEntriesIncludingTombstones, allHealthDays, getProfile, lsKey, writeImportedRows,
+  LS_PREFIX, allBatches, allCustomFoods, allEntriesIncludingTombstones, allHealthDays, allSavedMeals, getProfile, lsKey, writeImportedRows,
   type ImportRows,
 } from '@/data/db';
 import { API_KEY_LS } from '@/state/aiSettings';
 import { MEAL_SLOTS, type Batch, type CustomFood, type DiaryEntry } from '@/types/diary';
 import type { HealthDay } from '@/types/health';
+import type { SavedMeal } from '@/domain/savedMeals';
 import type { Profile } from '@/types/profile';
 
 /**
@@ -36,6 +37,8 @@ type ExportFile = {
   batches: Batch[];
   /** Absent in a backup written before daily health data existed, which reads as none. The version is NOT bumped for it. */
   healthDays: HealthDay[];
+  /** Absent in a backup written before saved meals existed, which reads as none. The version is NOT bumped for it. */
+  savedMeals: SavedMeal[];
   profile: Profile | null;
   /** localStorage `fd.*` keys other than the profile and the API key. */
   settings: Record<string, string>;
@@ -66,6 +69,7 @@ export async function exportAll(): Promise<Blob> {
     customFoods: await allCustomFoods(),
     batches: await allBatches(),
     healthDays: await allHealthDays(),
+    savedMeals: await allSavedMeals(),
     profile: await getProfile(),
     settings: readSettings(),
   };
@@ -166,6 +170,17 @@ function entry(v: unknown, i: number): DiaryEntry {
   }
   for (const k of ['supersededBy', 'revisionOf']) if (o[k] !== undefined) str(o[k], `${w} ${k}`);
   return v as DiaryEntry;
+}
+
+function savedMeal(v: unknown, i: number): SavedMeal {
+  const w = `saved meal ${i + 1}`;
+  const o = obj(v, w);
+  idOf(o.id, w);
+  str(o.name, `${w} name`);
+  refs(o.refs, `${w} foods`);
+  if (!Array.isArray(o.refs) || o.refs.length === 0) fail(w, 'has no foods, so it could never be logged');
+  time(o.savedAt, `${w} time`);
+  return v as SavedMeal;
 }
 
 function customFood(v: unknown, i: number): CustomFood {
@@ -306,6 +321,9 @@ export function parseExport(text: string): Parsed {
   // An older backup has no healthDays key: that reads as none. A present key must be a list.
   const healthDays = o.healthDays === undefined ? [] : arr(o.healthDays, 'health days').map(healthDay).filter((h): h is HealthDay => h !== null);
   uniqueDays(healthDays);
+  // Absent in an older backup, which reads as none. A saved meal is a name and a list of refs; its figures
+  // were never stored, so there is nothing here that could restore a wrong number.
+  const savedMeals = o.savedMeals === undefined ? [] : arr(o.savedMeals, 'saved meals').map(savedMeal);
   const prof = o.profile === null || o.profile === undefined ? null : profile(o.profile);
   const settings: Record<string, string> = {};
   for (const [k, v] of Object.entries(obj(o.settings ?? {}, 'settings'))) {
@@ -313,7 +331,7 @@ export function parseExport(text: string): Parsed {
     if (EXCLUDED_LS.has(k)) fail(`setting "${k}"`, 'is not something a backup may carry');
     settings[k] = str(v, `setting "${k}"`);
   }
-  return { rows: { entries, customFoods, batches, healthDays }, profile: prof, settings };
+  return { rows: { entries, customFoods, batches, healthDays, savedMeals }, profile: prof, settings };
 }
 
 // ---- import ----

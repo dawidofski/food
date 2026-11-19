@@ -12,6 +12,7 @@ import { parseEntry, type ParsedItem } from '@/domain/parseEntry';
 import { applyCorrection, type Correction } from '@/domain/corrections';
 import { resolveItems, resolveKnownFood } from '@/domain/resolveItems';
 import { applyAi, applyDish, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
+import { replaySavedMeal, type SavedMeal } from '@/domain/savedMeals';
 import { breakDownDish, interpretEntry, readIngredientList, type AiFailure } from '@/ai/deepseek';
 import { getApiKey, isAiEnabled } from '@/state/aiSettings';
 import { loadReportedEnergy } from '@/data/reportedEnergy';
@@ -174,6 +175,8 @@ export type EntryFlow = {
    * ordinary entry: the same rules, the same warning gate, the same confirmation. Nothing is added silently.
    */
   submitKnownFood: (food: DatasetFood, grams: number, text: string, source?: FoodSource) => Promise<void>;
+  /** Logs a saved meal, working its figures out afresh. Resolves with the foods that could not be found. */
+  submitSavedMeal: (meal: SavedMeal) => Promise<FoodRef[]>;
   answer: (answerKey: string, yes: boolean) => void;
   addAnyway: () => Promise<void>;
   showAlternatives: () => void;
@@ -580,6 +583,31 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
     return (d.store.reviseEntry ?? reviseEntry)(entry.id, fields);
   }, []);
 
+  /**
+   * Log a meal the person saved earlier.
+   *
+   * The meal stores which foods and how much, never their figures, so this works them out from the foods as
+   * they are today: the numbers keep the source they always had, and a food that has gone is reported rather
+   * than quietly leaving a smaller meal. From here it is an ordinary entry — the same rules, the same warning
+   * gate, the same confirmation. Nothing is added silently.
+   */
+  const submitSavedMeal = useCallback(
+    async (meal: SavedMeal): Promise<FoodRef[]> => {
+      const d = depsRef.current;
+      await d.loadData();
+      const { resolution, missing } = replaySavedMeal(meal, d.lookup);
+      if (resolution.refs.length === 0) return missing;
+      const items: ParsedItem[] = resolution.refs.map((r) => ({
+        rawFragment: meal.name,
+        quantity: { grams: r.grams },
+        foodQuery: meal.name,
+      }));
+      await run(meal.name, { items, resolution });
+      return missing;
+    },
+    [run],
+  );
+
   const continueWithout = useCallback(async () => {
     const p = pendingResolution.current;
     const text = lastText;
@@ -681,6 +709,6 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
 
   return {
     stage, cards, questions, failures, lines, unresolved, aiReadings, aiRefused, dishPending, dataMissing, viewingAlternatives, outcome, error, lastText,
-    genericTargets, storedCount, submit, submitKnownFood, correctEntry, setEntryMeal, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, tryDish, rejectAi, dismissOutcome,
+    genericTargets, storedCount, submit, submitKnownFood, submitSavedMeal, correctEntry, setEntryMeal, answer, addAnyway, showAlternatives, backToGate, cancel, edit, continueWithout, acceptAi, tryDish, rejectAi, dismissOutcome,
   };
 }
