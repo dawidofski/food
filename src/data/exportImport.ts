@@ -5,6 +5,7 @@ import {
 import { API_KEY_LS } from '@/state/aiSettings';
 import { MEAL_SLOTS, type Batch, type CustomFood, type DiaryEntry } from '@/types/diary';
 import type { HealthDay } from '@/types/health';
+import { MAX_ITEM_GRAMS } from '@/domain/resolveItems';
 import type { SavedMeal } from '@/domain/savedMeals';
 import type { Profile } from '@/types/profile';
 
@@ -176,9 +177,19 @@ function savedMeal(v: unknown, i: number): SavedMeal {
   const w = `saved meal ${i + 1}`;
   const o = obj(v, w);
   idOf(o.id, w);
-  str(o.name, `${w} name`);
+  // Stricter than an entry's refs, and deliberately so. An entry is history: it is reported as it was written,
+  // whatever it holds. A saved meal is an instruction to log something again, so a weight the app would not
+  // accept from the person must not reach the store through a file either.
+  if (typeof o.name !== 'string' || o.name.trim() === '') fail(`${w} name`, 'must say what the meal is called');
   refs(o.refs, `${w} foods`);
-  if (!Array.isArray(o.refs) || o.refs.length === 0) fail(w, 'has no foods, so it could never be logged');
+  const rs = Array.isArray(o.refs) ? o.refs : [];
+  if (rs.length === 0) fail(w, 'has no foods, so it could never be logged');
+  rs.forEach((r, j) => {
+    const g = (r as { grams?: unknown }).grams;
+    if (typeof g !== 'number' || !(g > 0) || g > MAX_ITEM_GRAMS) {
+      fail(`${w} foods[${j}].grams`, `must be a weight between 0 and ${MAX_ITEM_GRAMS} g`);
+    }
+  });
   time(o.savedAt, `${w} time`);
   return v as SavedMeal;
 }
@@ -352,7 +363,7 @@ function lsRestore(snap: Map<string, string>): void {
 /**
  * Validates the whole file, then writes. `merge` adds what is missing and keeps every local row, the
  * local profile and local settings; `replace` makes the store match the file. Counts cover entries,
- * custom foods, batches and health days together. Throws, having changed nothing, if the file is not valid or a
+ * custom foods, batches, health days and saved meals together. Throws, having changed nothing, if the file is not valid or a
  * store refuses the write.
  */
 export async function importAll(file: File, mode: 'merge' | 'replace'): Promise<{ added: number; skipped: number }> {

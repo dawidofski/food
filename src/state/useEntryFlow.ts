@@ -1,6 +1,6 @@
 import { useHoldUpdates } from '@/state/updates';
 import { useCallback, useRef, useState } from 'react';
-import { addEntry, countActiveEntries, decrementBatchPortion, deleteEntry, entriesBetween, getProfile, reviseEntry } from '@/data/db';
+import { addEntry, allSavedMeals, countActiveEntries, decrementBatchPortion, deleteEntry, deleteSavedMeal, entriesBetween, getProfile, putSavedMeal, reviseEntry } from '@/data/db';
 import { batchHasCustomIngredient, batchWeightKnown, portionsFor, refreshBatches, withBatches } from '@/domain/batches';
 import { datasetLookup } from '@/data/datasetLookup';
 import { refreshCustomFoods, withCustomFoods } from '@/domain/customFoods';
@@ -12,7 +12,7 @@ import { parseEntry, type ParsedItem } from '@/domain/parseEntry';
 import { applyCorrection, type Correction } from '@/domain/corrections';
 import { resolveItems, resolveKnownFood } from '@/domain/resolveItems';
 import { applyAi, applyDish, type AiApplied, type AiDeps, type AiReading } from '@/ai/aiFallback';
-import { replaySavedMeal, type SavedMeal } from '@/domain/savedMeals';
+import { mealEntryText, replaySavedMeal, type SavedMeal } from '@/domain/savedMeals';
 import { breakDownDish, interpretEntry, readIngredientList, type AiFailure } from '@/ai/deepseek';
 import { getApiKey, isAiEnabled } from '@/state/aiSettings';
 import { loadReportedEnergy } from '@/data/reportedEnergy';
@@ -70,6 +70,10 @@ export type FlowDeps = {
     countActiveEntries?: typeof countActiveEntries;
     /** Optional: absent means the real store. Only its figures are used, and only through `reportedExpenditureOver`. */
     healthDaysBetween?: typeof healthDaysBetween;
+    /** The named meals. Through the seam like everything else, so a test can hand the screen its own. */
+    allSavedMeals?: typeof allSavedMeals;
+    putSavedMeal?: typeof putSavedMeal;
+    deleteSavedMeal?: typeof deleteSavedMeal;
   };
   /** The optional AI fallback for a phrase the local parser could not resolve. Absent means off. */
   ai?: AiDeps;
@@ -88,7 +92,7 @@ export const defaultDeps: FlowDeps = {
     await refreshOffFoods().catch(() => undefined);
   },
   isDataReady: () => datasetState() === 'ready',
-  store: { addEntry, entriesBetween, getProfile, reviseEntry, deleteEntry, countActiveEntries },
+  store: { addEntry, entriesBetween, getProfile, reviseEntry, deleteEntry, countActiveEntries, allSavedMeals, putSavedMeal, deleteSavedMeal },
   ai: {
     isEnabled: isAiEnabled,
     getKey: getApiKey,
@@ -586,23 +590,33 @@ export function useEntryFlow(deps: FlowDeps = defaultDeps): EntryFlow {
   /**
    * Log a meal the person saved earlier.
    *
-   * The meal stores which foods and how much, never their figures, so this works them out from the foods as
-   * they are today: the numbers keep the source they always had, and a food that has gone is reported rather
-   * than quietly leaving a smaller meal. From here it is an ordinary entry — the same rules, the same warning
-   * gate, the same confirmation. Nothing is added silently.
+   * The meal stores which foods and how much, never their figures or their flags, so this reads the foods as
+   * they are today and works everything out again. From here it is an ordinary entry — the same rules, the
+   * same warning gate, the same confirmation. Nothing is added silently.
+   *
+   * A meal whose foods are not all still there is not logged at all, and the refs that could not be replayed
+   * are returned so the screen can say so. Logging the rest would quietly add a smaller meal than the person
+   * asked for, with coverage claiming it was complete.
    */
   const submitSavedMeal = useCallback(
     async (meal: SavedMeal): Promise<FoodRef[]> => {
       const d = depsRef.current;
       await d.loadData();
       const { resolution, missing } = replaySavedMeal(meal, d.lookup);
-      if (resolution.refs.length === 0) return missing;
+      if (missing.length > 0 || resolution.refs.length === 0) return missing;
+      // Same resets as every other way in: without them a correction still pending on this flow would make
+      // this meal supersede that entry instead of adding one of its own.
+      revisesRef.current = null;
+      keptRef.current = null;
+      pendingResolution.current = null;
+      // The text is the foods and weights, not the meal's name: see mealEntryText.
+      const text = mealEntryText(resolution.refs, d.lookup);
       const items: ParsedItem[] = resolution.refs.map((r) => ({
-        rawFragment: meal.name,
+        rawFragment: `${Math.round(r.grams)} g`,
         quantity: { grams: r.grams },
-        foodQuery: meal.name,
+        foodQuery: d.lookup.get(r.source, r.foodId)?.name ?? '',
       }));
-      await run(meal.name, { items, resolution });
+      await run(text, { items, resolution });
       return missing;
     },
     [run],

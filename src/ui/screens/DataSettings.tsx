@@ -58,8 +58,8 @@ export function BackupSettings({ onImported }: { onImported: () => void }) {
       <h2 id="backup-h" className="text-lg font-semibold">Backup</h2>
       <p className="text-sm">
         Everything is stored in this browser only, and a browser can clear its own storage. Export a file now and then and keep it
-        elsewhere. The file holds your diary (including deleted and corrected entries), your own foods, batches, profile and settings.
-        It does not include your DeepSeek key.
+        elsewhere. The file holds your diary (including deleted and corrected entries), your own foods, batches, saved meals, your
+        daily sleep, steps and energy, your profile and your settings. It does not include your DeepSeek key.
       </p>
       <button type="button" onClick={() => void doExport()} className={btn}>Export everything</button>
       <p data-testid="last-copy" className="text-sm text-slate-700 dark:text-slate-300">
@@ -182,14 +182,14 @@ export function EraseSettings({ onErased }: { onErased?: () => void }) {
       <h2 id="erase-h" className="text-lg font-semibold">Erase everything</h2>
       {!confirming ? (
         <>
-          <p className="text-sm">Deletes your diary, your own foods, batches, profile, weight log and settings from this device.</p>
+          <p className="text-sm">Deletes your diary, your own foods, batches, saved meals, daily health figures, profile, weight log and settings from this device.</p>
           <button type="button" onClick={() => { setConfirming(true); setDone(false); setError(null); }} className={btn}>Erase everything</button>
         </>
       ) : (
         <div className="space-y-2">
           <p className="text-base font-medium">
-            This permanently deletes your diary, your own foods, batches, profile, weight log, settings and your DeepSeek key from this
-            device. It cannot be undone. Export a backup first if you want to keep anything.
+            This permanently deletes your diary, your own foods, batches, saved meals, daily health figures, profile, weight log,
+            settings and your DeepSeek key from this device. It cannot be undone. Export a backup first if you want to keep anything.
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={busy} onClick={() => void erase()} className="min-h-12 rounded-lg bg-red-700 dark:bg-red-800 px-4 text-white disabled:opacity-50">

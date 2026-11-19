@@ -81,16 +81,27 @@ describe('logging a saved meal again', () => {
     const question = screen.queryByRole('button', { name: /^no$/i });
     if (question) await act(async () => { fireEvent.click(question); });
     await waitFor(() => { expect(screen.queryByRole('button', { name: /add anyway/i })).not.toBeNull(); }, { timeout: 10000 });
+    // Nothing is in the diary while the gate is still open: the confirmation is what stores it.
+    expect((await allEntriesIncludingTombstones()).filter((e) => e.state === 'active')).toHaveLength(0);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /add anyway/i })); });
+    const { datasetLookup } = await import('@/data/datasetLookup');
+    const expected = (datasetLookup.get('dataset', realId)?.per100g.energyKcal ?? 0) * 2;
+    expect(expected).toBeGreaterThan(0);
     await waitFor(async () => {
       const rows = (await allEntriesIncludingTombstones()).filter((e) => e.state === 'active');
       expect(rows).toHaveLength(1);
-      // The figure came from the dataset just now, not from anything the meal stored.
-      expect(rows[0]?.nutrients.energyKcal).toBeGreaterThan(0);
+      // Exactly 200 g of that food's own figure, worked out just now — not a stored total, not one natural
+      // serving, and not the food the meal's name would have matched.
+      expect(rows[0]?.nutrients.energyKcal).toBeCloseTo(expected, 6);
+      expect(rows[0]?.items.map((i) => [i.foodId, i.grams])).toEqual([[realId, 200]]);
+      // The text is the food and its weight, not the meal's name: "Log again" on this row must not send the
+      // words "my usual rice" back through the search.
+      expect(rows[0]?.rawText).not.toMatch(/my usual rice/);
+      expect(rows[0]?.rawText).toMatch(/200 g /);
     }, { timeout: 10000 });
   }, 40000);
 
-  test('says a food is gone rather than logging a smaller meal', async () => {
+  test('says so and logs nothing when every food is gone', async () => {
     await putSavedMeal({
       id: 'm2', name: 'vanished meal', savedAt: new Date().toISOString(),
       refs: [{ source: 'dataset', foodId: 'no-such-food', grams: 200, classification: flags }],
@@ -98,7 +109,37 @@ describe('logging a saved meal again', () => {
     render(<Log deps={realDeps} />);
     const log = await screen.findByRole('button', { name: 'Log vanished meal' }, { timeout: 8000 });
     await act(async () => { fireEvent.click(log); });
-    expect(await screen.findByRole('alert', undefined, { timeout: 10000 })).toHaveTextContent(/none of the foods .* could be found any more, so nothing was logged/i);
+    expect(await screen.findByRole('alert', undefined, { timeout: 10000 })).toHaveTextContent(/nothing in .* is among your foods any more, so nothing was logged/i);
+    expect((await allEntriesIncludingTombstones()).filter((e) => e.state === 'active')).toHaveLength(0);
+  }, 40000);
+
+  test('logs NOTHING when only one of its foods is gone, and says which count', async () => {
+    // The dangerous case: the meal still has a usable food, so the tempting thing is to log that one. An entry
+    // holding part of the meal would carry coverage 'known' and read as a complete total.
+    await putSavedMeal({
+      id: 'm3', name: 'half a meal', savedAt: new Date().toISOString(),
+      refs: [
+        { source: 'dataset', foodId: realId, grams: 200, classification: flags },
+        { source: 'custom', foodId: 'deleted-food', grams: 100, classification: flags },
+      ],
+    });
+    render(<Log deps={realDeps} />);
+    const log = await screen.findByRole('button', { name: 'Log half a meal' }, { timeout: 8000 });
+    await act(async () => { fireEvent.click(log); });
+    expect(await screen.findByRole('alert', undefined, { timeout: 10000 })).toHaveTextContent(/1 of the 2 foods in .* is not among your foods any more. Nothing was logged/i);
+    // No gate of ANY kind may open — not the confirmation and not a safety question. Asserting "has not
+    // opened yet" would pass for any entry still resolving, so this waits for one and requires the wait to
+    // time out. With the refusal removed, the rice alone reaches the rice-reheating question and this goes red.
+    await expect(
+      waitFor(
+        () => {
+          const open = screen.queryByRole('button', { name: /add anyway/i }) ?? screen.queryByRole('button', { name: /^no$/i });
+          if (!open) throw new Error('no gate open yet');
+          return open;
+        },
+        { timeout: 4000 },
+      ),
+    ).rejects.toBeTruthy();
     expect((await allEntriesIncludingTombstones()).filter((e) => e.state === 'active')).toHaveLength(0);
   }, 40000);
 });

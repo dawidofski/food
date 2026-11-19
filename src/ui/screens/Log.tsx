@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { isAiEnabled } from '@/state/aiSettings';
-import { putSavedMeal } from '@/data/db';
+import { allSavedMeals as allMealsFromDb, putSavedMeal as putMealInDb } from '@/data/db';
 import { mealFromEntry } from '@/domain/savedMeals';
 import SavedMeals from '@/ui/components/SavedMeals';
 import { useHoldUpdates } from '@/state/updates';
@@ -23,7 +23,7 @@ export default function Log({
   initialDraft?: string;
   /**
    * Reports whether there is work here that closing would destroy: typed text, an open food editor, a part-
-   * finished scan, or a warning gate the person is reading. The same predicate `useHoldUpdates` uses, because
+   * finished scan, a meal part-way through being named, or a warning gate the person is reading. The same predicate `useHoldUpdates` uses, because
    * the same things are worth protecting from a service-worker reload and from a stray back swipe.
    */
   onUnsavedWork?: (unsaved: boolean) => void;
@@ -74,8 +74,8 @@ export default function Log({
     void flow.submit(draft);
   };
 
-  // Typed text, an open food editor and a part-finished scan are unsaved work too.
-  const typing = draft.trim() !== '' || editorName !== null || scanning;
+  // Typed text, an open food editor, a part-finished scan and a half-typed meal name are unsaved work too.
+  const typing = draft.trim() !== '' || editorName !== null || scanning || mealName.trim() !== '';
   useHoldUpdates(typing);
 
   const gateOpen = flow.stage === 'gate' || flow.stage === 'questions';
@@ -259,18 +259,16 @@ export default function Log({
 
       <SavedMeals
         reloadToken={mealsToken}
-        onLog={(m) => {
-          setNaming(null);
-          return flow.submitSavedMeal(m);
-        }}
+        store={deps.store}
+        onLog={(m) => flow.submitSavedMeal(m)}
       />
 
       {naming && (
         <section aria-label="Name this meal" className="space-y-2 rounded-xl border-2 border-slate-400 dark:border-slate-500 p-3">
           <p className="text-base">{`Save “${naming.rawText}” as a meal you can log again?`}</p>
           <p className="text-xs text-slate-600 dark:text-slate-400">
-            It remembers which foods and how much, not their figures. Every time you log it the numbers are
-            worked out from those foods again, so they keep the source they have now and nothing is frozen.
+            It remembers which foods and how much — not their figures. Each time you log it, those foods are
+            read again as they are then, so a correction you make to one later reaches this meal too.
           </p>
           <label className="block text-sm">
             Call it
@@ -289,13 +287,25 @@ export default function Log({
               type="button"
               disabled={mealName.trim() === ''}
               onClick={() => {
-                const m = mealFromEntry(naming, mealName, globalThis.crypto.randomUUID(), new Date().toISOString());
+                const m = mealFromEntry(naming, mealName, globalThis.crypto.randomUUID(), deps.now().toISOString());
                 if (m === undefined) {
                   setMealNote('That entry has no foods with a weight behind it, so there is nothing to log again.');
                   return;
                 }
-                void putSavedMeal(m)
-                  .then(() => { setNaming(null); setMealName(''); setMealsToken((n) => n + 1); })
+                // Two meals with the same name are two identical buttons: there would be no way to tell which
+                // one you were about to log, or which one you were removing.
+                void (deps.store.allSavedMeals ?? allMealsFromDb)()
+                  .then((existing) => {
+                    if (existing.some((e) => e.name.toLowerCase() === m.name.toLowerCase())) {
+                      setMealNote(`You already have a meal called “${m.name}”. Give this one a different name, or remove that one first.`);
+                      return undefined;
+                    }
+                    return (deps.store.putSavedMeal ?? putMealInDb)(m).then(() => {
+                      setNaming(null);
+                      setMealName('');
+                      setMealsToken((n) => n + 1);
+                    });
+                  })
                   .catch(() => setMealNote('That could not be saved.'));
               }}
               className="min-h-12 flex-1 rounded-lg border border-slate-900 dark:border-slate-100 px-3 text-sm font-semibold disabled:opacity-50"

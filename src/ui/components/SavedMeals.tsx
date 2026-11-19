@@ -1,33 +1,41 @@
 import { useEffect, useState } from 'react';
-import { allSavedMeals, deleteSavedMeal } from '@/data/db';
+import { allSavedMeals as allFromDb, deleteSavedMeal as deleteFromDb } from '@/data/db';
 import type { SavedMeal } from '@/domain/savedMeals';
 import type { FoodRef } from '@/types/diary';
 
 /**
  * The meals the person named, ready to log again.
  *
- * Each one is a name pointing at foods and weights, so tapping it works the figures out from the foods as they
- * are today. Nothing here is a stored nutrition figure, which is why a saved meal cannot drift away from the
- * database behind it or quietly lose an allergen.
+ * Each one is a name pointing at foods and weights, so tapping it reads those foods as they are today and
+ * works everything out again. Nothing here is a stored nutrition figure or a stored flag, which is why a
+ * saved meal cannot drift away from the foods behind it or quietly lose an allergen.
  *
  * Logging one goes through the ordinary warning gate. Food is never added silently, whatever it was saved as.
  */
 export default function SavedMeals({
   onLog,
   reloadToken = 0,
+  store,
 }: {
-  /** Resolves with any foods that could not be found, so this can say which rather than logging less. */
+  /**
+   * Logs the meal. Resolves with the foods that could not be replayed — when that list is non-empty NOTHING
+   * was logged, because a meal is logged whole or not at all.
+   */
   onLog: (meal: SavedMeal) => Promise<FoodRef[]>;
   reloadToken?: number;
+  /** The store seam, so a test can hand this its own meals. Absent means the real one. */
+  store?: { allSavedMeals?: typeof allFromDb; deleteSavedMeal?: typeof deleteFromDb };
 }) {
+  const all = store?.allSavedMeals ?? allFromDb;
+  const remove = store?.deleteSavedMeal ?? deleteFromDb;
   const [meals, setMeals] = useState<SavedMeal[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const load = () => {
-    allSavedMeals()
-      .then((rows) => setMeals([...rows].sort((a, b) => a.name.localeCompare(b.name))))
+    all()
+      .then((rows) => setMeals([...rows].sort((a, b) => a.name.localeCompare(b.name) || a.savedAt.localeCompare(b.savedAt))))
       .catch(() => setMeals([]));
   };
   useEffect(load, [reloadToken]);
@@ -48,19 +56,27 @@ export default function SavedMeals({
               </p>
             </div>
             {confirmDelete === m.id ? (
-              <div className="flex shrink-0 gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void deleteSavedMeal(m.id).then(() => { setConfirmDelete(null); load(); }).catch(() => setNote('That could not be removed.'));
-                  }}
-                  className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-xs"
-                >
-                  Remove it
-                </button>
-                <button type="button" onClick={() => setConfirmDelete(null)} className="min-h-11 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-xs">
-                  Keep
-                </button>
+              <div className="flex shrink-0 flex-col gap-1">
+                <p className="text-xs text-slate-600 dark:text-slate-400">Forget this meal? What you already logged stays.</p>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    // Focus follows the question: the buttons that were under the person's finger have just
+                    // been replaced, and without this focus drops to the document body.
+                    autoFocus
+                    onClick={() => {
+                      void remove(m.id)
+                        .then(() => { setConfirmDelete(null); load(); })
+                        .catch(() => setNote('That could not be removed.'));
+                    }}
+                    className="min-h-11 rounded-lg border border-slate-400 dark:border-slate-500 px-3 text-xs"
+                  >
+                    Forget it
+                  </button>
+                  <button type="button" onClick={() => setConfirmDelete(null)} className="min-h-11 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-xs">
+                    Keep
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="flex shrink-0 flex-col gap-1">
@@ -74,12 +90,13 @@ export default function SavedMeals({
                     void onLog(m)
                       .then((missing) => {
                         if (missing.length === 0) return;
-                        // Named, not swallowed: logging a smaller meal than they asked for while looking
-                        // complete is the failure this app is built against.
+                        // A meal is logged whole or not at all. Logging the foods that are still there would add
+                        // a smaller meal than the person asked for, and its totals would read as complete — the
+                        // understating-while-looking-finished failure this app is built against.
                         setNote(
                           missing.length === m.refs.length
-                            ? `None of the foods in “${m.name}” could be found any more, so nothing was logged.`
-                            : `${missing.length} of the foods in “${m.name}” could not be found any more, so what was logged is short by that much.`,
+                            ? `Nothing in “${m.name}” is among your foods any more, so nothing was logged.`
+                            : `${missing.length} of the ${m.refs.length} foods in “${m.name}” ${missing.length === 1 ? 'is' : 'are'} not among your foods any more. Nothing was logged: a meal goes in whole or not at all. Log what you did eat by typing it, and save it again as a new meal.`,
                         );
                       })
                       .catch(() => setNote('That could not be logged.'))
@@ -91,11 +108,12 @@ export default function SavedMeals({
                 </button>
                 <button
                   type="button"
-                  aria-label={`Remove ${m.name} from your meals`}
+                  disabled={busy !== null}
+                  aria-label={`Forget ${m.name}`}
                   onClick={() => setConfirmDelete(m.id)}
-                  className="min-h-11 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-xs"
+                  className="min-h-11 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-xs disabled:opacity-50"
                 >
-                  Remove
+                  Forget
                 </button>
               </div>
             )}

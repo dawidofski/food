@@ -2,9 +2,11 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   addEntry, allBatches, allCustomFoods, allEntriesIncludingTombstones, deleteEntry, eraseEverything, getProfile,
-  getHealthDay, healthDaysBetween, lsKey, putBatch, putHealthDay, putCustomFood, putProfile, reviseEntry,
+  allSavedMeals, getHealthDay, healthDaysBetween, lsKey, putBatch, putHealthDay, putCustomFood, putProfile,
+  putSavedMeal, reviseEntry,
 } from '@/data/db';
 import { exportAll, importAll } from '@/data/exportImport';
+import type { SavedMeal } from '@/domain/savedMeals';
 import { setApiKey } from '@/state/aiSettings';
 import type { Batch, CustomFood, DiaryEntry } from '@/types/diary';
 import type { ClassificationFlags } from '@/types/nutrients';
@@ -42,6 +44,11 @@ const batch: Batch = {
 };
 
 /** Entries (one active, one tombstone, one superseded pair), a custom food, a batch, a profile and a setting. */
+const savedMeal: SavedMeal = {
+  id: 'sm1', name: 'my usual lunch', savedAt: '2026-11-12T12:00:00.000Z',
+  refs: [{ source: 'dataset', foodId: 'f-1', grams: 150, classification: flags }],
+};
+
 async function seedEverything(): Promise<number> {
   await addEntry(entry('e1'));
   await addEntry(entry('e2'));
@@ -53,8 +60,9 @@ async function seedEverything(): Promise<number> {
   await putProfile(ownerProfile);
   await putHealthDay({ date: '2026-11-10', sleepScore: 82, steps: 9100, energyBurnedKcal: 2450 });
   await putHealthDay({ date: '2026-11-11', steps: 0 }); // a real zero, not unknown
+  await putSavedMeal(savedMeal);
   localStorage.setItem(lsKey('ai.enabled'), '1');
-  return (await allEntriesIncludingTombstones()).length + 4; // entries + 1 custom food + 1 batch + 2 health days
+  return (await allEntriesIncludingTombstones()).length + 5; // entries + 1 custom food + 1 batch + 2 health days + 1 saved meal
 }
 
 const file = (text: string | Blob) => new File([text], 'diary.json');
@@ -63,6 +71,7 @@ const snapshot = async () => ({
   foods: await allCustomFoods(),
   batches: await allBatches(),
   healthDays: await healthDaysBetween('0000-01-01', '9999-12-31'),
+  savedMeals: await allSavedMeals(),
   profile: await getProfile(),
   ls: { ...localStorage },
 });
@@ -119,7 +128,7 @@ describe('export and import', () => {
     const parsed = JSON.parse(await blob.text());
     parsed.entries.push(entry('extra'));
     const r = await importAll(file(JSON.stringify(parsed)), 'merge');
-    expect(r).toEqual({ added: 1, skipped: 8 });
+    expect(r).toEqual({ added: 1, skipped: 9 });
     const entries = await allEntriesIncludingTombstones();
     expect(entries.map((e) => e.id)).toContain('extra');
     expect(entries.find((e) => e.id === 'e1')?.state).toBe('deleted'); // not resurrected by the file
@@ -324,7 +333,7 @@ describe('daily health data in a backup', () => {
     await putHealthDay({ date: '2026-11-12', steps: 500 }); // only local
     await putHealthDay({ date: '2026-11-10', steps: 1 }); // differs from the file
     const merged = await importAll(file(blob), 'merge');
-    expect(merged).toEqual({ added: 0, skipped: 8 }); // both file days exist locally, so nothing is added
+    expect(merged).toEqual({ added: 0, skipped: 9 }); // both file days exist locally, so nothing is added
     expect((await getHealthDay('2026-11-10'))?.steps).toBe(1);
     expect(await getHealthDay('2026-11-12')).toBeDefined();
     await importAll(file(blob), 'replace');
@@ -345,7 +354,7 @@ describe('daily health data in a backup', () => {
     delete g.healthDays;
     await putHealthDay({ date: '2026-11-12', steps: 500 });
     const r = await importAll(file(JSON.stringify(g)), 'replace');
-    expect(r).toEqual({ added: 6, skipped: 0 });
+    expect(r).toEqual({ added: 7, skipped: 0 });
     expect(await healthDaysBetween('0000-01-01', '9999-12-31')).toEqual([]);
     expect((await allEntriesIncludingTombstones()).length).toBe(4);
   });
@@ -380,7 +389,7 @@ describe('daily health data in a backup', () => {
     const g = JSON.parse(await (await exportAll()).text());
     g.healthDays.push({ date: '2026-11-13' });
     const r = await importAll(file(JSON.stringify(g)), 'replace');
-    expect(r).toEqual({ added: 8, skipped: 0 });
+    expect(r).toEqual({ added: 9, skipped: 0 });
     expect(await getHealthDay('2026-11-13')).toBeUndefined();
     expect((await healthDaysBetween('0000-01-01', '9999-12-31')).map((h) => h.date)).toEqual(['2026-11-10', '2026-11-11']);
   });
@@ -416,6 +425,13 @@ describe('a malformed import changes nothing', () => {
     ['a health day with a null step count', (g) => ({ ...g, healthDays: [...g.healthDays, { date: '2026-11-13', steps: null }] })],
     ['a health day with a misspelt key', (g) => ({ ...g, healthDays: [...g.healthDays, { date: '2026-11-13', step: 4000 }] })],
     ['a settings key outside the app prefix', (g) => ({ ...g, settings: { 'other.key': '1' } })],
+    // Stricter than an entry's: a saved meal is an instruction to log something again, so a weight or a name
+    // the app would refuse from the person must not get in through a file either.
+    ['a saved meal with a blank name', (g) => ({ ...g, savedMeals: [{ ...savedMeal, id: 'sm2', name: '   ' }] })],
+    ['a saved meal with no foods', (g) => ({ ...g, savedMeals: [{ ...savedMeal, id: 'sm2', refs: [] }] })],
+    ['a saved meal with a negative weight', (g) => ({ ...g, savedMeals: [{ ...savedMeal, id: 'sm2', refs: [{ ...savedMeal.refs[0], grams: -500 }] }] })],
+    ['a saved meal with a weight of zero', (g) => ({ ...g, savedMeals: [{ ...savedMeal, id: 'sm2', refs: [{ ...savedMeal.refs[0], grams: 0 }] }] })],
+    ['a saved meal with an absurd weight', (g) => ({ ...g, savedMeals: [{ ...savedMeal, id: 'sm2', refs: [{ ...savedMeal.refs[0], grams: 1e300 }] }] })],
   ];
   const textOf = (m: unknown) => (typeof m === 'string' ? m : JSON.stringify(m));
 

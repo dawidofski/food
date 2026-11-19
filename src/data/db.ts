@@ -12,7 +12,8 @@ import type { Profile } from '@/types/profile';
  *
  * "No silent add, no silent removal": entries are never hard-deleted and the API cannot rewrite
  * history. `addEntry` is insert-only, `deleteEntry` tombstones an active row, `reviseEntry`
- * supersedes the original. The only hard delete is `eraseEverything`. Entry nutrients are
+ * supersedes the original. No diary entry is ever hard-deleted; the things the person made themselves can be
+ * (`deleteCustomFood`, `deleteBatch`, `deleteSavedMeal`), and `eraseEverything` clears the lot. Entry nutrients are
  * snapshotted at commit time and nothing here recomputes them.
  */
 
@@ -496,20 +497,35 @@ async function eraseStores(): Promise<void> {
 export type ImportRows = { entries: DiaryEntry[]; customFoods: CustomFood[]; batches: Batch[]; healthDays: HealthDay[]; savedMeals: SavedMeal[] };
 
 /**
- * Writes already-validated rows to all four stores in ONE transaction, so an import lands whole or
+ * Writes already-validated rows to every store a backup carries, in ONE transaction, so an import lands whole or
  * not at all. `replace` clears each store first; `merge` adds only ids that are not present and
  * leaves every existing row exactly as it is (a local tombstone is never resurrected by a file).
  * This is the one path that may write a non-active entry, because a backup must restore history
  * as it was. `at` is normalised so the index invariant holds.
  */
+/**
+ * Which store each kind of imported row lands in, typed by `keyof ImportRows` so the two cannot drift: the day
+ * a new kind of row joins a backup, this stops compiling until it is listed, rather than letting `replace`
+ * quietly leave that store's old rows in place while Settings says it replaced everything. `offProducts` is
+ * deliberately absent — it is a cache of what has been scanned, not the person's own data.
+ */
+const IMPORT_TARGETS: { [K in keyof ImportRows]: (typeof STORES)[number] } = {
+  entries: 'entries',
+  customFoods: 'customFoods',
+  batches: 'batches',
+  healthDays: 'healthDays',
+  savedMeals: 'savedMeals',
+};
+
 export async function writeImportedRows(rows: ImportRows, mode: 'merge' | 'replace'): Promise<{ added: number; skipped: number }> {
-  const tx = (await db()).transaction(['entries', 'customFoods', 'batches', 'healthDays', 'savedMeals'], 'readwrite');
+  const targets = Object.values(IMPORT_TARGETS);
+  const tx = (await db()).transaction(targets, 'readwrite');
   const done = tx.done.catch(() => undefined);
   let added = 0;
   let skipped = 0;
   try {
     if (mode === 'replace') {
-      await Promise.all([tx.objectStore('entries').clear(), tx.objectStore('customFoods').clear(), tx.objectStore('batches').clear(), tx.objectStore('healthDays').clear(), tx.objectStore('savedMeals').clear()]);
+      await Promise.all(targets.map((name) => tx.objectStore(name).clear()));
     }
     const put = async <T>(store: { getKey(k: string): Promise<unknown>; put(v: T): Promise<unknown> }, row: T, key: string) => {
       if (mode === 'merge' && (await store.getKey(key)) !== undefined) {
