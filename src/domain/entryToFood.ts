@@ -47,7 +47,12 @@ export function entryToFoodDraft(entry: DiaryEntry, lookup: FoodLookup): FoodDra
     // `known` only: a partial figure is a floor, and a floor scaled to 100 g is a floor pretending to be a fact.
     if (!isKnownValue(v) || entry.coverage[key] !== 'known') continue;
     const scaled = (v * 100) / grams;
-    if (Number.isFinite(scaled)) per100g[key] = Math.round(scaled * 1000) / 1000;
+    // Rounded the way this app prints every other figure: whole numbers from ten up, one decimal below.
+    // Three decimals would claim a precision a scaled figure does not have — 148.714 kcal per 100 g reads
+    // as a measurement, and it is arithmetic on a portion someone estimated.
+    if (Number.isFinite(scaled)) {
+      per100g[key] = Math.abs(scaled) < 10 ? Math.round(scaled * 10) / 10 : Math.round(scaled);
+    }
   }
 
   const allergens = new Set<string>();

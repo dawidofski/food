@@ -69,6 +69,15 @@ describe('turning an entry into one of my foods', () => {
     expect(entryToFoodDraft(entry(), lookup)?.name).toBe('50 g oats with 200 ml milk');
   });
 
+  test('rounds the way the app prints figures, rather than claiming three decimals', () => {
+    // 521 kcal across 350 g is 148.857..., which must not appear as "148.857" in a box: it is arithmetic on
+    // a portion someone estimated, not a measurement.
+    const d = entryToFoodDraft(entry({ nutrients: { energyKcal: 521, proteinG: 44.9, satFatG: 3.09 }, coverage: { energyKcal: 'known', proteinG: 'known', satFatG: 'known' }, items: [{ source: 'dataset', foodId: 'f-oats', grams: 350, classification: FLAGS }] }), lookup);
+    expect(d?.nutrientsPer100g.energyKcal).toBe(149);
+    expect(d?.nutrientsPer100g.proteinG).toBe(13);
+    expect(d?.nutrientsPer100g.satFatG).toBe(0.9);
+  });
+
   test('never divides by zero or writes a figure that is not finite', () => {
     const d = entryToFoodDraft(entry(), lookup);
     for (const v of Object.values(d?.nutrientsPer100g ?? {})) expect(Number.isFinite(v)).toBe(true);
