@@ -5,7 +5,8 @@ import { combineLookups, type FoodLookup } from '@/domain/foodLookup';
 import { parseEntry } from '@/domain/parseEntry';
 import { resolveItems } from '@/domain/resolveItems';
 import {
-  createCustomFood, customFoodToDatasetShape, deleteCustomFood, customLookup, parseNutrientField, refreshCustomFoods, updateCustomFood,
+  NutrientRangeError, createCustomFood, customFoodToDatasetShape, deleteCustomFood, customLookup, parseNutrientField,
+  refreshCustomFoods, updateCustomFood,
   withCustomFoods,
 } from '@/domain/customFoods';
 import { dayTotals, weekContext } from '@/domain/totals';
@@ -101,6 +102,13 @@ describe('custom foods', () => {
     expect(f.nutrientsPer100g.sodiumMg).toBe(0);
     await expect(createCustomFood({ name: 'x', per100g: { sodiumMg: Number.NaN } })).rejects.toThrow(RangeError);
     await expect(createCustomFood({ name: 'x', per100g: { fatG: -1 } })).rejects.toThrow(RangeError);
+    // The error carries the key so the screen can name the field as the person sees it. Without this the
+    // editor showed them "energyKcal must be a number between 0 and 1000", which names nothing on the form.
+    await expect(createCustomFood({ name: 'x', per100g: { energyKcal: 5000 } })).rejects.toMatchObject({
+      key: 'energyKcal',
+      ceiling: 1000,
+    });
+    await expect(createCustomFood({ name: 'x', per100g: { energyKcal: 5000 } })).rejects.toBeInstanceOf(NutrientRangeError);
     await expect(createCustomFood({ name: '  ' })).rejects.toThrow();
     await expect(createCustomFood({ name: 'x', referencePortion: { label: '1 serving', grams: 0 } })).rejects.toThrow();
   });

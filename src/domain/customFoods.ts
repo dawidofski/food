@@ -55,6 +55,20 @@ export type CustomFoodInput = {
   referencePortion?: { label: string; grams: number };
 };
 
+/**
+ * A nutrient figure outside what a per-100 g field can hold.
+ *
+ * Carries the key rather than only a sentence, so the screen can name the field the way the person sees it
+ * ("Energy (kcal)") instead of showing them the internal `energyKcal`. The message is a readable fallback for
+ * anywhere that only logs the error.
+ */
+export class NutrientRangeError extends RangeError {
+  constructor(readonly key: NutrientKey, readonly ceiling: number) {
+    super(`${key} must be a number between 0 and ${ceiling}`);
+    this.name = 'NutrientRangeError';
+  }
+}
+
 function cleanNutrients(input: CustomFoodInput['per100g']): NutrientSet {
   const out: NutrientSet = {};
   if (!input) return out;
@@ -62,7 +76,7 @@ function cleanNutrients(input: CustomFoodInput['per100g']): NutrientSet {
     const v = input[key] as number | undefined | null;
     if (v === undefined || v === null) continue; // unknown: the key stays absent
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > CEILING[key]) {
-      throw new RangeError(`${key} must be a number between 0 and ${CEILING[key]}`);
+      throw new NutrientRangeError(key, CEILING[key]);
     }
     out[key] = v;
   }

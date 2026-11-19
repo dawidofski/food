@@ -3,7 +3,8 @@ import LabelPhoto from '@/ui/components/LabelPhoto';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { allCustomFoods } from '@/data/db';
 import {
-  ALLERGEN_TAGS, NO_FLAGS, createCustomFood, deleteCustomFood, parseNutrientField, updateCustomFood, type CustomFoodInput,
+  ALLERGEN_TAGS, NO_FLAGS, NutrientRangeError, createCustomFood, deleteCustomFood, parseNutrientField, updateCustomFood,
+  type CustomFoodInput,
 } from '@/domain/customFoods';
 import type { CustomFood } from '@/types/diary';
 import { NUTRIENT_KEYS, type ClassificationFlags, type NutrientKey } from '@/types/nutrients';
@@ -110,7 +111,14 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
       setError(null);
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Named as the person sees the field, never as the internal key.
+      setError(
+        err instanceof NutrientRangeError
+          ? `${fieldLabel(err.key)} must be a number between 0 and ${err.ceiling}.`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
       setSaving(false);
     }
   }
@@ -249,7 +257,8 @@ export function FoodEditor({ food, initialName = '', onSaved, onCancel, onDelete
       {food && confirmingDelete && (
         <div role="group" aria-label="Confirm delete" className="space-y-2 rounded-xl border-2 border-red-700 dark:border-red-400 p-3">
           <p className="text-base">
-            Delete &ldquo;{food.name}&rdquo;? It will no longer be found when you log. Entries you already logged keep
+            Delete &ldquo;{food.name}&rdquo;? It will no longer be found when you log, and a saved meal that uses it
+            will stop logging — it will say so rather than logging a smaller meal. Entries you already logged keep
             their numbers; nothing in your diary changes.
           </p>
           <button
