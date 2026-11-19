@@ -27,16 +27,27 @@ interface FoodDiaryDB extends DBSchema {
   healthDays: { key: string; value: HealthDay };
   /** Meals the owner named so they can log them again. Refs only: the foods are looked up fresh each time. */
   savedMeals: { key: string; value: SavedMeal };
+  /**
+   * Handles for files on the device the owner picked, such as the one the automatic backup overwrites.
+   *
+   * A handle is a live reference to a real file outside the browser, not a copy of it and not a path: it cannot
+   * be read from a backup file, and it means nothing on another device. That is why it is here and not in the
+   * export. The permission to use it is held by the browser, separately, and can lapse.
+   */
+  fileHandles: { key: string; value: StoredFileHandle };
 }
+
+/** A file the owner chose, kept so the app can write to that same file again. */
+export type StoredFileHandle = { id: string; handle: FileSystemFileHandle; name: string; chosenAt: string };
 
 const DB_NAME = 'food-diary';
 /**
- * 2 adds `offProducts`; 3 adds `healthDays`; 4 adds `savedMeals`. Raise this for EVERY store added: `upgrade` runs only when the stored version is below it,
+ * 2 adds `offProducts`; 3 adds `healthDays`; 4 adds `savedMeals`; 5 adds `fileHandles`. Raise this for EVERY store added: `upgrade` runs only when the stored version is below it,
  * and `create` below is written to add whatever is missing, so an old database gains the new store and a fresh one
  * gets everything. The repair path in `open()` relies on `create` being safe to call on a database that already
  * holds some of the stores.
  */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 /** Every localStorage key this app writes MUST go through `lsKey`, so `eraseEverything` can find it. */
 export const LS_PREFIX = 'fd.';
 export const lsKey = (name: string): string => `${LS_PREFIX}${name}`;
@@ -44,7 +55,7 @@ const PROFILE_KEY = lsKey('profile');
 
 let dbPromise: Promise<IDBPDatabase<FoodDiaryDB>> | null = null;
 
-const STORES = ['entries', 'customFoods', 'batches', 'offProducts', 'healthDays', 'savedMeals'] as const;
+const STORES = ['entries', 'customFoods', 'batches', 'offProducts', 'healthDays', 'savedMeals', 'fileHandles'] as const;
 
 /** Adds whatever is missing, so it serves a fresh database, a version upgrade and the repair in `open()` alike. */
 function create(d: IDBPDatabase<FoodDiaryDB>): void {
@@ -59,6 +70,7 @@ function create(d: IDBPDatabase<FoodDiaryDB>): void {
   if (!d.objectStoreNames.contains('offProducts')) d.createObjectStore('offProducts', { keyPath: 'barcode' });
   if (!d.objectStoreNames.contains('healthDays')) d.createObjectStore('healthDays', { keyPath: 'date' });
   if (!d.objectStoreNames.contains('savedMeals')) d.createObjectStore('savedMeals', { keyPath: 'id' });
+  if (!d.objectStoreNames.contains('fileHandles')) d.createObjectStore('fileHandles', { keyPath: 'id' });
 }
 
 function missingStores(d: IDBPDatabase<FoodDiaryDB>): string[] {
@@ -579,4 +591,29 @@ export async function allSavedMeals(): Promise<SavedMeal[]> {
 export async function deleteSavedMeal(id: string): Promise<void> {
   const d = await db();
   await d.delete('savedMeals', id);
+}
+
+// ---- file handles ----
+
+/**
+ * Keeps a handle to a file the owner picked, so the app can write to that same file next time.
+ *
+ * The handle is stored, never the file's contents and never a path - a `FileSystemFileHandle` survives being put
+ * in IndexedDB, which is the only reason "overwrite the same file tomorrow" is possible at all. Whether the app
+ * may still WRITE through it is a separate question the browser answers, and the answer can change between one
+ * opening of the app and the next, so every use checks.
+ */
+export async function putFileHandle(row: StoredFileHandle): Promise<void> {
+  const d = await db();
+  await d.put('fileHandles', row);
+}
+
+export async function getFileHandle(id: string): Promise<StoredFileHandle | undefined> {
+  const d = await db();
+  return d.get('fileHandles', id);
+}
+
+export async function deleteFileHandle(id: string): Promise<void> {
+  const d = await db();
+  await d.delete('fileHandles', id);
 }

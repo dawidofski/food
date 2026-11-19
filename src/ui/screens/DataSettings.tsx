@@ -4,6 +4,7 @@ import { importAll } from '@/data/exportImport';
 import { getLastExportAt } from '@/state/backupReminder';
 import { downloadBackup } from '@/state/exportDownload';
 import { persistenceState, type PersistenceState } from '@/state/persistentStorage';
+import AutoBackup from '@/ui/components/AutoBackup';
 
 /** Backup (export and import), what this browser promises about keeping the data, and erase everything. */
 
@@ -69,6 +70,8 @@ export function BackupSettings({ onImported }: { onImported: () => void }) {
         This records only that a file was built and handed to the browser: the app cannot tell whether it was saved,
         where it went, or whether it is still there.
       </p>
+
+      <AutoBackup />
 
       <div className="space-y-2 border-t border-slate-300 dark:border-slate-700 pt-3">
         <label htmlFor="import-file" className="block text-sm font-medium">Import file</label>
@@ -182,14 +185,16 @@ export function EraseSettings({ onErased }: { onErased?: () => void }) {
       <h2 id="erase-h" className="text-lg font-semibold">Erase everything</h2>
       {!confirming ? (
         <>
-          <p className="text-sm">Deletes your diary, your own foods, batches, saved meals, daily health figures, profile, weight log and settings from this device.</p>
+          <p className="text-sm">Deletes your diary, your own foods, batches, saved meals, daily health figures, profile, weight log and settings from this device, including which file the automatic backup writes to. That file itself is left where it is.</p>
           <button type="button" onClick={() => { setConfirming(true); setDone(false); setError(null); }} className={btn}>Erase everything</button>
         </>
       ) : (
         <div className="space-y-2">
           <p className="text-base font-medium">
             This permanently deletes your diary, your own foods, batches, saved meals, daily health figures, profile, weight log,
-            settings and your DeepSeek key from this device. It cannot be undone. Export a backup first if you want to keep anything.
+            settings and your DeepSeek key from this device, and forgets which file the automatic backup writes to. It cannot be
+            undone. The automatic backup file is NOT deleted — whatever was last written to it is still there, and importing it
+            back is the way to undo this.
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={busy} onClick={() => void erase()} className="min-h-12 rounded-lg bg-red-700 dark:bg-red-800 px-4 text-white disabled:opacity-50">

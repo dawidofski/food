@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getProfile } from '@/data/db';
+import { backupOnOpen } from '@/state/fileBackup';
 import { isSetupSkipped, skipSetup } from '@/state/setup';
 import FirstRun from '@/ui/screens/FirstRun';
 import Diary from '@/ui/screens/Diary';
@@ -35,6 +36,20 @@ export default function App() {
       live = false;
     };
   }, []);
+  /**
+   * The automatic backup, once per opening of the app.
+   *
+   * Here rather than in Settings because it must happen whether or not that screen is ever visited, and it runs
+   * once per mount: a tab left open for a week backs up when it is opened, not every time the clock passes
+   * midnight. It never asks for anything — there is no tap behind an app opening — so a lapsed permission is
+   * left for Settings to report and offer a button for. It cannot block the diary, so nothing waits on it and a
+   * failure is swallowed here; `backupOnOpen` already records nothing unless the write finished, and Settings
+   * reads that stamp to say what really happened.
+   */
+  useEffect(() => {
+    void backupOnOpen().catch(() => undefined);
+  }, []);
+
   /** Set when a portion is picked from the fridge list, so the log opens with it typed in. The gate still runs. */
   const [draft, setDraft] = useState('');
   const [logOpen, setLogOpen] = useState(false);
