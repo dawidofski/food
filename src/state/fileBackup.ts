@@ -1,4 +1,4 @@
-import { deleteFileHandle, getFileHandle, lsKey, putFileHandle, type StoredFileHandle } from '@/data/db';
+import { deleteFileHandle, getFileHandle, putFileHandle, type StoredFileHandle } from '@/data/db';
 import { exportAll } from '@/data/exportImport';
 import { recordExportOffered } from '@/state/backupReminder';
 
@@ -8,33 +8,42 @@ import { recordExportOffered } from '@/state/backupReminder';
  * This is the first thing in the app that can honestly say the diary was **backed up** rather than merely
  * offered. A download hands a file to the browser and then knows nothing — it may have been cancelled, or saved
  * somewhere the browser can clear. Writing through a handle the owner picked either finishes or throws, and what
- * it writes is a real file at a place they chose. So the stamp here records a completed write, and nothing
- * records it unless `close()` returned.
+ * it writes is a real file at a place they chose. So the moment recorded here is the moment `close()` returned,
+ * and nothing records it on any other path.
+ *
+ * **The date is kept ON the file's own row, never beside it.** An earlier version held "last written at" in a
+ * key of its own, and so could pair yesterday's date with a file chosen today whose first write had failed: the
+ * screen then read "Last written to B.json on <the day A.json was written>". A date that lives with the file it
+ * describes cannot outlive it, cannot survive the file being swapped, and does not travel in the export to land
+ * on another device as a claim about a write that never happened there.
  *
  * Two things this deliberately does NOT do, because it cannot:
  *
  * - **Run when the app is shut.** Nothing can wake a web page. The backup happens when the app is opened, which
  *   is why the screen says "when you open the app" and never "every day".
- * - **Keep its own permission.** The browser owns that. On Android a write permission granted today may be back
- *   to asking tomorrow, and re-asking needs a tap — so when the permission has lapsed this reports that plainly
- *   instead of failing quietly or pretending a backup happened.
+ * - **Keep its own permission.** The browser owns that, and Chrome drops it after a tab has been in the
+ *   background for a while. Re-granting needs a tap, which opening the app is not — so `backupOnOpen` reports a
+ *   lapse rather than asking, and `backupStatus` exists so the screen can SHOW that lapse instead of leaving
+ *   the owner to notice for himself that a date stopped moving.
  */
 
 /** There is one automatic backup file, so one handle. */
 const HANDLE_ID = 'autoBackup';
 
 /**
- * The seam to the store and to the export, as every other part of this app has one.
+ * The seam to the store, the export and the clock, as every other part of this app has one.
  *
  * It is here for a reason beyond habit: a real `FileSystemFileHandle` is a platform object, and nothing a test
- * can build will survive being put through IndexedDB's structured clone. Without this seam the only way to
- * exercise "the write failed, so record nothing" would be to not exercise it.
+ * can build survives IndexedDB's structured clone. Without this seam, "the write failed, so record nothing"
+ * could not be tested at all.
  */
 export type BackupDeps = {
   getHandle: () => Promise<StoredFileHandle | undefined>;
   putHandle: (row: StoredFileHandle) => Promise<void>;
   deleteHandle: () => Promise<void>;
   exportAll: () => Promise<Blob>;
+  /** Read when a write FINISHES, which is the only moment worth recording. */
+  now: () => Date;
 };
 
 export const defaultBackupDeps: BackupDeps = {
@@ -42,10 +51,8 @@ export const defaultBackupDeps: BackupDeps = {
   putHandle: putFileHandle,
   deleteHandle: () => deleteFileHandle(HANDLE_ID),
   exportAll,
+  now: () => new Date(),
 };
-
-/** Written only after a completed write. Through `lsKey`, so erasing the app sweeps it without being told. */
-export const LAST_FILE_BACKUP_KEY = lsKey('lastFileBackupAt');
 
 const DAY_MS = 86_400_000;
 
@@ -64,42 +71,22 @@ type PickerWindow = Window & {
   showSaveFilePicker?: (o?: SavePickerOptions) => Promise<FileSystemFileHandle>;
 };
 
-/** True when this browser can write to a file the owner picks. Chrome for Android can; Firefox cannot. */
+/** True when this browser can write to a file the owner picks. Chrome 132+ on Android can; Firefox cannot. */
 export function canWriteToAFile(): boolean {
   return typeof window !== 'undefined' && typeof (window as PickerWindow).showSaveFilePicker === 'function';
 }
 
-function readStamp(): Date | null {
-  let raw: string | null;
-  try {
-    raw = localStorage.getItem(LAST_FILE_BACKUP_KEY);
-  } catch {
-    return null; // Storage blocked: the same position as never having backed up.
-  }
-  if (raw === null || raw === '') return null;
-  const t = new Date(raw).getTime();
+/** The row's stored moment, or null when it is absent or not a date. A junk value must read as "never". */
+function writtenAt(row: StoredFileHandle | undefined): Date | null {
+  if (row?.lastWrittenAt === undefined || row.lastWrittenAt === '') return null;
+  const t = new Date(row.lastWrittenAt).getTime();
   return Number.isFinite(t) ? new Date(t) : null;
 }
 
-/** When the backup file was last actually written, or null: never, unreadable, or storage blocked. */
-export function getLastFileBackupAt(): Date | null {
-  return readStamp();
-}
-
-function recordWritten(at: Date): void {
-  try {
-    localStorage.setItem(LAST_FILE_BACKUP_KEY, at.toISOString());
-  } catch {
-    /* Not remembered, so it backs up again sooner than needed. The harmless direction. */
-  }
-  // A completed write is a copy made, which is exactly what the weekly reminder watches for. Recording it here
-  // keeps that reminder quiet without it needing to know this feature exists.
-  recordExportOffered(at);
-}
-
 /**
- * A stamp more than a day ahead of now is a wrong value, not clock drift, and is ignored — otherwise a nonsense
- * date could switch the backup off for years in silence. Settings prints the stored date, so it stays visible.
+ * A moment more than a day ahead of now is a wrong value, not clock drift, and is ignored — otherwise a
+ * nonsense date could switch the backup off for years in silence. Settings prints the stored date, so a strange
+ * value stays visible either way.
  */
 function dueAt(stamp: Date | null, now: Date): boolean {
   if (stamp === null) return true;
@@ -108,7 +95,7 @@ function dueAt(stamp: Date | null, now: Date): boolean {
 }
 
 export type BackupState =
-  /** Written just now. */
+  /** Written just now. `at` is when the write finished. */
   | { state: 'written'; at: Date; name: string }
   /** A file is set up and was written recently enough; nothing to do. */
   | { state: 'not-due'; at: Date; name: string }
@@ -116,9 +103,9 @@ export type BackupState =
   | { state: 'off' }
   /** This browser cannot write to a file at all. */
   | { state: 'unsupported' }
-  /** A file is set up but the browser is no longer letting the app write to it without being asked. */
+  /** A file is set up but the browser wants to be asked again before the app may write to it. */
   | { state: 'needs-permission'; name: string }
-  /** Something went wrong. `reason` is for the person, not a stack trace. */
+  /** Something went wrong. `reason` is a sentence for the owner, never a stack trace. */
   | { state: 'failed'; reason: string; name: string };
 
 type PermissionCapable = FileSystemFileHandle & {
@@ -127,10 +114,11 @@ type PermissionCapable = FileSystemFileHandle & {
 };
 
 /**
- * Whether the app may write through this handle right now.
+ * Whether the app may write through this handle right now. Never prompts: `queryPermission` only reports.
  *
- * A browser without these methods (they are not in every implementation) is treated as granted: the write itself
- * is the real test, and it throws if it is not allowed. Guessing "denied" here would turn a working backup off.
+ * A handle without the method, or one that throws, is treated as allowed. `createWritable` is the real
+ * authority and throws `NotAllowedError` when it is not, so the owner is still told nothing was saved —
+ * whereas guessing "denied" here would switch off a backup that in fact works.
  */
 async function mayWrite(handle: FileSystemFileHandle): Promise<boolean> {
   const h = handle as PermissionCapable;
@@ -153,6 +141,13 @@ async function askToWrite(handle: FileSystemFileHandle): Promise<boolean> {
   }
 }
 
+/**
+ * What the owner is told when a write fails.
+ *
+ * The two cases worth naming are named. Everything else gets a plain sentence rather than the browser's own
+ * message, which on a phone reads like "Failed to execute 'write' on 'FileSystemWritableFileStream'" and tells
+ * them nothing they can act on.
+ */
 const reasonOf = (err: unknown): string => {
   if (err instanceof DOMException && err.name === 'NotFoundError') {
     return 'that file is not there any more — it may have been moved or deleted';
@@ -160,70 +155,101 @@ const reasonOf = (err: unknown): string => {
   if (err instanceof DOMException && err.name === 'NotAllowedError') {
     return 'the browser did not allow the write';
   }
-  return err instanceof Error ? err.message : String(err);
+  return 'the write did not finish';
 };
 
 /**
- * Overwrites the chosen file with the whole diary.
+ * One write at a time.
  *
- * `createWritable` does not touch the existing file: the browser writes to a scratch file and only puts it in
- * place when `close()` returns. So a write that fails part-way leaves yesterday's backup intact, which matters
- * when the file being replaced is the only copy there is.
+ * Opening the app fires a write, and under React's StrictMode that effect runs twice; a "Back up now" tap can
+ * also land while the opening write is still going. `createWritable` defaults to `siloed` mode, so concurrent
+ * writers do not throw — each gets its own scratch file and the last one closed wins, which can leave the file
+ * holding the EARLIER of two snapshots while both report success. Sharing the promise makes the second caller
+ * wait for the first and report the same outcome, and saves a phone a second full export.
  */
-async function write(row: { handle: FileSystemFileHandle; name: string }, now: Date, deps: BackupDeps): Promise<BackupState> {
+let inFlight: Promise<BackupState> | null = null;
+
+/**
+ * Overwrites the chosen file with the whole diary, then records the moment that finished.
+ *
+ * `createWritable` does not touch the existing file: the browser writes to a scratch file beside it and only
+ * puts it in place when `close()` returns. So a write that fails part-way leaves the previous backup intact,
+ * which is what matters when the file being replaced is the only copy there is. A failure at any stage — the
+ * write or the close — aborts the stream, so the scratch file is not left sitting in the owner's folder either.
+ */
+async function writeOnce(row: StoredFileHandle, deps: BackupDeps): Promise<BackupState> {
   try {
+    // Built BEFORE the file is opened for writing, deliberately: a failure here must not have touched the file.
     const blob = await deps.exportAll();
     const w = await row.handle.createWritable();
     try {
       await w.write(blob);
+      await w.close();
     } catch (err) {
       await w.abort().catch(() => undefined);
       throw err;
     }
-    await w.close();
-    recordWritten(now);
-    return { state: 'written', at: now, name: row.name };
+    const at = deps.now();
+    // Only here, and nowhere else: the bytes are in the file the owner chose.
+    await deps.putHandle({ ...row, lastWrittenAt: at.toISOString() }).catch(() => undefined);
+    // A completed write is a copy made, which is what the weekly reminder watches for. Recording it here keeps
+    // that reminder right without it needing to know this feature exists.
+    recordExportOffered(at);
+    return { state: 'written', at, name: row.name };
   } catch (err) {
     return { state: 'failed', reason: reasonOf(err), name: row.name };
   }
+}
+
+function write(row: StoredFileHandle, deps: BackupDeps): Promise<BackupState> {
+  if (inFlight !== null) return inFlight;
+  const p = writeOnce(row, deps).finally(() => {
+    inFlight = null;
+  });
+  inFlight = p;
+  return p;
 }
 
 /**
  * What the app does when it is opened: back up if a file is set up and a day has passed.
  *
  * Never asks for anything. There is no tap behind opening the app, so a permission that has lapsed is reported,
- * not requested — the screen then offers the owner a button, which is a tap and may ask.
+ * not requested — `backupStatus` then lets Settings show it and offer the button, which is a tap and may ask.
  */
 export async function backupOnOpen(now: Date = new Date(), deps: BackupDeps = defaultBackupDeps): Promise<BackupState> {
   if (!canWriteToAFile()) return { state: 'unsupported' };
   const row = await deps.getHandle().catch(() => undefined);
   if (!row) return { state: 'off' };
-  const last = readStamp();
+  const last = writtenAt(row);
   if (last !== null && !dueAt(last, now)) return { state: 'not-due', at: last, name: row.name };
   if (!(await mayWrite(row.handle))) return { state: 'needs-permission', name: row.name };
-  return write(row, now, deps);
+  return write(row, deps);
 }
 
 /**
  * Back up now because the owner asked. Call from a tap.
  *
  * Ignores the once-a-day rule: that rule exists so the app does not write behind their back, and this is not
- * behind their back. May ask for permission, which is why it needs the tap.
+ * behind their back. Takes no moment, because the only moment worth recording is the one the write ends at.
+ * May ask for permission, which is why it needs the tap.
  */
-export async function backupNow(now: Date = new Date(), deps: BackupDeps = defaultBackupDeps): Promise<BackupState> {
+export async function backupNow(deps: BackupDeps = defaultBackupDeps): Promise<BackupState> {
   if (!canWriteToAFile()) return { state: 'unsupported' };
   const row = await deps.getHandle().catch(() => undefined);
   if (!row) return { state: 'off' };
   if (!(await mayWrite(row.handle)) && !(await askToWrite(row.handle))) {
     return { state: 'needs-permission', name: row.name };
   }
-  return write(row, now, deps);
+  return write(row, deps);
 }
 
 /**
  * Ask the owner where the backup should live, then write it once so they can see that it worked.
  *
- * Returns undefined when they closed the picker without choosing — a cancel is not an error and must not be
+ * The new row carries no `lastWrittenAt`, so until that first write succeeds the screen says nothing has been
+ * written to this file — which is true, whatever had been written to the file it replaced.
+ *
+ * Returns undefined when they closed the picker without choosing: a cancel is not an error and must not be
  * reported as one. Call from a tap.
  */
 export async function chooseBackupFile(now: Date = new Date(), deps: BackupDeps = defaultBackupDeps): Promise<BackupState | undefined> {
@@ -239,13 +265,13 @@ export async function chooseBackupFile(now: Date = new Date(), deps: BackupDeps 
     if (err instanceof DOMException && err.name === 'AbortError') return undefined;
     return { state: 'failed', reason: reasonOf(err), name: '' };
   }
-  const row = { id: HANDLE_ID, handle, name: handle.name, chosenAt: now.toISOString() };
+  const row: StoredFileHandle = { id: HANDLE_ID, handle, name: handle.name, chosenAt: now.toISOString() };
   try {
     await deps.putHandle(row);
   } catch (err) {
     return { state: 'failed', reason: reasonOf(err), name: handle.name };
   }
-  return write(row, now, deps);
+  return write(row, deps);
 }
 
 /** Forget the file. The file itself is left exactly where it is, holding the last backup written to it. */
@@ -253,8 +279,28 @@ export async function stopFileBackup(deps: BackupDeps = defaultBackupDeps): Prom
   await deps.deleteHandle();
 }
 
-/** The file currently set up, or undefined. */
-export async function currentBackupFile(deps: BackupDeps = defaultBackupDeps): Promise<{ name: string; chosenAt: string } | undefined> {
+/** Everything the screen needs to describe the backup truthfully, including whether it can still run. */
+export type BackupStatus =
+  | { kind: 'unsupported' }
+  | { kind: 'off' }
+  | { kind: 'ready'; name: string; lastWrittenAt: Date | null }
+  /** A file is set up, but the browser will ask before the app may write again, so opening it does nothing. */
+  | { kind: 'blocked'; name: string; lastWrittenAt: Date | null };
+
+/**
+ * What is actually true right now, permission included.
+ *
+ * Settings calls this rather than reading the stored row alone, because the row cannot tell it that the browser
+ * has quietly stopped allowing the writes. Without this the screen would keep showing an old date beside "it
+ * happens when you open the app", and the owner would only find out by noticing the date had stopped moving.
+ * `queryPermission` reports without prompting, so this is safe to call when a screen appears.
+ */
+export async function backupStatus(deps: BackupDeps = defaultBackupDeps): Promise<BackupStatus> {
+  if (!canWriteToAFile()) return { kind: 'unsupported' };
   const row = await deps.getHandle().catch(() => undefined);
-  return row ? { name: row.name, chosenAt: row.chosenAt } : undefined;
+  if (!row) return { kind: 'off' };
+  const lastWrittenAt = writtenAt(row);
+  return (await mayWrite(row.handle))
+    ? { kind: 'ready', name: row.name, lastWrittenAt }
+    : { kind: 'blocked', name: row.name, lastWrittenAt };
 }

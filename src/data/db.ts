@@ -37,8 +37,20 @@ interface FoodDiaryDB extends DBSchema {
   fileHandles: { key: string; value: StoredFileHandle };
 }
 
-/** A file the owner chose, kept so the app can write to that same file again. */
-export type StoredFileHandle = { id: string; handle: FileSystemFileHandle; name: string; chosenAt: string };
+/**
+ * A file the owner chose, kept so the app can write to that same file again.
+ *
+ * `lastWrittenAt` lives HERE, on the row, rather than in a setting of its own: a date kept apart from the file
+ * it describes outlives it, and can end up printed beside the name of a different file that was never written.
+ */
+export type StoredFileHandle = {
+  id: string;
+  handle: FileSystemFileHandle;
+  name: string;
+  chosenAt: string;
+  /** ISO datetime a write to this file FINISHED. Absent until one has. */
+  lastWrittenAt?: string;
+};
 
 const DB_NAME = 'food-diary';
 /**

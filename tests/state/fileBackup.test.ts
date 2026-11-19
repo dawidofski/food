@@ -1,15 +1,14 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { addEntry, eraseEverything, getFileHandle, lsKey, putFileHandle } from '@/data/db';
+import { addEntry, eraseEverything, getFileHandle, lsKey, putFileHandle, type StoredFileHandle } from '@/data/db';
 import { exportAll } from '@/data/exportImport';
 import { getLastExportAt } from '@/state/backupReminder';
 import {
   BACKUP_INTERVAL_MS,
-  LAST_FILE_BACKUP_KEY,
   backupNow,
   backupOnOpen,
+  backupStatus,
   canWriteToAFile,
-  getLastFileBackupAt,
   stopFileBackup,
   type BackupDeps,
 } from '@/state/fileBackup';
@@ -28,11 +27,20 @@ const entry = (id: string) => ({
 });
 
 /**
- * A file the browser would give us. `written` holds what actually reached it, so a test can tell a real write
- * from a call that looked like one, and `closed` records that the write was COMPLETED rather than merely begun.
+ * A file that behaves like a real one: the writable stages bytes in a scratch area and only `close()` puts them
+ * into `content`, which is how `createWritable` actually works. That is the whole point — it lets a test assert
+ * that YESTERDAY'S BACKUP IS STILL THERE after a failed write, rather than asserting that abort() was called
+ * and hoping that means the same thing.
  */
 function fakeFile(opts: { permission?: PermissionState; failOn?: 'write' | 'close' | 'open' } = {}) {
-  const state = { written: null as string | null, closed: false, aborted: false, opens: 0, asked: 0 };
+  const state = {
+    content: 'yesterday' as string,
+    closed: false,
+    aborted: false,
+    opens: 0,
+    asked: 0,
+    scratch: null as string | null,
+  };
   let permission: PermissionState = opts.permission ?? 'granted';
   const handle = {
     name: 'food-diary-backup.json',
@@ -45,28 +53,34 @@ function fakeFile(opts: { permission?: PermissionState; failOn?: 'write' | 'clos
     createWritable: async () => {
       state.opens++;
       if (opts.failOn === 'open') throw new DOMException('gone', 'NotFoundError');
+      state.scratch = '';
       return {
         write: async (b: Blob) => {
           if (opts.failOn === 'write') throw new DOMException('disk full', 'QuotaExceededError');
-          state.written = await b.text();
+          state.scratch = await b.text();
         },
         close: async () => {
           if (opts.failOn === 'close') throw new DOMException('nope', 'NotAllowedError');
+          // Only now does anything reach the real file.
+          state.content = state.scratch ?? '';
+          state.scratch = null;
           state.closed = true;
         },
-        abort: async () => { state.aborted = true; },
+        abort: async () => {
+          state.scratch = null;
+          state.aborted = true;
+        },
       };
     },
   };
   return { handle, state, deny: () => { permission = 'prompt'; } };
 }
 
-/**
- * The store seam, holding the fake file. A real `FileSystemFileHandle` is a platform object and no stand-in for
- * one survives IndexedDB's structured clone, so the store itself is tested separately, at the bottom.
- */
-function depsFor(f: ReturnType<typeof fakeFile> | null): BackupDeps {
-  let row = f
+const AT = (iso: string) => () => new Date(iso);
+
+/** The store seam, holding the fake file. The real store is exercised separately, at the bottom. */
+function depsFor(f: ReturnType<typeof fakeFile> | null, now = AT('2026-11-19T09:00:00.000Z')): BackupDeps & { row: () => StoredFileHandle | undefined } {
+  let row: StoredFileHandle | undefined = f
     ? { id: 'autoBackup', handle: f.handle as unknown as FileSystemFileHandle, name: f.handle.name, chosenAt: '2026-11-01T00:00:00.000Z' }
     : undefined;
   return {
@@ -74,6 +88,8 @@ function depsFor(f: ReturnType<typeof fakeFile> | null): BackupDeps {
     putHandle: async (r) => { row = r; },
     deleteHandle: async () => { row = undefined; },
     exportAll,
+    now,
+    row: () => row,
   };
 }
 
@@ -95,25 +111,25 @@ afterEach(() => {
 });
 
 describe('backing up to a file the owner chose', () => {
-  test('writes the whole diary and records the moment it FINISHED', async () => {
+  test('writes the whole diary into the file and records when the write finished', async () => {
     await addEntry(entry('e1'));
     const f = fakeFile();
-    const deps = depsFor(f);
+    const deps = depsFor(f, AT('2026-11-19T09:00:05.000Z'));
 
-    const now = new Date('2026-11-19T09:00:00.000Z');
-    const r = await backupOnOpen(now, deps);
+    const r = await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps);
 
     expect(r.state).toBe('written');
+    // The diary really is IN the file, not merely handed to something.
+    expect(JSON.parse(f.state.content).entries.map((e: { id: string }) => e.id)).toEqual(['e1']);
     expect(f.state.closed).toBe(true);
-    // Not "a file was handed over": the diary really is in it.
-    const parsed = JSON.parse(f.state.written ?? '{}');
-    expect(parsed.entries.map((e: { id: string }) => e.id)).toEqual(['e1']);
-    expect(getLastFileBackupAt()?.toISOString()).toBe(now.toISOString());
+    // The moment recorded is when the write ended, not when it was started.
+    expect(r.state === 'written' && r.at.toISOString()).toBe('2026-11-19T09:00:05.000Z');
+    expect(deps.row()?.lastWrittenAt).toBe('2026-11-19T09:00:05.000Z');
     // A completed write is a copy made, so the weekly reminder goes quiet too.
-    expect(getLastExportAt()?.toISOString()).toBe(now.toISOString());
+    expect(getLastExportAt()?.toISOString()).toBe('2026-11-19T09:00:05.000Z');
   });
 
-  test('records NOTHING when the write fails, so the screen cannot claim a backup that did not happen', async () => {
+  test('a failed write leaves the PREVIOUS backup in the file and records nothing', async () => {
     await addEntry(entry('e1'));
     const f = fakeFile({ failOn: 'write' });
     const deps = depsFor(f);
@@ -121,14 +137,15 @@ describe('backing up to a file the owner chose', () => {
     const r = await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps);
 
     expect(r.state).toBe('failed');
-    expect(getLastFileBackupAt()).toBeNull();
-    expect(getLastExportAt()).toBeNull();
-    // The half-written scratch file is thrown away, so the previous backup is still the previous backup.
+    // This is the claim the whole feature rests on: the only copy there was is still the only copy there is.
+    expect(f.state.content).toBe('yesterday');
     expect(f.state.aborted).toBe(true);
-    expect(f.state.closed).toBe(false);
+    expect(f.state.scratch).toBeNull();
+    expect(deps.row()?.lastWrittenAt).toBeUndefined();
+    expect(getLastExportAt()).toBeNull();
   });
 
-  test('a write that begins and never closes is not a backup', async () => {
+  test('a write that stages every byte and then fails to close is not a backup', async () => {
     await addEntry(entry('e1'));
     const f = fakeFile({ failOn: 'close' });
     const deps = depsFor(f);
@@ -136,30 +153,37 @@ describe('backing up to a file the owner chose', () => {
     const r = await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps);
 
     expect(r.state).toBe('failed');
-    // The bytes reached the scratch file; the commit did not happen. Recording this as a backup is the exact
-    // lie this feature must not tell.
-    expect(f.state.written).not.toBeNull();
-    expect(getLastFileBackupAt()).toBeNull();
+    // Yesterday's backup is untouched, and the scratch file is not left sitting in the owner's folder.
+    expect(f.state.content).toBe('yesterday');
+    expect(f.state.aborted).toBe(true);
+    expect(f.state.scratch).toBeNull();
+    expect(deps.row()?.lastWrittenAt).toBeUndefined();
   });
 
-  test('says the file is gone rather than reporting a backup', async () => {
-    const f = fakeFile({ failOn: 'open' });
-    const deps = depsFor(f);
+  test('says the file is gone, in words, rather than reporting a backup', async () => {
+    const deps = depsFor(fakeFile({ failOn: 'open' }));
     const r = await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps);
-    expect(r).toMatchObject({ state: 'failed', reason: expect.stringMatching(/not there any more/i) });
-    expect(getLastFileBackupAt()).toBeNull();
+    expect(r).toMatchObject({ state: 'failed', reason: 'that file is not there any more — it may have been moved or deleted' });
+    expect(deps.row()?.lastWrittenAt).toBeUndefined();
   });
 
-  test('at most once a day, and the day is measured from the last completed write', async () => {
+  test("an unexpected failure is a sentence, not the browser's own message", async () => {
+    const f = fakeFile({ failOn: 'write' }); // QuotaExceededError: real, and nothing the owner can read.
+    const r = await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), depsFor(f));
+    expect(r).toMatchObject({ state: 'failed', reason: 'the write did not finish' });
+    expect(r.state === 'failed' && r.reason).not.toMatch(/quota|exceed|execute/i);
+  });
+
+  test('at most once a day, measured from the last completed write', async () => {
+    expect(BACKUP_INTERVAL_MS).toBe(86_400_000); // The owner asked for daily. Pinned so it cannot drift.
     await addEntry(entry('e1'));
     const f = fakeFile();
-    const deps = depsFor(f);
-
     const first = new Date('2026-11-19T09:00:00.000Z');
+    const deps = depsFor(f, () => first);
+
     expect((await backupOnOpen(first, deps)).state).toBe('written');
     expect(f.state.opens).toBe(1);
 
-    // Opened again an hour later, and six hours after that: the file is not touched either time.
     expect((await backupOnOpen(new Date(first.getTime() + 3_600_000), deps)).state).toBe('not-due');
     expect((await backupOnOpen(new Date(first.getTime() + 7 * 3_600_000), deps)).state).toBe('not-due');
     expect(f.state.opens).toBe(1);
@@ -175,10 +199,10 @@ describe('backing up to a file the owner chose', () => {
     const r = await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps);
 
     expect(r).toMatchObject({ state: 'needs-permission', name: 'food-diary-backup.json' });
-    // Asking needs a tap, and opening the app is not one. Nothing was written and nothing was asked.
+    // Asking needs a tap, and opening the app is not one. Nothing was asked and nothing was written.
     expect(f.state.asked).toBe(0);
     expect(f.state.opens).toBe(0);
-    expect(getLastFileBackupAt()).toBeNull();
+    expect(f.state.content).toBe('yesterday');
   });
 
   test('"Back up now" may ask, and writes even though a day has not passed', async () => {
@@ -186,28 +210,58 @@ describe('backing up to a file the owner chose', () => {
     const f = fakeFile({ permission: 'prompt' });
     const deps = depsFor(f);
 
-    const r = await backupNow(new Date('2026-11-19T09:00:00.000Z'), deps);
-
-    expect(r.state).toBe('written');
+    expect((await backupNow(deps)).state).toBe('written');
     expect(f.state.asked).toBe(1);
-    // Straight away again: the once-a-day rule is about not writing behind their back, and this is not that.
-    expect((await backupNow(new Date('2026-11-19T09:00:30.000Z'), deps)).state).toBe('written');
+    expect((await backupNow(deps)).state).toBe('written');
     expect(f.state.opens).toBe(2);
+  });
+
+  test('two writes at once become one, so the file cannot end up holding the earlier snapshot', async () => {
+    await addEntry(entry('e1'));
+    const f = fakeFile();
+    const deps = depsFor(f);
+    // What React's StrictMode does to the effect in App, and what a tap during the opening write would do.
+    const [a, b] = await Promise.all([backupNow(deps), backupNow(deps)]);
+    expect(a.state).toBe('written');
+    expect(b.state).toBe('written');
+    expect(f.state.opens).toBe(1);
   });
 
   test('no file set up, or a browser that cannot do this at all', async () => {
     expect((await backupOnOpen(new Date(), depsFor(null))).state).toBe('off');
     noPicker();
     expect(canWriteToAFile()).toBe(false);
-    // Short-circuits before the store: a browser that cannot write must not report "off", which reads as
-    // "you have not set it up yet" and would send the owner looking for a button that cannot work.
+    // Short-circuits before the store: "off" reads as "you have not set it up yet" and would send the owner
+    // looking for a button that cannot work.
     expect((await backupOnOpen(new Date(), depsFor(fakeFile()))).state).toBe('unsupported');
   });
 
-  test('a stamp from the future is ignored rather than switching the backup off for years', async () => {
-    const deps = depsFor(fakeFile());
-    localStorage.setItem(LAST_FILE_BACKUP_KEY, '2099-01-01T00:00:00.000Z');
+  describe('a stored date that cannot be trusted', () => {
+    test('one from the future does not switch the backup off for years', async () => {
+      const deps = depsFor(fakeFile());
+      await deps.putHandle({ ...(deps.row() as StoredFileHandle), lastWrittenAt: '2099-01-01T00:00:00.000Z' });
+      expect((await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps)).state).toBe('written');
+    });
+
+    test('one that is not a date reads as never, so the backup runs and the screen shows no date', async () => {
+      const deps = depsFor(fakeFile());
+      await deps.putHandle({ ...(deps.row() as StoredFileHandle), lastWrittenAt: 'not a date' });
+      expect(await backupStatus(deps)).toMatchObject({ kind: 'ready', lastWrittenAt: null });
+      expect((await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps)).state).toBe('written');
+    });
+  });
+
+  test('a write still counts when the date cannot be saved afterwards', async () => {
+    // The row write and the localStorage stamp are bookkeeping. The bytes are already in the owner's file, so
+    // reporting a failure here would be a second lie in the other direction.
+    await addEntry(entry('e1'));
+    const f = fakeFile();
+    const deps = { ...depsFor(f), putHandle: () => Promise.reject(new Error('store is full')) };
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+
     expect((await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps)).state).toBe('written');
+    expect(JSON.parse(f.state.content).entries).toHaveLength(1);
+    vi.restoreAllMocks();
   });
 
   test('stopping forgets the file and the app stops writing to it', async () => {
@@ -216,19 +270,58 @@ describe('backing up to a file the owner chose', () => {
     await stopFileBackup(deps);
     expect((await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps)).state).toBe('off');
     expect(f.state.opens).toBe(0);
+    expect(await backupStatus(deps)).toEqual({ kind: 'off' });
+  });
+});
+
+describe('what the screen is told', () => {
+  test('a file whose permission has lapsed is reported as blocked, with its date kept', async () => {
+    const f = fakeFile();
+    const deps = depsFor(f);
+    await backupOnOpen(new Date('2026-11-19T09:00:00.000Z'), deps);
+
+    f.deny();
+
+    expect(await backupStatus(deps)).toMatchObject({
+      kind: 'blocked',
+      name: 'food-diary-backup.json',
+      lastWrittenAt: new Date('2026-11-19T09:00:00.000Z'),
+    });
+    // Checking must never prompt: this runs whenever Settings is opened.
+    expect(f.state.asked).toBe(0);
   });
 
-  test('erasing everything forgets which file was chosen, and the stamp with it', async () => {
-    // The real store, with a stand-in for the handle: what is being checked is that the sweep reaches this
-    // store at all, which is the thing a hand-written list of stores gets wrong.
-    await putFileHandle({ id: 'autoBackup', handle: {} as FileSystemFileHandle, name: 'f.json', chosenAt: '2026-11-01T00:00:00.000Z' });
-    localStorage.setItem(LAST_FILE_BACKUP_KEY, '2026-11-18T00:00:00.000Z');
+  test('a date belongs to its file, so choosing a different one starts with no claim', async () => {
+    // The defect this shape exists to prevent: A was written yesterday, B is chosen today and its first write
+    // fails. Nothing may say "last written to B" using A's date.
+    const a = fakeFile();
+    const deps = depsFor(a, AT('2026-11-18T09:00:00.000Z'));
+    await backupOnOpen(new Date('2026-11-18T09:00:00.000Z'), deps);
+    expect(await backupStatus(deps)).toMatchObject({ name: 'food-diary-backup.json', lastWrittenAt: new Date('2026-11-18T09:00:00.000Z') });
+
+    const b = fakeFile({ failOn: 'write' });
+    await deps.putHandle({ id: 'autoBackup', handle: b.handle as unknown as FileSystemFileHandle, name: 'other.json', chosenAt: '2026-11-19T09:00:00.000Z' });
+
+    expect(await backupStatus(deps)).toMatchObject({ kind: 'ready', name: 'other.json', lastWrittenAt: null });
+  });
+});
+
+describe('the real store', () => {
+  test('erasing everything forgets which file was chosen', async () => {
+    // A stand-in for the handle: what is checked here is that the erase sweep reaches this store at all, which
+    // is the thing a hand-written list of stores gets wrong.
+    await putFileHandle({ id: 'autoBackup', handle: {} as FileSystemFileHandle, name: 'f.json', chosenAt: '2026-11-01T00:00:00.000Z', lastWrittenAt: '2026-11-18T00:00:00.000Z' });
     expect(await getFileHandle('autoBackup')).toBeDefined();
 
     await eraseEverything();
 
     expect(await getFileHandle('autoBackup')).toBeUndefined();
-    expect(localStorage.getItem(lsKey('lastFileBackupAt'))).toBeNull();
-    expect(getLastFileBackupAt()).toBeNull();
+    expect(localStorage.getItem(lsKey('lastExportAt'))).toBeNull();
+  });
+
+  test('the chosen file is not in the export, so it cannot land on another device', async () => {
+    await putFileHandle({ id: 'autoBackup', handle: {} as FileSystemFileHandle, name: 'f.json', chosenAt: '2026-11-01T00:00:00.000Z', lastWrittenAt: '2026-11-18T00:00:00.000Z' });
+    const text = await (await exportAll()).text();
+    expect(text).not.toMatch(/autoBackup|lastWrittenAt/);
   });
 });
